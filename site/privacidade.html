@@ -23,11 +23,12 @@
   </header>
   <main>
     <section class="legal">
-      <p class="eyebrow">Atualizada em 18 de outubro de 2026</p>
+      <p class="eyebrow">Atualizada em 20 de outubro de 2026</p>
       <h1>Política de privacidade</h1>
       <p>O Reunilo é uma extensão de navegador da meneseslabs que transcreve reuniões do Google Meet, Microsoft Teams e
-        Zoom e, pelo gravador do computador, huddles do Slack e outros apps. Ela foi projetada para que nós nunca tenhamos
-        acesso às suas reuniões.</p>
+        Zoom e, pelo gravador do computador, huddles do Slack e outros apps. A versão grátis foi projetada para que nós
+        nunca tenhamos acesso às suas reuniões. O <b>Reunilo Pro</b>, opcional e pago, guarda uma cópia das reuniões na sua
+        conta, como explicado na seção própria abaixo.</p>
       <p>No gravador do computador, o Chrome pede para você compartilhar a tela para liberar o áudio do sistema. O Reunilo
         usa só o som: a imagem da tela não é gravada nem guardada, e o áudio é transcrito no próprio computador, sem sair dele.</p>
 
@@ -37,9 +38,9 @@
         notas, capturas de tela e conversas com a IA.</p>
 
       <h2>Onde esses dados ficam</h2>
-      <p>Somente no armazenamento local do seu navegador (<code>chrome.storage.local</code>), no seu computador. O Reunilo
-        não tem servidores, não cria contas e não envia transcrições, áudio ou estatísticas de uso para a meneseslabs nem
-        para terceiros.</p>
+      <p>Na versão grátis, somente no armazenamento local do seu navegador (<code>chrome.storage.local</code>), no seu
+        computador. Sem uma conta Pro conectada, o Reunilo não envia transcrições, áudio ou estatísticas de uso para a
+        meneseslabs nem para terceiros.</p>
 
       <h2>Quando algo sai do seu computador</h2>
       <ul>
@@ -50,6 +51,29 @@
         <li><b>Modelo de reconhecimento:</b> ao ativar o modo de alta precisão, os arquivos do modelo Whisper são baixados
           uma vez do Hugging Face. Só arquivos públicos do modelo são baixados; o áudio nunca é enviado.</li>
       </ul>
+
+      <h2>Reunilo Pro (conta online)</h2>
+      <p>Se você criar uma conta e assinar o Pro, tratamos estes dados para prestar o serviço contratado (LGPD, art. 7º, V):</p>
+      <ul>
+        <li><b>Conta:</b> seu e-mail e a data de criação. O acesso é por um link enviado ao seu e-mail; não guardamos senha.</li>
+        <li><b>Reuniões:</b> depois que você autoriza na extensão, as reuniões (transcrição, nomes dos participantes, destaques,
+          notas, atas e conversas com a IA) são enviadas para a sua conta, no servidor da meneseslabs. Ficam criptografadas
+          (AES-256) no banco de dados; um índice de palavras permite a busca. Capturas de tela e áudio nunca são enviados.</li>
+        <li><b>IA inclusa:</b> quando você pede uma ata, revisão ou resposta, o texto da reunião é enviado pelo nosso servidor à
+          Anthropic (Claude), que processa o pedido e, pelos termos da API, não usa esses dados para treinar modelos. Registramos
+          quantos créditos e tokens cada pedido usou, sem guardar o texto do pedido fora da reunião.</li>
+        <li><b>Pagamento:</b> feito pela Stripe (cartão ou Pix Automático). Os dados do cartão e da conta bancária ficam com a
+          Stripe; guardamos só o identificador da assinatura, o status e a moeda.</li>
+        <li><b>Links de compartilhamento:</b> quem recebe um link vê a reunião sem conta, até o link vencer ou ser revogado.
+          Contamos quantas vezes cada link foi aberto.</li>
+        <li><b>Segurança:</b> registramos logins, dispositivos conectados e ações sensíveis, com o endereço IP, para proteger a sua conta.</li>
+      </ul>
+      <p>Subprocessadores: Hostinger (servidor e e-mail), Stripe (pagamentos) e Anthropic (IA). O servidor do Reunilo Pro fica
+        nos Estados Unidos (Boston), assim como a Stripe e a Anthropic: essa transferência internacional é necessária para
+        prestar o serviço que você contratou (LGPD, art. 33, IX). Backups do banco são
+        criptografados e guardados por 14 dias. Reuniões apagadas ficam 30 dias na lixeira. Você pode exportar tudo e apagar a
+        conta a qualquer momento na área da conta: isso apaga as reuniões da nuvem e cancela a assinatura na hora; as cópias nos
+        backups somem em até 14 dias. As reuniões no seu computador continuam com você.</p>
 
       <h2>Seus controles</h2>
       <ul>

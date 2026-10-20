@@ -1,6 +1,9 @@
-# Site do Reunilo (reunilo.meneseslabs.com.br), publicado pelo Caddy (stack /opt/caddy).
+# Reunilo em reunilo.meneseslabs.com.br, publicado pelo Caddy (stack /opt/caddy).
 # O endereço antigo, escriba.meneseslabs.com.br, redireciona para o novo (301).
-# Arquivos estáticos em ./public: editar e recarregar o navegador, sem reiniciar.
+#   ./public   site estático e o app web (/app, com as bibliotecas da extensão em /app/lib)
+#   ./src      código da API (server/) e bibliotecas da extensão, para o build
+#   ./db       dados do Postgres          ./backups  dumps diários criptografados
+# Segredos só na VPS (fora do repositório): contato.env, pro.env, db.env, backup.env.
 services:
   reunilo-site:
     image: caddy:2-alpine
@@ -21,7 +24,7 @@ services:
     volumes:
       - ./public:/srv:ro
 
-  # Formulário de contato (/api/contato). O destino e a senha do SMTP ficam em contato.env, só na VPS.
+  # Formulário de contato (/api/contato). O destino e a senha do SMTP ficam em contato.env.
   reunilo-contato:
     image: python:3.12-alpine
     container_name: reunilo-contato
@@ -32,13 +35,85 @@ services:
         required: false
     labels:
       caddy: reunilo.meneseslabs.com.br
-      caddy.reverse_proxy: "/api/* {{upstreams 8080}}"
+      caddy.reverse_proxy: "/api/contato* {{upstreams 8080}}"
     networks:
       - caddy
     volumes:
       - ./contato:/app:ro
       - ./dados:/data
 
+  # API do Reunilo Pro (/api/v1 e os links públicos /s/).
+  reunilo-api:
+    build:
+      context: ./src
+      dockerfile: server/Dockerfile
+    image: reunilo-api:local
+    container_name: reunilo-api
+    restart: unless-stopped
+    env_file: ./pro.env
+    depends_on:
+      reunilo-db:
+        condition: service_healthy
+    mem_limit: 384m
+    labels:
+      caddy: reunilo.meneseslabs.com.br
+      caddy.reverse_proxy_0: "/api/v1/* {{upstreams 8080}}"
+      caddy.reverse_proxy_1: "/s/* {{upstreams 8080}}"
+    networks:
+      - caddy
+      - interna
+
+  # Banco: só na rede interna, sem porta exposta.
+  reunilo-db:
+    image: postgres:17-alpine
+    container_name: reunilo-db
+    restart: unless-stopped
+    env_file: ./db.env
+    environment:
+      POSTGRES_USER: reunilo
+      POSTGRES_DB: reunilo
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reunilo -d reunilo"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - ./db:/var/lib/postgresql/data
+    networks:
+      - interna
+
+  # Backup diário: pg_dump comprimido e criptografado (AES-256), guardado 14 dias em ./backups.
+  reunilo-backup:
+    image: postgres:17-alpine
+    container_name: reunilo-backup
+    restart: unless-stopped
+    env_file: ./backup.env
+    depends_on:
+      reunilo-db:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache openssl >/dev/null
+        sleep 600  # dá tempo para a API aplicar as migrações antes do primeiro dump
+        while true; do
+          f=/backups/reunilo-$$(date +%Y%m%d-%H%M).sql.gz.enc
+          if pg_dump -h reunilo-db -U reunilo -d reunilo --no-owner | gzip | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_PASSPHRASE -out "$$f.tmp"; then
+            mv "$$f.tmp" "$$f" && echo "backup ok: $$f"
+          else
+            rm -f "$$f.tmp"; echo "backup FALHOU"
+          fi
+          find /backups -name 'reunilo-*.enc' -mtime +14 -delete
+          sleep 86400
+        done
+    mem_limit: 128m
+    volumes:
+      - ./backups:/backups
+    networks:
+      - interna
+
 networks:
   caddy:
     external: true
+  interna:

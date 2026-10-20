@@ -7,7 +7,7 @@
 | Time            | Thiago M. Meneses (com apoio do Claude Code)                          |
 | Epic/Ticket     | A criar                                                               |
 | Figma/Design    | A criar (ver "Área logada: UX/UI")                                     |
-| Status          | Rascunho                                                              |
+| Status          | Em implementação: código pronto e publicado; falta ligar Stripe e IA e fazer o beta |
 | Criado          | 2026-10-20                                                            |
 | Última revisão  | 2026-10-20                                                            |
 
@@ -373,6 +373,31 @@ limite global de gasto de IA por dia, com alerta, protege contra surpresas.
 
 ---
 
+## Estado da implementação (20/10/2026)
+
+| Parte | Estado | Onde |
+| --- | --- | --- |
+| API (contas, reuniões, busca, IA, créditos, Stripe, links, exclusão) | ✅ Pronta, 35 testes | `server/` |
+| Área logada | ✅ Pronta, teste em Chrome real (14 verificações) | `site/app/` |
+| Extensão 2.5.0 (conectar, sincronizar, IA da conta) | ✅ Pronta, 33 testes unitários + 16 verificações ponta a ponta | `extension/` |
+| Produção na VPS (banco, API, backups, app) | ✅ No ar em `reunilo.meneseslabs.com.br/app`, sem link no site | `site/docker-compose.yml` |
+| Backup | ✅ Diário, criptografado; restauração testada | `server/README.md` |
+| Política de privacidade com o Pro | ✅ Publicada (inclui a transferência internacional: VPS em Boston) | `site/privacidade.html` |
+| Stripe (produto, preços, webhook, portal) | ⏳ Script pronto; falta a chave da conta | `server/scripts/stripe-setup.js` |
+| Chave da Anthropic do servidor | ⏳ Falta criar | `pro.env` |
+| Login com Google | 🔜 V1.1 | — |
+
+### Checklist de lançamento
+
+1. Colocar `STRIPE_SECRET_KEY` (teste) e `ANTHROPIC_API_KEY` no `pro.env` e rodar `stripe-setup.js` (ver `server/README.md`).
+2. Testar uma assinatura de ponta a ponta no modo de teste da Stripe: Pix (e-mail `succeed_immediately@...`) e cartão `4242 4242 4242 4242`.
+3. Cadastrar `/api/v1/health` no Uptime Kuma e guardar `DATA_KEY` e `BACKUP_PASSPHRASE` fora da VPS.
+4. Beta fechado com 10 a 20 pessoas (cupom de desconto pela Stripe), medindo custo de IA e erros por uma semana.
+5. Trocar para as chaves `sk_live_...`, rodar `stripe-setup.js` de novo e publicar a extensão 2.5.0 no site.
+6. Abrir: seção do Pro e preços no site, botão "Entrar" apontando para `/app`.
+
+---
+
 ## Riscos
 
 | Risco | Impacto | Probabilidade | Mitigação |
@@ -386,6 +411,7 @@ limite global de gasto de IA por dia, com alerta, protege contra surpresas.
 | Abuso de link compartilhado ou de cota (contas falsas) | Médio | Média | Tokens longos com validade, limite de requisições por IP e por conta, Pro exige pagamento antes de liberar a IA |
 | Mudança do protocolo do Meet/Teams | Médio | Média | Já mitigado: plano B lendo as legendas da tela e o Whisper local |
 | Regras da Chrome Web Store (pagamento, privacidade, permissões) | Médio | Baixa | Pagamento fora da extensão (Stripe no site), divulgação clara do uso de dados, sem código remoto |
+| Dados no exterior: a VPS fica em Boston (EUA, data center 24 da Hostinger) | Médio | Certa | Declarado na política de privacidade como transferência internacional para executar o contrato (LGPD, art. 33, IX); opção de migrar para o data center de Campinas se o público exigir dados no Brasil |
 | LGPD e GDPR | Alto | Baixa | Política de privacidade e termos, consentimento no envio inicial, exportação e exclusão, DPA com a Anthropic (a API não treina com os dados) |
 | Escopo crescer (times, integrações) | Médio | Alta | V1 fechada nesta lista; o resto vai para o backlog de V2 |
 

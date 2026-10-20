@@ -1,4 +1,4 @@
-# Reunilo 2.4 — Transcrição de Reuniões
+# Reunilo 2.5 — Transcrição de Reuniões
 
 Site: https://reunilo.meneseslabs.com.br
 
@@ -26,7 +26,26 @@ gravação aparece na lista como qualquer reunião: destaques, notas, IA, análi
 Limites: o Chrome só captura o áudio do sistema no **Windows** e no **ChromeOS**. O Slack não informa quem está
 falando, então as outras pessoas aparecem juntas como "Participantes" (dá para renomear depois).
 
-## Backup e sincronização (novo na 2.3)
+## Conta Reunilo Pro (novo na 2.5)
+
+Opcional. Em **Ajustes › Conta Reunilo Pro › Entrar ou assinar o Pro**, o app web abre, a pessoa entra
+pelo link enviado ao e-mail e clica em **Conectar este navegador**. O app entrega um token de dispositivo
+à extensão por `externally_connectable` (só aceito vindo de `reunilo.meneseslabs.com.br`); o token fica
+no service worker, e o app da extensão só vê o e-mail, o plano e os créditos.
+
+- **Permissão antes de enviar:** depois de conectar, a lista mostra "Enviar as N reuniões deste computador?"
+  (**Enviar todas** ou **Só as próximas**). Nada sobe antes disso.
+- **Sincronização** (`src/lib/sync.js` + `background.js`): cada reunião salva entra na fila; reuniões ao
+  vivo sobem a cada 2 minutos, as encerradas em segundos. O envio leva a versão conhecida; em conflito
+  (409), a extensão baixa a versão da conta, mescla (falas, Whisper, notas e conversas somadas por id;
+  título e ata do lado alterado por último) e reenvia. A cada 10 minutos baixa o que mudou na web ou em
+  outro computador. Reunião apagada na conta continua no computador e não volta para a conta.
+- **IA sem chave:** sem chave de API própria e com o Pro ativo, ata, revisão e perguntas usam os créditos
+  da conta (a transcrição vai junto do pedido, então funciona também durante a reunião ao vivo).
+  Com chave própria, nada muda: a chave tem prioridade e não gasta créditos.
+- **Desconectar** remove o token, apaga o dispositivo da conta e mantém todas as reuniões no computador.
+
+
 
 - **Backup automático numa pasta** (Ajustes → Backup e sincronização → Escolher pasta…). Cada reunião vira
   um arquivo `AAAA-MM-DD_HHhMM_<id>.json` dentro de uma subpasta `Reunilo` (uma pasta `Escriba`, do nome antigo, também vale), gravado pelo service worker
@@ -152,10 +171,11 @@ página da reunião (main world)        isolated world                     servi
 ## Testes
 
 ```bash
-npm test                                                     # 29 testes unitários
+npm test                                                     # 33 testes unitários
 CHROME=/caminho/do/chrome node test/e2e-meet.mjs [pasta]     # ponta a ponta num Chrome real (+ screenshots)
 CHROME=/caminho/do/chrome node test/e2e-asr.mjs audio.f32    # Whisper real na extensão (PCM float32 16 kHz)
 CHROME=/caminho/do/chrome node test/e2e-backup.mjs [pasta]    # backup na pasta, restauração e ajustes sincronizados
+CHROME=/caminho/do/chrome node test/e2e-account.mjs [pasta]   # conta Pro: conectar, sincronizar, conflito, IA da conta (precisa do Postgres de teste, ver ../server)
 PULSE_SERVER=unix:/nonexistent CHROME=/caminho/do/chrome node test/e2e-recorder.mjs sistema.wav mic.wav [pasta]  # gravador do computador (no WSL, sem o servidor de som travar o AudioContext)
 ```
 

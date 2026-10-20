@@ -8,14 +8,15 @@ O Reunilo é uma extensão do Chrome. Na versão grátis, tudo fica no seu compu
 servidor, sem telemetria e sem limite de reuniões. Até a versão 2.3 o projeto se chamava **Escriba**.
 
 - **Site:** https://reunilo.meneseslabs.com.br
-- **Versão atual:** 2.4.0
+- **Versão atual:** extensão 2.5.0 (com a conta Pro), API 1.0.0
 
 ## O que tem aqui
 
 | Pasta | O que é |
 | --- | --- |
 | [`extension/`](extension/) | A extensão do Chrome (Manifest V3): código, testes e [documentação completa](extension/README.md) |
-| [`site/`](site/) | O site de divulgação (HTML/CSS/JS estático) e o servidor do formulário de contato |
+| [`site/`](site/) | O site de divulgação, o app web do Pro (`site/app`), o formulário de contato e o `docker-compose.yml` da VPS |
+| [`server/`](server/) | A API do Reunilo Pro: contas, sincronização, busca, IA inclusa, Stripe e links públicos ([manual](server/README.md)) |
 | [`docs/`](docs/) | Documentos de design, como o [TDD do Reunilo Pro](docs/TDD-reunilo-pro.md) |
 
 ## Recursos
@@ -48,7 +49,7 @@ A extensão não tem etapa de build: o código em `extension/src` é o que o Chr
 
 ```bash
 cd extension
-npm test                                                   # testes unitários
+npm test                                                   # testes unitários (33)
 CHROME=/caminho/do/chrome node test/e2e-meet.mjs [pasta]   # ponta a ponta no Meet (simulado)
 CHROME=/caminho/do/chrome node test/e2e-backup.mjs [pasta] # backup e restauração
 ```
@@ -59,16 +60,26 @@ O site é estático, servido por Caddy em Docker (`site/docker-compose.yml`). O 
 (`site/contato/server.py`, só biblioteca padrão do Python) lê as credenciais de um arquivo `contato.env`
 que fica apenas no servidor e nunca entra no repositório.
 
-## Reunilo Pro (em planejamento)
+## Reunilo Pro
 
-Uma versão paga, de **R$ 15/mês ou US$ 3/mês**, com conta online, transcrições sincronizadas entre
-computadores, uma área web para ler, buscar e compartilhar reuniões, e **15 créditos de IA por mês**
-sem precisar de chave de API. Pagamento por Pix Automático ou cartão. O plano técnico completo está em
-[`docs/TDD-reunilo-pro.md`](docs/TDD-reunilo-pro.md).
+A versão paga, de **R$ 15/mês ou US$ 3/mês** (Pix Automático ou cartão, pela Stripe), com:
+
+- **Conta online:** as reuniões da extensão vão para a conta e aparecem em qualquer computador, com
+  sincronização por versão (nada se perde quando dois lugares editam a mesma reunião).
+- **Área web** em `/app`: biblioteca, busca em todas as falas sem depender de acento, ata ao lado da
+  transcrição, análise de fala, paleta de comandos (`Ctrl K`), tema escuro e celular.
+- **IA sem chave:** 15 créditos por mês, que acumulam até 30. Ata, revisão, pergunta, e-mail de follow-up
+  e tarefas custam 1; pergunta sobre todas as reuniões custa 2.
+- **Links de leitura** com validade e revogação, para quem não usa o Reunilo.
+
+Estado em 20/10/2026: servidor, app web e extensão prontos e testados, publicados na VPS. Falta ligar as
+chaves da Stripe e da Anthropic e fazer o beta. Plano técnico em [`docs/TDD-reunilo-pro.md`](docs/TDD-reunilo-pro.md);
+operação em [`server/README.md`](server/README.md).
 
 ## Privacidade
 
-A versão grátis não envia nada para servidor nenhum. A única conexão de rede é com a API do Claude, e
+A versão grátis não envia nada para servidor nenhum (o Reunilo Pro, opcional, guarda as reuniões na conta,
+criptografadas). A única conexão de rede é com a API do Claude, e
 só quando você pede algo à IA usando a sua própria chave. O modelo do Whisper é baixado uma vez do
 Hugging Face e fica no cache do navegador. Política completa em
 [`site/privacidade.html`](site/privacidade.html).

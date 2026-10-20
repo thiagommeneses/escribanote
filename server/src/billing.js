@@ -66,7 +66,11 @@ export function registerBilling(app, { db, config, stripe }) {
     need();
     const row = await db.one("SELECT stripe_customer_id FROM subscriptions WHERE user_id = $1", [req.user.id]);
     if (!row?.stripe_customer_id) fail(404, "no_customer", "Você ainda não tem uma assinatura.");
-    const s = await stripe.billingPortal.sessions.create({ customer: row.stripe_customer_id, return_url: `${config.publicUrl}/app/#/conta` });
+    const s = await stripe.billingPortal.sessions.create({
+      customer: row.stripe_customer_id,
+      return_url: `${config.publicUrl}/app/#/conta`,
+      ...(config.stripe.portalConfig ? { configuration: config.stripe.portalConfig } : {}),
+    });
     return { url: s.url };
   });
 

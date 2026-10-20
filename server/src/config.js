@@ -29,6 +29,7 @@ export function loadConfig(overrides = {}) {
       webhookSecret: env.STRIPE_WEBHOOK_SECRET || "",
       priceBrl: env.STRIPE_PRICE_BRL || "",
       priceUsd: env.STRIPE_PRICE_USD || "",
+      portalConfig: env.STRIPE_PORTAL_CONFIG || "",
       pixMandateMax: num(env.PIX_MANDATE_MAX_CENTS, 2000), // teto do débito automático (R$ 20)
     },
     sessionDays: 30,
