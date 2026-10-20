@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reunilo</title>
+  <link rel="icon" href="../../icons/icon48.png">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="top">
+      <button class="brand" data-nav="meeting" title="Reunião atual">
+        <img src="../../icons/icon48.png" alt="" width="22" height="22">
+        <span>Reunilo</span>
+        <span class="live-badge" id="live-badge" hidden>AO VIVO</span>
+      </button>
+      <nav class="nav" aria-label="Navegação">
+        <button data-nav="meeting" title="Reunião"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Reunião</span></button>
+        <button data-nav="list" title="Minhas reuniões"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg><span>Reuniões</span></button>
+        <button data-nav="settings" title="Ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Ajustes</span></button>
+        <button id="pop-out" class="pop" title="Abrir em uma aba"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v6H4V6h6"/></svg></button>
+      </nav>
+    </header>
+
+    <div class="layout">
+      <!-- Lista lateral (só em tela larga) e view "Reuniões" -->
+      <aside id="view-list" class="view list-view">
+        <div class="list-head">
+          <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="list-search" type="search" placeholder="Buscar em todas as transcrições…" aria-label="Buscar reuniões"></div>
+          <div class="filters" id="filters"></div>
+        </div>
+        <div id="bk-banner" class="banner warn bk-banner" hidden>O backup automático está pausado: o Chrome pede para confirmar o acesso à pasta.
+          <button type="button" class="btn sm" data-bk-resume>Retomar</button></div>
+        <div id="list" class="meetings"></div>
+        <div class="list-foot">
+          <button class="btn ghost sm" data-recorder title="Slack e outros apps fora do navegador">Gravar do computador</button>
+          <button class="btn ghost sm" id="backup">Exportar backup</button>
+          <label class="btn ghost sm">Importar<input type="file" id="import" accept="application/json" hidden></label>
+        </div>
+      </aside>
+
+      <!-- Reunião -->
+      <main id="view-meeting" class="view meeting-view">
+        <div id="m-empty" class="empty">
+          <div class="empty-art"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg></div>
+          <h2>Nenhuma reunião em andamento nesta aba</h2>
+          <p>Entre numa reunião do <b>Google Meet</b>, <b>Microsoft Teams</b> ou <b>Zoom</b> pelo navegador.
+            O Reunilo começa a transcrever sozinho e mostra um widget dentro da reunião.</p>
+          <div class="rec-cta">
+            <div><b>Huddle no Slack ou reunião em outro app?</b>
+              <span>Grave o áudio do computador e transcreva com o Whisper, aqui mesmo.</span></div>
+            <button class="btn primary sm" data-recorder><span class="rec-dot"></span>Gravar do computador</button>
+          </div>
+          <div id="recent" class="recent"></div>
+        </div>
+
+        <div id="m" hidden>
+          <div class="m-head">
+            <input id="m-title" class="m-title" aria-label="Título da reunião" maxlength="200">
+            <div class="m-meta" id="m-meta"></div>
+            <div class="m-actions">
+              <button class="btn sm" id="m-pause" hidden></button>
+              <button class="btn sm" id="m-hq" hidden title="Transcreve de novo o áudio da reunião com o Whisper, neste computador"></button>
+              <div class="menu-wrap">
+                <button class="btn sm" id="m-export">Exportar <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+                <div class="menu" id="export-menu" hidden></div>
+              </div>
+              <button class="btn sm ghost" id="m-delete" title="Apagar reunião">Apagar</button>
+            </div>
+          </div>
+
+          <div class="subtabs" role="tablist">
+            <button data-tab="transcript" aria-selected="true">Transcrição</button>
+            <button data-tab="highlights">Destaques <span class="count" id="c-hl"></span></button>
+            <button data-tab="notes">Notas <span class="count" id="c-notes"></span></button>
+            <button data-tab="ai">IA</button>
+            <button data-tab="stats">Análise</button>
+          </div>
+
+          <section class="pane" id="pane-transcript">
+            <div id="t-banner"></div>
+            <div class="t-tools">
+              <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input id="t-search" type="search" placeholder="Buscar nesta reunião…" aria-label="Buscar na transcrição"></div>
+            </div>
+            <div class="speakers" id="speakers"></div>
+            <ol class="timeline" id="timeline"></ol>
+            <button class="jump" id="jump" hidden>↓ Ao vivo</button>
+          </section>
+
+          <section class="pane" id="pane-highlights" hidden></section>
+
+          <section class="pane" id="pane-notes" hidden>
+            <label class="field-label" for="notes-text">Anotações da reunião <span class="muted">(Markdown, salvas automaticamente)</span></label>
+            <textarea id="notes-text" class="notes-text" placeholder="Pauta, contexto, combinados…"></textarea>
+            <div class="field-label">Notas com horário</div>
+            <div class="note-add"><input id="note-input" placeholder="Nova nota no horário atual…" maxlength="2000"><button class="btn sm primary" id="note-add">Adicionar</button></div>
+            <ul class="note-list" id="note-list"></ul>
+          </section>
+
+          <section class="pane" id="pane-ai" hidden>
+            <div class="card review">
+              <div class="card-head"><b>Revisão da transcrição</b><button class="btn sm" id="review-run">Revisar com IA</button></div>
+              <p class="muted tiny" id="review-info">Corrige palavras mal reconhecidas (fala rápida, nomes, siglas) usando o contexto e o seu glossário. O texto original fica guardado.</p>
+            </div>
+            <div class="card ata">
+              <div class="card-head"><b>Ata da reunião</b>
+                <div class="row"><button class="btn sm ghost" id="ata-copy" hidden>Copiar</button><button class="btn sm primary" id="ata-gen">Gerar ata</button></div></div>
+              <div class="md" id="ata-body"></div>
+            </div>
+            <div class="card chat">
+              <div class="card-head"><b>Pergunte à IA</b>
+                <select id="chat-select" aria-label="Conversas"></select></div>
+              <div class="chat-log" id="chat-log"></div>
+              <div class="chips" id="quick"></div>
+              <div class="chat-input"><textarea id="chat-input" rows="1" placeholder="Pergunte qualquer coisa sobre esta reunião…"></textarea>
+                <button class="btn primary" id="chat-send">Enviar</button></div>
+              <p class="muted tiny" id="ai-hint"></p>
+            </div>
+          </section>
+
+          <section class="pane" id="pane-stats" hidden></section>
+        </div>
+      </main>
+
+      <!-- Ajustes -->
+      <section id="view-settings" class="view settings-view" hidden>
+        <form id="settings" class="settings" autocomplete="off">
+          <div class="card">
+            <h3>Transcrição</h3>
+            <div class="seg" role="radiogroup" aria-label="Quando transcrever">
+              <label><input type="radio" name="mode" value="always"><span>Sempre</span></label>
+              <label><input type="radio" name="mode" value="ask"><span>Perguntar</span></label>
+              <label><input type="radio" name="mode" value="off"><span>Desligado</span></label>
+            </div>
+            <label class="switch"><input type="checkbox" name="autoCaptions"><span></span>Ligar as legendas do Meet automaticamente</label>
+            <label class="switch"><input type="checkbox" name="domFallback"><span></span>Ler as legendas da tela como plano B (Meet)</label>
+          </div>
+
+          <div class="card">
+            <h3>Reconhecimento</h3>
+            <label class="field"><span>Idioma falado nas reuniões</span>
+              <select name="captionLang"><option value="pt-BR">Português (Brasil)</option><option value="pt-PT">Português (Portugal)</option><option value="en-US">Inglês</option><option value="es-ES">Espanhol</option></select></label>
+            <p class="muted tiny">O Reunilo avisa quando as legendas da plataforma estão em outro idioma, a causa nº 1 de transcrição ruim.</p>
+
+            <label class="field"><span>Alta precisão (Whisper no seu computador)</span>
+              <select name="hq" id="hq-select"></select></label>
+            <p class="muted tiny" id="hq-info">Ouve o áudio da reunião e transcreve de novo, com mais precisão para fala rápida ou pouco clara. O modelo é baixado uma vez; o áudio não sai do computador.</p>
+            <label class="switch"><input type="checkbox" name="hqMic"><span></span>Incluir o meu microfone (sua própria voz não vem no áudio da aba)</label>
+            <div class="row"><button type="button" class="btn sm ghost" id="mic-perm">Permitir microfone</button><button type="button" class="btn sm ghost" id="hq-test">Testar o modelo</button><span class="muted tiny" id="hq-test-out"></span></div>
+
+            <label class="field"><span>Glossário: nomes, siglas e termos da sua equipe (um por linha)</span>
+              <textarea name="glossary" rows="4" placeholder="Q4&#10;OKR&#10;Thiago Meneses&#10;meneseslabs"></textarea></label>
+            <label class="switch"><input type="checkbox" name="autoReview"><span></span>Revisar com IA automaticamente durante a reunião (usa sua chave de API)</label>
+          </div>
+
+          <div class="card">
+            <h3>Widget na reunião</h3>
+            <label class="switch"><input type="checkbox" name="widget"><span></span>Mostrar o widget do Reunilo dentro da reunião</label>
+            <label class="switch"><input type="checkbox" name="hideCaptions"><span></span>Ocultar as legendas nativas do Meet (a transcrição continua)</label>
+            <div class="grid2">
+              <label class="field"><span>Seu nome na reunião</span><input name="myName" placeholder="Ex.: Thiago Meneses"></label>
+              <label class="field"><span>Meta de parcela de fala (%)</span><input name="talkTarget" type="number" min="5" max="95" step="5"></label>
+            </div>
+            <label class="field"><span>Mensagem para avisar os participantes</span><textarea name="notifyMessage" rows="2"></textarea></label>
+          </div>
+
+          <div class="card">
+            <h3>Tags de destaque</h3>
+            <div id="tag-editor" class="tag-editor"></div>
+            <div class="row"><button type="button" class="btn sm ghost" id="tag-add">+ Nova tag</button><button type="button" class="btn sm ghost" id="tag-reset">Restaurar padrão</button></div>
+          </div>
+
+          <div class="card">
+            <h3>Inteligência artificial <span class="muted">(opcional)</span></h3>
+            <p class="muted">Usa a sua chave da API do Claude. Nada é enviado até você pedir uma ata ou fazer uma pergunta.</p>
+            <label class="field"><span>Chave de API</span>
+              <div class="row"><input name="apiKey" type="password" placeholder="sk-ant-…" class="grow"><button type="button" class="btn sm primary" id="save-key">Salvar</button></div></label>
+            <span id="key-status" class="muted tiny"></span>
+            <label class="field"><span>Modelo</span><select name="aiModel" id="model-select"></select></label>
+            <label class="switch"><input type="checkbox" name="autoAta"><span></span>Gerar a ata automaticamente quando a reunião terminar</label>
+          </div>
+
+          <div class="card">
+            <h3>Capturas de tela e atalhos</h3>
+            <p class="muted">O Chrome libera capturas depois que você clica no ícone do Reunilo na aba da reunião ou usa um atalho. Para capturar sempre pelo widget, autorize abaixo.</p>
+            <div class="row"><button type="button" class="btn sm" id="grant-shots">Autorizar capturas pelo widget</button><span id="shots-status" class="muted tiny"></span></div>
+            <ul class="kbd-list" id="kbd-list"></ul>
+            <button type="button" class="btn sm ghost" id="edit-shortcuts">Alterar atalhos</button>
+          </div>
+
+          <div class="card" id="backup-card">
+            <h3>Backup e sincronização</h3>
+            <p class="muted">O Reunilo salva cada reunião sozinho numa pasta do computador. Se a extensão for removida ou você trocar de computador,
+              escolha a mesma pasta e tudo volta. Uma pasta do OneDrive ou do Google Drive leva as reuniões para os seus outros computadores.</p>
+            <p id="bk-status" class="bk-status"></p>
+            <div class="row">
+              <button type="button" class="btn sm primary" id="bk-pick">Escolher pasta…</button>
+              <button type="button" class="btn sm" id="bk-resume" hidden>Retomar o backup</button>
+              <button type="button" class="btn sm" id="bk-now" hidden>Fazer backup agora</button>
+              <button type="button" class="btn sm" id="bk-restore" hidden>Restaurar desta pasta</button>
+              <button type="button" class="btn sm ghost" id="bk-off" hidden>Desligar</button>
+            </div>
+            <label class="switch"><input type="checkbox" name="syncSettings"><span></span>Sincronizar os ajustes com a sua conta do Chrome</label>
+            <p class="muted tiny">Os ajustes voltam ao reinstalar ou em outro computador com a mesma conta do Chrome. A chave de API fica só neste computador.</p>
+          </div>
+
+          <div class="card">
+            <h3>Armazenamento</h3>
+            <p id="usage" class="muted"></p>
+            <button type="button" class="btn sm danger" id="wipe">Apagar todas as reuniões</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <div class="lightbox" id="lightbox" hidden><img alt="Captura de tela"></div>
+  <div class="toast" id="toast" role="status"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

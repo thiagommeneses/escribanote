@@ -1,0 +1,13 @@
+# Pacotes gerados para o site (publicados na VPS, não no repositório)
+site/download/*.zip
+
+# Segredos e dados do servidor
+*.env
+*.pem
+site/dados/
+
+# Dependências e sistema
+node_modules/
+.DS_Store
+Thumbs.db
+desktop.ini

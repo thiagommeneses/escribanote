@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Política de privacidade — Reunilo</title>
+  <meta name="description" content="Como o Reunilo trata os seus dados: tudo fica no seu computador.">
+  <link rel="icon" href="img/icon.png">
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .legal { max-width: 46rem; padding-bottom: 6rem; }
+    .legal h1 { font-size: var(--step-3); margin-bottom: 0.6rem; }
+    .legal h2 { font-size: var(--step-2); margin: 2.6rem 0 0.8rem; }
+    .legal p, .legal li { color: var(--ink-2); margin-bottom: 0.8rem; }
+    .legal ul { padding-left: 1.2rem; }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <a class="wordmark" href="./"><span class="rec" aria-hidden="true"></span>Reunilo</a>
+    <a class="btn btn-ink" href="./#instalar">Baixar grátis</a>
+  </header>
+  <main>
+    <section class="legal">
+      <p class="eyebrow">Atualizada em 18 de outubro de 2026</p>
+      <h1>Política de privacidade</h1>
+      <p>O Reunilo é uma extensão de navegador da meneseslabs que transcreve reuniões do Google Meet, Microsoft Teams e
+        Zoom e, pelo gravador do computador, huddles do Slack e outros apps. Ela foi projetada para que nós nunca tenhamos
+        acesso às suas reuniões.</p>
+      <p>No gravador do computador, o Chrome pede para você compartilhar a tela para liberar o áudio do sistema. O Reunilo
+        usa só o som: a imagem da tela não é gravada nem guardada, e o áudio é transcrito no próprio computador, sem sair dele.</p>
+
+      <h2>O que o Reunilo coleta</h2>
+      <p>Durante uma reunião, a extensão lê as legendas exibidas pela plataforma e, se você ativar o modo de alta precisão,
+        o áudio da aba da reunião. Com isso ela produz a transcrição, os nomes dos participantes, os seus destaques,
+        notas, capturas de tela e conversas com a IA.</p>
+
+      <h2>Onde esses dados ficam</h2>
+      <p>Somente no armazenamento local do seu navegador (<code>chrome.storage.local</code>), no seu computador. O Reunilo
+        não tem servidores, não cria contas e não envia transcrições, áudio ou estatísticas de uso para a meneseslabs nem
+        para terceiros.</p>
+
+      <h2>Quando algo sai do seu computador</h2>
+      <ul>
+        <li><b>IA opcional:</b> se você cadastrar uma chave da API do Claude e pedir uma ata, uma pergunta ou uma revisão,
+          o texto da transcrição daquela reunião é enviado diretamente do seu navegador para a Anthropic
+          (<code>api.anthropic.com</code>), sob os termos da sua conta na Anthropic. Nada é enviado sem a sua ação ou sem
+          você ativar a ata/revisão automática.</li>
+        <li><b>Modelo de reconhecimento:</b> ao ativar o modo de alta precisão, os arquivos do modelo Whisper são baixados
+          uma vez do Hugging Face. Só arquivos públicos do modelo são baixados; o áudio nunca é enviado.</li>
+      </ul>
+
+      <h2>Seus controles</h2>
+      <ul>
+        <li>Escolher entre transcrever sempre, perguntar a cada reunião ou nunca transcrever.</li>
+        <li>Pausar a transcrição a qualquer momento.</li>
+        <li>Apagar uma reunião, ou todas, nos ajustes da extensão. Desinstalar a extensão também apaga os dados.</li>
+        <li>Exportar um backup em JSON e importá-lo em outro computador.</li>
+      </ul>
+
+      <h2>Participantes da reunião</h2>
+      <p>Transcrever uma conversa pode exigir o consentimento dos participantes, conforme a lei aplicável (como a LGPD).
+        O Reunilo oferece um aviso pronto para colar no chat, mas a responsabilidade de informar os participantes é de quem
+        usa a extensão.</p>
+
+      <h2>Contato</h2>
+      <p>Dúvidas sobre esta política: use o <a href="./#contato">formulário de contato</a>. O que você escrever
+        nele (nome, e-mail e mensagem) é guardado no servidor da meneseslabs só para responder a você, junto com o
+        endereço IP de envio, usado contra spam. Nada disso é usado para marketing ou repassado a terceiros.</p>
+    </section>
+  </main>
+  <footer class="foot">
+    <a class="wordmark" href="./"><span class="rec" aria-hidden="true"></span>Reunilo</a>
+    <a class="made" href="https://meneseslabs.com.br"><img src="img/meneseslabs.svg" alt="" width="28" height="22">um produto <b>meneses<span>labs</span></b></a>
+  </footer>
+</body>
+</html>

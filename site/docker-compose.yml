@@ -1,0 +1,41 @@
+# Site do Reunilo (escriba.meneseslabs.com.br), publicado pelo Caddy (stack /opt/caddy).
+# Arquivos estáticos em ./public: editar e recarregar o navegador, sem reiniciar.
+services:
+  escriba-site:
+    image: caddy:2-alpine
+    container_name: escriba-site
+    restart: unless-stopped
+    command: caddy file-server --root /srv
+    labels:
+      caddy: escriba.meneseslabs.com.br
+      caddy.reverse_proxy: "{{upstreams 80}}"
+      caddy.encode: zstd gzip
+      caddy.header.Strict-Transport-Security: "max-age=31536000"
+      caddy.header.X-Content-Type-Options: nosniff
+      caddy.header.Referrer-Policy: strict-origin-when-cross-origin
+    networks:
+      - caddy
+    volumes:
+      - ./public:/srv:ro
+
+  # Formulário de contato (/api/contato). O destino e a senha do SMTP ficam em contato.env, só na VPS.
+  escriba-contato:
+    image: python:3.12-alpine
+    container_name: escriba-contato
+    restart: unless-stopped
+    command: python -u /app/server.py
+    env_file:
+      - path: ./contato.env
+        required: false
+    labels:
+      caddy: escriba.meneseslabs.com.br
+      caddy.reverse_proxy: "/api/* {{upstreams 8080}}"
+    networks:
+      - caddy
+    volumes:
+      - ./contato:/app:ro
+      - ./dados:/data
+
+networks:
+  caddy:
+    external: true

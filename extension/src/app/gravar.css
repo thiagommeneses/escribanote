@@ -1,0 +1,57 @@
+/* Gravador do computador: reaproveita os tokens de app.css. */
+body { background: var(--bg-soft); }
+.rec-shell { max-width: 860px; margin: 0 auto; padding: 0 16px 48px; }
+.rec-top { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+.brand-static { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
+.rec-main h1 { font-size: 22px; line-height: 1.25; margin: 0 0 8px; letter-spacing: -0.01em; }
+.lead { color: var(--text-2); font-size: 15px; max-width: 46rem; margin: 0 0 18px; }
+
+.how { margin: 0 0 22px; padding: 0; list-style: none; counter-reset: how; display: grid; gap: 10px; }
+.how li { counter-increment: how; position: relative; padding-left: 36px; color: var(--text-2); }
+.how li::before { content: counter(how); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 12px; }
+.how b { color: var(--text); }
+
+.rec-form { display: grid; gap: 14px; padding: 18px; margin-bottom: 14px; }
+.rec-form label { display: grid; gap: 5px; font-weight: 600; font-size: 13px; color: var(--text-2); }
+.rec-form input:not([type=checkbox]), .rec-form select { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface); font-weight: 400; color: var(--text); }
+.rec-form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.rec-form .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; color: var(--text); }
+.rec-form .check input { margin-top: 3px; }
+.rec-form .check .muted { display: block; font-size: 12.5px; }
+.btn.big { padding: 10px 18px; font-size: 15px; font-weight: 600; border-radius: 10px; }
+.btn .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.btn.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+.btn.danger-solid:hover { filter: brightness(0.92); border-color: var(--danger); }
+.err { color: var(--danger); font-size: 13px; max-width: 34rem; }
+.test-out { margin: 0; font-size: 13.5px; }
+.test-out.ok { color: var(--ok); }
+
+.live-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.state { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+.pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); animation: pulse 1.6s ease-out infinite; }
+.paused .pulse { animation: none; background: var(--muted); }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 55%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+.meters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin-bottom: 12px; }
+.meter { display: grid; gap: 5px; font-size: 12.5px; font-weight: 600; }
+.meter i { display: block; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.meter b { display: block; height: 100%; width: 0; background: var(--ok); border-radius: 3px; transition: width 0.12s linear; }
+.meter.off { opacity: 0.45; }
+
+.feed { display: grid; gap: 2px; margin-top: 8px; }
+.feed .blk { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
+.feed .who { font-weight: 600; font-size: 13px; display: flex; gap: 8px; align-items: baseline; }
+.feed .who time { color: var(--muted); font-weight: 400; font-size: 12px; font-variant-numeric: tabular-nums; }
+.feed .blk p { margin: 2px 0 0; }
+.feed .av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700; }
+.feed .tag { font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--mark); color: var(--text); font-weight: 600; }
+.feed-empty { color: var(--muted); padding: 28px 12px; text-align: center; border: 1px dashed var(--border-strong); border-radius: 10px; }
+
+.done { padding: 24px; }
+
+@media (max-width: 620px) {
+  .rec-form .two, .meters { grid-template-columns: 1fr; }
+}

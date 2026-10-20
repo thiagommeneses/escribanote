@@ -1,0 +1,137 @@
+{
+  "manifest_version": 3,
+  "name": "Reunilo — Transcrição de Reuniões",
+  "short_name": "Reunilo",
+  "version": "2.4.0",
+  "description": "Transcrição local e privada do Google Meet, Teams, Zoom e huddles do Slack: reconhecimento de alta precisão (Whisper local), revisão por IA com glossário, widget na reunião, destaques, notas e análise de fala.",
+  "minimum_chrome_version": "116",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2VOvZcRMPnStL1qAqS1uLTeoVKJtYSqnfbiE0Znom+JeOmLpCARMZDtmx+fF5wlC661grfmH4yaD3MNCyIhLBFHQnegIE8lzjYX4DTvvn8rP38mlSVIpL57V7AIKeRR0twuvYF/4Nrx2gqEfBQygUfzwFKcVuwq5AvjUqCyl8oXxe6yxIe++J68lTZQUpiTGh8d8P/p+0sUnCo5egeBDx7m1IGulsCFyiETmmoKTThONMPnoTOMDwOcTTbUIdCA76ZviGbDyJWt8ava2SgRxV/88EbxonDGKYB9CNktVUpwP8D1fSp+32VC3ip+8OtcdIMMVgBYfvTIdaFO3BPMRBQIDAQAB",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Abrir o Reunilo"
+  },
+  "side_panel": {
+    "default_path": "src/app/app.html"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "sidePanel",
+    "activeTab",
+    "offscreen",
+    "tabCapture"
+  ],
+  "optional_host_permissions": [
+    "https://api.anthropic.com/*",
+    "<all_urls>"
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+E"
+      },
+      "description": "Abrir o Reunilo"
+    },
+    "highlight-last": {
+      "suggested_key": {
+        "default": "Alt+Shift+H"
+      },
+      "description": "Destacar o último bloco da transcrição"
+    },
+    "screenshot": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Salvar uma captura de tela na transcrição"
+    },
+    "toggle-pause": {
+      "suggested_key": {
+        "default": "Alt+Shift+P"
+      },
+      "description": "Pausar ou retomar a transcrição"
+    },
+    "open-recorder": {
+      "description": "Abrir o gravador do computador (Slack e outros apps)"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://meet.google.com/*"
+      ],
+      "js": [
+        "src/main/core.js",
+        "src/main/proto.js",
+        "src/main/meet.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://teams.microsoft.com/*",
+        "https://teams.live.com/*",
+        "https://teams.cloud.microsoft/*"
+      ],
+      "js": [
+        "src/main/core.js",
+        "src/main/teams.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://*.zoom.us/wc/*",
+        "https://app.zoom.us/*"
+      ],
+      "js": [
+        "src/main/core.js",
+        "src/main/zoom.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://meet.google.com/*",
+        "https://teams.microsoft.com/*",
+        "https://teams.live.com/*",
+        "https://teams.cloud.microsoft/*",
+        "https://*.zoom.us/wc/*",
+        "https://app.zoom.us/*"
+      ],
+      "js": [
+        "src/content/bridge.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://meet.google.com/*",
+        "https://teams.microsoft.com/*",
+        "https://teams.live.com/*",
+        "https://teams.cloud.microsoft/*",
+        "https://*.zoom.us/wc/*",
+        "https://app.zoom.us/*"
+      ],
+      "js": [
+        "src/content/widget.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}

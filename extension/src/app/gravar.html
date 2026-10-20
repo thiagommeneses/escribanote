@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reunilo — Gravador do computador</title>
+  <link rel="icon" href="../../icons/icon48.png">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="gravar.css">
+</head>
+<body>
+  <div class="rec-shell">
+    <header class="rec-top">
+      <div class="brand-static"><img src="../../icons/icon48.png" alt="" width="22" height="22">Reunilo</div>
+      <span class="muted">Gravador do computador</span>
+    </header>
+
+    <!-- Preparação -->
+    <section id="setup" class="rec-main">
+      <h1>Transcrever um huddle do Slack ou outro app</h1>
+      <p class="lead">Funciona com o app do Slack instalado no Windows e qualquer programa que toque som no computador:
+        o Reunilo ouve o áudio do sistema e o seu microfone e transcreve tudo aqui, com o Whisper, sem enviar o áudio para lugar nenhum.</p>
+
+      <ol class="how">
+        <li><b>Entre no huddle</b> pelo app do Slack, como sempre.</li>
+        <li>Aqui, clique em <b>Começar a gravar</b>. Na janela do Chrome, escolha <b>Tela inteira</b> e ative
+          <b>Compartilhar áudio do sistema</b>. A imagem da tela não é gravada; ela só é exigida pelo Chrome para liberar o som.</li>
+        <li><b>Deixe esta aba aberta</b> (pode ir para outra aba ou minimizar). Para terminar, clique em <b>Parar e salvar</b>.</li>
+      </ol>
+
+      <form id="form" class="card rec-form">
+        <label>Nome da gravação<input id="title" maxlength="120" required></label>
+        <div class="two">
+          <label>App<select id="platform"><option value="slack">Slack (huddle)</option><option value="desktop">Outro app ou vídeo</option></select></label>
+          <label>Precisão<select id="model"></select></label>
+        </div>
+        <label class="check"><input type="checkbox" id="mic" checked> <span>Incluir o meu microfone, para a sua fala sair como <b id="me-name">Você</b>.
+          <span class="muted">Sem fone de ouvido, o eco da caixa de som é detectado e descartado.</span></span></label>
+        <div class="row"><button class="btn primary big" id="start" type="submit"><span class="dot"></span>Começar a gravar</button>
+          <button class="btn" id="test" type="button" title="Transcreve um trecho de fala embutido para conferir se o modelo funciona neste computador">Testar o modelo</button>
+          <span id="setup-err" class="err" role="alert"></span></div>
+        <p id="test-out" class="test-out muted" aria-live="polite" hidden></p>
+      </form>
+      <p class="muted tiny">Só funciona no Chrome para Windows ou ChromeOS: no macOS e no Linux o Chrome não captura o áudio do sistema.
+        Os participantes não aparecem com nome (o Slack não informa quem fala); você pode renomear "Participantes" depois.</p>
+    </section>
+
+    <!-- Gravando -->
+    <section id="live" class="rec-main" hidden>
+      <div class="live-head">
+        <div>
+          <div class="state"><span class="pulse"></span><b id="clock">00:00</b><span id="status" class="muted"></span></div>
+          <h1 id="live-title"></h1>
+        </div>
+        <div class="row">
+          <button class="btn" id="pause" type="button"></button>
+          <button class="btn" id="star" type="button" title="Destacar a última fala (Alt+Shift+H)">⭐ Destacar</button>
+          <button class="btn" id="open" type="button">Abrir no Reunilo</button>
+          <button class="btn danger-solid" id="stop" type="button">Parar e salvar</button>
+        </div>
+      </div>
+
+      <div class="meters">
+        <div class="meter"><span>Participantes <span class="muted">(áudio do computador)</span></span><i><b id="lv-system"></b></i></div>
+        <div class="meter" id="meter-mic"><span>Você <span class="muted">(microfone)</span></span><i><b id="lv-mic"></b></i></div>
+      </div>
+      <div id="warn" class="banner warn" hidden></div>
+
+      <div id="feed" class="feed" aria-live="polite"></div>
+    </section>
+
+    <!-- Fim -->
+    <section id="done" class="rec-main" hidden>
+      <div class="card done">
+        <h1>Gravação salva</h1>
+        <p id="done-sub" class="muted"></p>
+        <div class="row"><button class="btn primary" id="done-open" type="button">Abrir a transcrição</button>
+          <button class="btn" id="again" type="button">Gravar outra</button></div>
+      </div>
+    </section>
+  </div>
+  <script type="module" src="gravar.js"></script>
+</body>
+</html>
