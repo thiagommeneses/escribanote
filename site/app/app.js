@@ -120,9 +120,28 @@ function parseRoute() {
   return { parts, params: new URLSearchParams(query || "") };
 }
 
+// Plano escolhido na página /pro/ (#/conta?plano=anual&moeda=brl). Fica no localStorage porque o link
+// de login abre em outra aba, onde o sessionStorage não existe.
+const PLAN_KEY = "reunilo:plano";
+function rememberPlan(params) {
+  const plano = params.get("plano"), moeda = params.get("moeda");
+  if (!plano && !moeda) return;
+  try {
+    localStorage.setItem(PLAN_KEY, JSON.stringify({ interval: plano === "mensal" ? "month" : "year", currency: moeda === "usd" ? "usd" : "brl" }));
+  } catch {}
+}
+function pendingPlan() {
+  try {
+    return JSON.parse(localStorage.getItem(PLAN_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
 async function route() {
   const { parts, params } = parseRoute();
   const [head, arg] = parts;
+  if (head === "conta") rememberPlan(params);
   if (head === "entrar") return renderLogin(arg);
   if (!state.me) {
     try {
@@ -160,7 +179,8 @@ async function renderLogin(token) {
       renderCredits();
       const after = sessionStorage.getItem("after");
       sessionStorage.removeItem("after");
-      history.replaceState(null, "", after && !after.startsWith("#/entrar") ? after : "#/");
+      const fallback = pendingPlan() && state.me.plan !== "pro" ? "#/conta" : "#/";
+      history.replaceState(null, "", after && !after.startsWith("#/entrar") && after !== "#/" ? after : fallback);
       return route();
     } catch (err) {
       view.innerHTML = `<section class="page"><h1>Este link não vale mais</h1>
@@ -747,21 +767,20 @@ async function renderAccount(params) {
     incomplete: "Aguardando a confirmação do pagamento",
   }[sub?.status] || "Sem assinatura";
   const c = me.credits;
+  if (isPro()) {
+    try {
+      localStorage.removeItem(PLAN_KEY);
+    } catch {}
+  }
+  const PLAN_NAMES = { brl: { month: "R$ 15/mês", year: "R$ 150/ano" }, usd: { month: "US$ 3/mês", year: "US$ 30/ano" } };
   const plan = isPro()
     ? `<section class="panel pro"><h2>Reunilo Pro</h2>
-        <dl class="kv"><dt>Assinatura</dt><dd>${esc(statusText)}</dd><dt>Moeda</dt><dd>${sub?.currency === "usd" ? "US$ 3/mês" : "R$ 15/mês"}</dd></dl>
+        <dl class="kv"><dt>Assinatura</dt><dd>${esc(statusText)}</dd><dt>Plano</dt><dd>${sub?.interval === "year" ? "Anual" : "Mensal"} · ${PLAN_NAMES[sub?.currency === "usd" ? "usd" : "brl"][sub?.interval === "year" ? "year" : "month"]}</dd></dl>
         <div><div class="row" style="justify-content:space-between"><b>Créditos de IA</b><span class="small muted">${c.balance} de ${c.max} · +${c.perCycle} ${c.renewsAt ? `em ${dateShort(c.renewsAt)}` : "a cada mês"}</span></div>
         <div class="meter" style="margin-top:6px"><b style="width:${Math.min(100, (c.balance / c.max) * 100)}%"></b></div>
-        <p class="small muted" style="margin-top:6px">Ata, revisão, pergunta, e-mail de follow-up e tarefas: 1 crédito. Pergunta sobre todas as reuniões: 2. Os que sobram acumulam até ${c.max}.</p></div>
+        <p class="small muted" style="margin-top:6px">Ata, revisão, pergunta, e-mail de follow-up e tarefas: 1 crédito. Pergunta sobre todas as reuniões: 2. Os que sobram acumulam até ${c.max}${sub?.interval === "year" ? ". No plano anual, os créditos chegam todo mês" : ""}.</p></div>
         <div class="row"><button class="btn" data-act="portal">Forma de pagamento, recibos e cancelamento</button></div></section>`
-    : `<section class="panel"><h2>Assine o Reunilo Pro</h2>
-        <ul class="feat"><li>Suas reuniões salvas na conta e sincronizadas entre computadores</li><li>Esta área web: busca em todas as falas, ata ao lado da transcrição, análise de fala</li>
-        <li>IA sem chave de API: 15 créditos por mês, que acumulam até 30</li><li>Links de leitura para quem não usa o Reunilo</li></ul>
-        <div class="plans">
-          <div class="plan"><span class="small muted">No Brasil</span><span class="price">R$ 15 <small>/mês</small></span><span class="small">Pix Automático ou cartão</span><button class="btn primary" data-act="checkout" data-c="brl">Assinar em reais</button></div>
-          <div class="plan"><span class="small muted">Outside Brazil</span><span class="price">US$ 3 <small>/month</small></span><span class="small">Credit card</span><button class="btn dark" data-act="checkout" data-c="usd">Subscribe in USD</button></div>
-        </div>
-        <p class="small muted">Cancele quando quiser pelo portal da Stripe. A extensão continua grátis e local para sempre.</p></section>`;
+    : `<section class="panel subscribe" id="subscribe">${subscribeHtml(pendingPlan() || {})}</section>`;
   view.innerHTML = `<section class="page">
     <h1>Sua <em>conta</em></h1>
     ${justPaid && !isPro() ? `<div class="notice" id="paid-wait">Recebemos o seu pagamento. Estamos confirmando com a Stripe; com Pix pode levar alguns instantes.</div>` : ""}
@@ -782,6 +801,62 @@ async function renderAccount(params) {
       <div class="row"><button class="btn primary" data-act="delete-account">Apagar para sempre</button></div></div></section>
   </section>`;
   if (justPaid && !isPro()) pollPro();
+}
+
+// ---------------- assinar ----------------
+const OFFERS = {
+  brl: {
+    year: { price: "R$ 150", per: "/ano", was: "R$ 180", note: "Equivale a R$ 12,50 por mês · 2 meses grátis", pay: "Pix Automático ou cartão de crédito" },
+    month: { price: "R$ 15", per: "/mês", note: "Cancele quando quiser", pay: "Cartão de crédito" },
+  },
+  usd: {
+    year: { price: "US$ 30", per: "/year", was: "US$ 36", note: "US$ 2.50 a month · 2 months free", pay: "Credit card" },
+    month: { price: "US$ 3", per: "/month", note: "Cancel anytime", pay: "Credit card" },
+  },
+};
+function subscribeHtml({ interval = "year", currency = "brl" }) {
+  const o = OFFERS[currency][interval];
+  const seg = (k, v, label, on) =>
+    `<button type="button" role="radio" aria-checked="${on}" class="seg-btn" data-act="plan-pick" data-k="${k}" data-v="${v}">${label}</button>`;
+  return `<div class="sub-head"><div><p class="eyebrow-sm">Reunilo Pro</p><h2>Suas reuniões em qualquer computador, com IA inclusa</h2></div>
+      <div class="segs">
+        <div class="seg" role="radiogroup" aria-label="Cobrança">${seg("interval", "year", `Anual <span class="save">−17%</span>`, interval === "year")}${seg("interval", "month", "Mensal", interval === "month")}</div>
+        <div class="seg" role="radiogroup" aria-label="Moeda">${seg("currency", "brl", "R$", currency === "brl")}${seg("currency", "usd", "US$", currency === "usd")}</div>
+      </div></div>
+    <div class="offer">
+      <div class="offer-price" aria-live="polite">
+        ${o.was ? `<s class="was">${o.was}</s>` : ""}<span class="amount">${o.price}<small>${o.per}</small></span>
+        <span class="note">${o.note}</span>
+        <span class="pay">${interval === "year" && currency === "brl" ? "◆ " : ""}${o.pay}</span>
+        <button class="btn primary big" data-act="checkout" data-c="${currency}" data-i="${interval}">${currency === "usd" ? "Subscribe" : "Assinar"} ${interval === "year" ? (currency === "usd" ? "yearly" : "o anual") : currency === "usd" ? "monthly" : "o mensal"}</button>
+        ${currency === "brl" && interval === "month" ? `<span class="small muted">Quer pagar com Pix? O Pix está disponível no plano anual.</span>` : ""}
+      </div>
+      <ul class="feat">
+        <li>Reuniões salvas na conta e sincronizadas entre computadores</li>
+        <li>Esta área web: busca em todas as falas, ata ao lado da transcrição, análise de fala</li>
+        <li>IA sem chave de API: 15 créditos por mês, que acumulam até 30</li>
+        <li>Links de leitura para quem não usa o Reunilo</li>
+      </ul>
+    </div>
+    <div class="trust" aria-label="Segurança e privacidade">
+      <div><b>Protegido no caminho e guardado cifrado</b><span>HTTPS no envio e AES-256 no armazenamento; os backups diários também são cifrados.</span></div>
+      <div><b>Seus dados são seus</b><span>Não vendemos, não usamos para treinar IA e você exporta ou apaga tudo quando quiser.</span></div>
+      <div><b>Direitos garantidos</b><span>Seguimos a LGPD e respeitamos os direitos do GDPR (União Europeia) e das leis de privacidade dos EUA, como a CCPA. <a href="/privacidade.html#pro">Política</a>.</span></div>
+    </div>
+    <p class="small muted">Pagamento processado pela Stripe; o Reunilo não vê o número do seu cartão. A extensão continua grátis e local para sempre: o Pro é opcional.</p>`;
+}
+function pickPlan(el) {
+  const box = $("subscribe");
+  const cur = {
+    interval: box.querySelector('[data-k="interval"][aria-checked="true"]').dataset.v,
+    currency: box.querySelector('[data-k="currency"][aria-checked="true"]').dataset.v,
+  };
+  cur[el.dataset.k] = el.dataset.v;
+  try {
+    localStorage.setItem(PLAN_KEY, JSON.stringify(cur));
+  } catch {}
+  box.innerHTML = subscribeHtml(cur);
+  box.querySelector(`[data-k="${el.dataset.k}"][aria-checked="true"]`)?.focus();
 }
 
 async function pollPro(tries = 0) {
@@ -994,9 +1069,14 @@ view.addEventListener("click", async (e) => {
         await api.del(`/shares/${el.dataset.id}`);
         toast("Link revogado");
         return loadShares();
+      case "plan-pick":
+        return pickPlan(el);
       case "checkout": {
         el.disabled = true;
-        const r = await api.post("/billing/checkout", { currency: el.dataset.c });
+        const r = await api.post("/billing/checkout", { currency: el.dataset.c, interval: el.dataset.i }).catch((err) => {
+          el.disabled = false;
+          throw err;
+        });
         location.href = r.url;
         return;
       }

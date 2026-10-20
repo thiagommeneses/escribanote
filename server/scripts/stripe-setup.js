@@ -1,4 +1,4 @@
-// Prepara a conta Stripe para o Reunilo Pro: produto, preços (BRL e USD), webhook e portal do cliente.
+// Prepara a conta Stripe para o Reunilo Pro: produto, preços (BRL e USD, mensal e anual), webhook e portal do cliente.
 // Pode rodar mais de uma vez: reaproveita o que já existe (preços pelo lookup_key, webhook pela URL).
 // Imprime as linhas para o pro.env (ou grava direto com --write caminho/pro.env).
 //   STRIPE_SECRET_KEY=sk_... PUBLIC_URL=https://reunilo.meneseslabs.com.br node scripts/stripe-setup.js [--write /caminho/pro.env]
@@ -12,16 +12,16 @@ const stripe = new Stripe(key);
 const mode = key.startsWith("sk_live") ? "produção" : "teste";
 const EVENTS = ["checkout.session.completed", "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted", "invoice.paid", "invoice.payment_failed", "mandate.updated"];
 
-async function price(lookup, currency, amount, product) {
+async function price(lookup, currency, amount, product, interval = "month") {
   const found = await stripe.prices.list({ lookup_keys: [lookup], active: true, limit: 1 });
   if (found.data[0]) return found.data[0];
   return stripe.prices.create({
     product,
     currency,
     unit_amount: amount,
-    recurring: { interval: "month" },
+    recurring: { interval },
     lookup_key: lookup,
-    nickname: `Reunilo Pro mensal (${currency.toUpperCase()})`,
+    nickname: `Reunilo Pro ${interval === "year" ? "anual" : "mensal"} (${currency.toUpperCase()})`,
     tax_behavior: "inclusive",
   });
 }
@@ -36,6 +36,9 @@ const product =
   }));
 const brl = await price("reunilo_pro_brl_monthly", "brl", 1500, product.id);
 const usd = await price("reunilo_pro_usd_monthly", "usd", 300, product.id);
+// Anual: 12 meses pelo preço de 10 (R$ 150 e US$ 30).
+const brlYear = await price("reunilo_pro_brl_yearly", "brl", 15000, product.id, "year");
+const usdYear = await price("reunilo_pro_usd_yearly", "usd", 3000, product.id, "year");
 
 const url = `${publicUrl}/api/v1/billing/webhook`;
 const hooks = await stripe.webhookEndpoints.list({ limit: 100 });
@@ -63,9 +66,15 @@ if (!portal) {
   });
 }
 
-const lines = { STRIPE_PRICE_BRL: brl.id, STRIPE_PRICE_USD: usd.id, STRIPE_PORTAL_CONFIG: portal.id };
+const lines = {
+  STRIPE_PRICE_BRL: brl.id,
+  STRIPE_PRICE_BRL_YEAR: brlYear.id,
+  STRIPE_PRICE_USD: usd.id,
+  STRIPE_PRICE_USD_YEAR: usdYear.id,
+  STRIPE_PORTAL_CONFIG: portal.id,
+};
 if (secret) lines.STRIPE_WEBHOOK_SECRET = secret;
-console.log(`Stripe (${mode}): produto ${product.id}, preços ${brl.id} e ${usd.id}, webhook ${hook.id}, portal ${portal.id}`);
+console.log(`Stripe (${mode}): produto ${product.id}, preços ${brl.id}, ${brlYear.id}, ${usd.id} e ${usdYear.id}, webhook ${hook.id}, portal ${portal.id}`);
 if (!secret) console.log("O webhook já existia: o segredo dele continua o mesmo do pro.env.");
 
 const target = process.argv.indexOf("--write") > 0 ? process.argv[process.argv.indexOf("--write") + 1] : null;

@@ -86,9 +86,9 @@ test("SDK da Anthropic: streaming, cache, esforço e custo", async () => {
   assert.ok(row.cost > 0);
 });
 
-test("SDK da Stripe: Checkout com Pix Automático codificado como a API espera", async () => {
+test("SDK da Stripe: Checkout anual com Pix Automático codificado como a API espera", async () => {
   const novo = await login(ctx);
-  const r = await novo.post("/api/v1/billing/checkout", { currency: "brl" });
+  const r = await novo.post("/api/v1/billing/checkout", { currency: "brl", interval: "year" });
   assert.equal(r.statusCode, 200, r.body);
   assert.equal(r.json().url, "https://checkout.stripe.com/c/cs_real");
   const call = seen.find((s) => s.url === "/v1/checkout/sessions");
@@ -96,10 +96,10 @@ test("SDK da Stripe: Checkout com Pix Automático codificado como a API espera",
   assert.equal(form.get("mode"), "subscription");
   assert.equal(form.get("payment_method_types[0]"), "card");
   assert.equal(form.get("payment_method_types[1]"), "pix");
-  assert.equal(form.get("payment_method_options[pix][mandate_options][amount]"), "2000");
+  assert.equal(form.get("payment_method_options[pix][mandate_options][amount]"), "18000");
   assert.equal(form.get("payment_method_options[pix][mandate_options][amount_type]"), "maximum");
-  assert.equal(form.get("payment_method_options[pix][mandate_options][payment_schedule]"), "monthly");
-  assert.equal(form.get("payment_method_options[pix][mandate_options][reference]"), "Reunilo Pro");
-  assert.equal(form.get("line_items[0][price]"), "price_brl");
+  assert.equal(form.get("payment_method_options[pix][mandate_options][payment_schedule]"), "yearly");
+  assert.equal(form.get("payment_method_options[pix][mandate_options][reference]"), "Reunilo Pro anual");
+  assert.equal(form.get("line_items[0][price]"), "price_brl_year");
   assert.match(call.headers["stripe-version"] || "", /^\d{4}-\d{2}-\d{2}/);
 });

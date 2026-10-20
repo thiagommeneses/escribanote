@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reunilo Pro — suas reuniões em todos os computadores, com IA inclusa</title>
+  <meta name="description" content="O Reunilo Pro guarda uma cópia cifrada das suas reuniões numa conta sua, com área web, busca e IA inclusa. R$ 150 por ano (Pix ou cartão) ou R$ 15 por mês. Conforme a LGPD.">
+  <meta property="og:title" content="Reunilo Pro — suas reuniões em todos os computadores">
+  <meta property="og:description" content="Conta opcional, cifrada e conforme a LGPD. IA inclusa. R$ 12,50 por mês no plano anual.">
+  <meta property="og:image" content="https://reunilo.meneseslabs.com.br/img/og.png">
+  <meta property="og:url" content="https://reunilo.meneseslabs.com.br/pro/">
+  <meta name="theme-color" content="#f6f1e7">
+  <link rel="icon" href="../img/icon.png">
+  <link rel="preload" href="../fonts/fraunces-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../fonts/hanken-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../fonts.css">
+  <link rel="stylesheet" href="../styles.css">
+  <script>
+    // Transição entre páginas: se a navegação for rápida demais o navegador pula a animação e rejeita
+    // as promessas dela. É esperado; não deve aparecer como erro. Fica no <head> porque o "pagereveal"
+    // acontece antes dos scripts com defer.
+    for (const ev of ["pageswap", "pagereveal"]) addEventListener(ev, (e) => { for (const k of ["ready", "finished", "updateCallbackDone"]) e.viewTransition?.[k]?.catch(() => {}); });
+  </script>
+</head>
+<body class="pro">
+  <a class="skip" href="#conteudo">Pular para o conteúdo</a>
+  <div class="progress" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a class="wordmark" href="../" aria-label="Reunilo, início"><span class="rec" aria-hidden="true"></span>Reunilo</a>
+    <nav aria-label="Seções">
+      <a href="../#caminho">Privacidade</a>
+      <a href="../#recursos">Recursos</a>
+      <a href="#planos">Planos</a>
+      <a href="#seguranca">Segurança</a>
+      <a class="nav-pro" href="./" aria-current="page">Pro</a>
+    </nav>
+    <a class="nav-login" href="../app/">Entrar</a>
+    <a class="btn btn-ink" href="#planos">Assinar</a>
+  </header>
+
+  <main id="conteudo">
+    <section class="pro-hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Reunilo Pro · opcional</p>
+        <h1 class="split">Suas reuniões em <em>todos</em> os computadores. A IA já vem junto.</h1>
+        <p class="lede">O mesmo Reunilo, com uma conta sua: as reuniões sincronizam entre computadores, ganham uma área web com
+          busca em todas as falas e a ata sai sem configurar chave nenhuma.</p>
+        <div class="cta">
+          <a class="btn btn-rec" href="#planos">Ver os planos</a>
+          <a class="link-arrow" href="#seguranca">Como protegemos seus dados →</a>
+        </div>
+      </div>
+      <aside class="pro-hero-aside" data-reveal>
+        <p><b>O grátis continua grátis.</b> A extensão segue local, sem conta e sem limite. Sem o Pro, nada sai do seu computador.</p>
+        <p><b>Você decide o que sobe.</b> Ao conectar, a extensão pergunta se envia as reuniões antigas ou só as próximas.</p>
+        <p><b>Sai quando quiser.</b> Exporte tudo e apague a conta em um clique; as reuniões do seu computador continuam lá.</p>
+      </aside>
+    </section>
+
+    <section class="pricing" id="planos" aria-labelledby="planos-title">
+      <div class="section-head" data-reveal>
+        <p class="eyebrow">Planos</p>
+        <h2 id="planos-title">Um preço honesto. <em>Dois meses grátis</em> no anual.</h2>
+      </div>
+      <div class="toggles" data-reveal>
+        <div class="seg" role="radiogroup" aria-label="Cobrança" data-k="interval">
+          <span class="thumb" aria-hidden="true"></span>
+          <button type="button" role="radio" aria-checked="true" data-v="year">Anual <span class="save">−17%</span></button>
+          <button type="button" role="radio" aria-checked="false" tabindex="-1" data-v="month">Mensal</button>
+        </div>
+        <div class="seg" role="radiogroup" aria-label="Moeda" data-k="currency">
+          <span class="thumb" aria-hidden="true"></span>
+          <button type="button" role="radio" aria-checked="true" data-v="brl">Real (R$)</button>
+          <button type="button" role="radio" aria-checked="false" tabindex="-1" data-v="usd">Dólar (US$)</button>
+        </div>
+      </div>
+
+      <div class="plans-grid" id="pricing">
+        <article class="plan-card way-free" data-reveal>
+          <p class="way-kicker">Reunilo</p>
+          <div class="price-line"><span class="price-now">0</span><span class="price-per">para sempre</span></div>
+          <p class="way-lede">A extensão completa, no seu computador. Sem conta.</p>
+          <ul class="ticks">
+            <li>Transcrição ao vivo no Meet, Teams, Zoom e Slack</li>
+            <li>Alta precisão com o Whisper local</li>
+            <li>Destaques, notas, capturas, análise de fala</li>
+            <li>Exporta em PDF, Markdown, SRT, JSON…</li>
+            <li>IA com a sua própria chave da API</li>
+          </ul>
+          <a class="btn btn-ink" href="../#instalar">Baixar grátis</a>
+        </article>
+
+        <article class="plan-card way-pro" data-reveal aria-live="polite">
+          <p class="way-kicker">Reunilo <em>Pro</em></p>
+          <div class="price-line" id="p-price"><span class="price-was" id="p-was">R$ 180</span><span class="price-now" id="p-now">R$ 150</span><span class="price-per" id="p-per">/ano</span></div>
+          <p class="price-note" id="p-note">Equivale a R$ 12,50 por mês · 2 meses grátis</p>
+          <div class="price-pay" id="p-pay"><span class="chip pix">Pix Automático</span><span class="chip card">Cartão de crédito</span></div>
+          <ul class="ticks">
+            <li>Tudo do grátis, e mais:</li>
+            <li>Reuniões sincronizadas entre todos os seus computadores</li>
+            <li>Área web: busca em todas as falas, ata ao lado da transcrição</li>
+            <li>IA inclusa, sem chave: 15 créditos por mês, acumulam até 30</li>
+            <li>Pergunte a todas as reuniões de uma vez</li>
+            <li>Links de leitura para quem não usa o Reunilo</li>
+          </ul>
+          <a class="btn btn-light" id="p-cta" href="../app/#/conta?plano=anual&amp;moeda=brl">Assinar o anual</a>
+          <p class="way-fine">Pagamento seguro pela Stripe. Você entra com o seu e-mail, sem senha.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="pro-more" aria-labelledby="more-title">
+      <div class="section-head" data-reveal>
+        <p class="eyebrow">O que o Pro adiciona</p>
+        <h2 id="more-title">Menos configurar, <em>mais encontrar</em>.</h2>
+      </div>
+      <div class="pro-feats" data-reveal-group>
+        <div data-reveal><h3>Em todo computador</h3><p>Conecte a extensão em quantos computadores quiser. As reuniões vão para a conta sozinhas e, se a mesma reunião mudar em dois lugares, as versões se juntam sem perder falas.</p></div>
+        <div data-reveal><h3>Uma área web de verdade</h3><p>Todas as reuniões num só lugar, com busca que ignora acentos, a ata ao lado da transcrição, destaques e análise de fala. Atalho <kbd>Ctrl</kbd><kbd>K</kbd> para tudo.</p></div>
+        <div data-reveal><h3>IA sem chave</h3><p>Ata, revisão, perguntas, e-mail de follow-up e tarefas, com o Claude. Cada pedido usa 1 crédito; perguntar a todas as reuniões usa 2. Se a IA falhar, o crédito volta.</p></div>
+      </div>
+    </section>
+
+    <section class="trust-sec" id="seguranca" aria-labelledby="sec-title">
+      <div class="section-head" data-reveal>
+        <p class="eyebrow">Segurança e privacidade</p>
+        <h2 id="sec-title">Suas reuniões continuam <em>suas</em>. Mesmo na nuvem.</h2>
+      </div>
+      <div class="practices" data-reveal-group>
+        <p data-reveal><b>Cifrado no caminho e guardado cifrado.</b> HTTPS em toda conexão e AES-256 no banco de dados. Os backups diários também são cifrados.</p>
+        <p data-reveal><b>Sem venda e sem treino de IA.</b> Não vendemos dados, não mostramos anúncios e as suas reuniões não treinam modelos de IA.</p>
+        <p data-reveal><b>Você controla o que sobe.</b> Capturas de tela e áudio nunca saem do computador. Só vai a transcrição, depois que você autoriza.</p>
+        <p data-reveal><b>Exporte e apague quando quiser.</b> JSON completo a qualquer hora. Apagar a conta remove tudo da nuvem e cancela a assinatura na hora.</p>
+        <p data-reveal><b>Login sem senha.</b> Entrada por link único no seu e-mail, que vale 15 minutos. Você vê e desconecta os computadores ligados à conta.</p>
+        <p data-reveal><b>Transparência sobre onde.</b> O servidor fica nos EUA (Boston), informado na política, com pagamentos pela Stripe e IA pela Anthropic.</p>
+      </div>
+      <div class="laws" data-reveal-group>
+        <article class="law" data-reveal><span class="law-flag">Brasil</span><h3>LGPD</h3><p>Tratamos os dados conforme a Lei Geral de Proteção de Dados: finalidade clara, mínimo necessário e os seus direitos de acesso, correção, portabilidade e exclusão, direto na área da conta.</p></article>
+        <article class="law" data-reveal><span class="law-flag">União Europeia</span><h3>GDPR</h3><p>Quem está na UE tem os mesmos direitos garantidos pelo GDPR: acessar, corrigir, levar e apagar os dados, e saber com quem são compartilhados.</p></article>
+        <article class="law" data-reveal><span class="law-flag">Estados Unidos</span><h3>CCPA e leis estaduais</h3><p>Respeitamos os direitos das leis de privacidade dos EUA, como a da Califórnia: saber o que guardamos, apagar e não ter os dados vendidos ou compartilhados para publicidade.</p></article>
+      </div>
+      <p class="honest" data-reveal>Sendo direto: o Reunilo ainda não tem certificações de terceiros (como SOC 2). O que fazemos, e como, está escrito na
+        <a href="../privacidade.html#pro">política de privacidade</a>, e o código é aberto no <a href="https://github.com/thiagommeneses/reunilo">GitHub</a>.</p>
+    </section>
+
+    <section class="faq" id="perguntas">
+      <div class="section-head">
+        <p class="eyebrow">Perguntas sobre o Pro</p>
+        <h2>O que costumam perguntar.</h2>
+      </div>
+      <div class="faq-list">
+        <details><summary>Por que o Pix só no plano anual?</summary>
+          <p>No Pix, a assinatura usa o Pix Automático: você autoriza uma vez no app do banco e a cobrança anual sai sozinha, com
+            aviso do banco antes de cada débito. Ele fica no plano anual, que já sai com 2 meses grátis. O mensal é no cartão de crédito.</p></details>
+        <details><summary>Como funcionam os créditos de IA?</summary>
+          <p>Você recebe 15 créditos por mês, nos dois planos (no anual, eles chegam todo mês). Ata, revisão, pergunta, e-mail de
+            follow-up e tarefas usam 1 crédito; perguntar a todas as reuniões usa 2. Os que sobram acumulam até 30. Se acabarem, você
+            pode usar a sua própria chave da API até renovar.</p></details>
+        <details><summary>Preciso do Pro para usar o Reunilo?</summary>
+          <p>Não. A extensão é completa e grátis, sem limite. O Pro é para quem quer as reuniões em vários computadores, a área web
+            e a IA sem chave.</p></details>
+        <details><summary>E se eu cancelar?</summary>
+          <p>O Pro continua até o fim do período pago. Depois, a conta continua aberta só para ler e exportar, e as reuniões do seu
+            computador ficam intactas. Você pode apagar a conta quando quiser.</p></details>
+        <details><summary>Posso pagar em dólar?</summary>
+          <p>Sim, com cartão de crédito: US$ 30 por ano ou US$ 3 por mês.</p></details>
+        <details><summary>Vocês leem as minhas reuniões?</summary>
+          <p>Não. Elas ficam cifradas no banco e só são abertas para mostrar a você, para a busca e quando você pede algo à IA. O acesso
+            ao servidor é restrito a uma chave criptográfica do mantenedor.</p></details>
+      </div>
+    </section>
+
+    <section class="final-cta" data-reveal>
+      <h2>Comece grátis hoje. <em>Assine quando fizer sentido.</em></h2>
+      <div class="cta"><a class="btn btn-rec" href="../#instalar">Baixar grátis</a><a class="btn btn-ink" href="#planos">Ver os planos</a></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a class="wordmark" href="../"><span class="rec" aria-hidden="true"></span>Reunilo</a>
+    <p>Transcrição de reuniões que fica com você.</p>
+    <nav aria-label="Rodapé"><a href="../">Início</a><a href="../app/">Entrar</a><a href="../privacidade.html">Política de privacidade</a><a href="../#contato">Contato</a></nav>
+    <a class="made" href="https://meneseslabs.com.br"><img src="../img/meneseslabs.svg" alt="" width="28" height="22">um produto <b>meneses<span>labs</span></b></a>
+  </footer>
+
+  <script src="../main.js" defer></script>
+</body>
+</html>

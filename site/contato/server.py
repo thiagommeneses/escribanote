@@ -34,6 +34,9 @@ TEMPO_MIN = 3  # segundos entre pedir o desafio e enviar
 VALIDADE = 30 * 60
 POR_IP_HORA = 5
 
+# Nome com que o servidor se apresenta ao SMTP (o padrão seria o ID do contêiner, que conta como spam).
+HELO = os.environ.get("SMTP_HELO", "reunilo.meneseslabs.com.br")
+
 SMTP = {
     "host": os.environ.get("SMTP_HOST", ""),
     "port": int(os.environ.get("SMTP_PORT", "465")),
@@ -127,9 +130,9 @@ def enviar_email(r):
     try:
         ctx = ssl.create_default_context()
         if SMTP["port"] == 465:
-            s = smtplib.SMTP_SSL(SMTP["host"], SMTP["port"], context=ctx, timeout=20)
+            s = smtplib.SMTP_SSL(SMTP["host"], SMTP["port"], context=ctx, timeout=20, local_hostname=HELO)
         else:
-            s = smtplib.SMTP(SMTP["host"], SMTP["port"], timeout=20)
+            s = smtplib.SMTP(SMTP["host"], SMTP["port"], timeout=20, local_hostname=HELO)
             s.starttls(context=ctx)
         with s:
             s.login(SMTP["user"], SMTP["password"])

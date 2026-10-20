@@ -39,7 +39,7 @@ const pending = new Map();
 const consoleErrors = [];
 ws.onmessage = (m) => {
   const msg = JSON.parse(m.data);
-  if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails.exception?.description || msg.params.exceptionDetails.text);
+  if (msg.method === "Runtime.exceptionThrown") consoleErrors.push((msg.params.exceptionDetails.exception?.description || msg.params.exceptionDetails.text) + " @" + (msg.params.exceptionDetails.url || ""));
   if (msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error") consoleErrors.push(msg.params.args.map((a) => a.value ?? a.description).join(" "));
   if (msg.id && pending.has(msg.id)) {
     const { ok, no } = pending.get(msg.id);
@@ -80,7 +80,8 @@ try {
   await send("Runtime.enable", {}, p);
   const go = (hash) => evalIn(p, `location.hash = ${JSON.stringify(hash)}; true`);
 
-  // 1) Login por link mágico
+  // 1) Login por link mágico, vindo da página /pro/ com o plano mensal em dólar escolhido
+  await go("#/conta?plano=mensal&moeda=usd");
   await waitFor(p, `!!document.getElementById("login-form")`, "tela de login");
   await shot(p, "web-1-login.png");
   await evalIn(p, `document.getElementById("login-email").value = "ana@exemplo.com"; document.querySelector("#login-form button").click(); true`);
@@ -88,15 +89,30 @@ try {
   const mail = await (await fetch(`${srv.url}/__test/mail`)).json();
   const link = mail.text.match(/https?:\/\/\S+#\/entrar\/[\w-]+/)[0];
   check(link.startsWith(srv.url + "/app/#/entrar/"), "e-mail com o link de acesso");
-  await evalIn(p, `location.href = ${JSON.stringify(link)}; true`);
-  await waitFor(p, `!!document.querySelector(".lib")`, "biblioteca depois do login");
-  check(await evalIn(p, `document.querySelector(".empty-pane")?.textContent.includes("Conhecer o Pro")`), "conta grátis: convite para o Pro");
+  check(/<title>Seu link de acesso ao Reunilo<\/title>/.test(mail.html), "e-mail em HTML completo (com título)");
+  // O link abre noutra aba (sessionStorage vazio): o plano escolhido tem que sobreviver.
+  await evalIn(p, `sessionStorage.clear(); location.href = ${JSON.stringify(link)}; true`);
 
-  // 2) Conta grátis: planos e Checkout
-  await go("#/conta");
-  await waitFor(p, `!!document.querySelector('[data-act="checkout"]')`, "planos na conta");
+  // 2) Conta grátis: cai na assinatura com o plano escolhido; troca para anual e assina
+  await waitFor(p, `!!document.getElementById("subscribe")`, "assinatura depois do login (plano vindo do site)");
+  const offer = () => evalIn(p, `document.querySelector("#subscribe .offer-price").textContent.replace(/\\s+/g, " ")`);
+  check((await offer()).includes("US$ 3"), "plano escolhido no site mantido (mensal em dólar)");
+  await evalIn(p, `document.querySelector('[data-k="currency"][data-v="brl"]').click(); true`);
+  let o = await offer();
+  check(o.includes("R$ 15") && o.includes("Cartão de crédito") && !o.includes("Pix Automático"), "mensal em reais: só cartão");
+  check(o.includes("Pix está disponível no plano anual"), "mensal avisa que o Pix é do anual");
+  await evalIn(p, `document.querySelector('[data-k="interval"][data-v="year"]').click(); true`);
+  o = await offer();
+  check(o.includes("R$ 150") && o.includes("R$ 180") && o.includes("Pix Automático"), "anual em reais: R$ 150, preço cheio riscado e Pix");
+  check(await evalIn(p, `document.querySelector("#subscribe .trust").textContent.includes("LGPD")`), "bloco de segurança com LGPD/GDPR/CCPA");
   await shot(p, "web-2-conta-gratis.png");
-  check(await evalIn(p, `document.querySelector(".plans").textContent.includes("Pix Automático")`), "plano em reais com Pix Automático");
+  await evalIn(p, `document.querySelector('#subscribe [data-act="checkout"]').click(); true`);
+  await sleep(600);
+  const calls = await (await fetch(`${srv.url}/__test/stripe`)).json();
+  const co = calls.filter((c) => c[0] === "checkout.create").at(-1)?.[1];
+  check(co?.line_items?.[0]?.price === "price_brl_year" && co.payment_method_types.includes("pix"), "checkout do anual em reais com Pix");
+  await send("Page.navigate", { url: `${srv.url}/app/#/` }, p);
+  await sleep(800);
 
   // 3) Vira Pro e ganha reuniões (como se a extensão tivesse sincronizado)
   await fetch(`${srv.url}/__test/pro`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "ana@exemplo.com" }) });
@@ -181,6 +197,32 @@ try {
   await go("#/");
   await sleep(500);
   await shot(p, "web-8-celular-lista.png");
+
+  // 9) Site: página do Pro com os seletores e o atalho "Pro" no menu da home
+  await send("Emulation.clearDeviceMetricsOverride", {}, p).catch(() => {});
+  await send("Page.navigate", { url: `${srv.url}/` }, p);
+  await waitFor(p, `document.readyState === "complete" && !!document.querySelector(".nav-pro")`, "home carregada");
+  check(await evalIn(p, `document.querySelector(".nav-pro").getAttribute("href") === "pro/" && !!document.querySelector('.nav-login[href="app/"]')`), "home: menu com Pro e Entrar");
+  check(await evalIn(p, `!document.body.textContent.includes("porque eles não existem")`), "home: sem a frase antiga sobre servidores");
+  // Sai da conta: quem chega do site ainda não está logado.
+  await evalIn(p, `fetch("/api/v1/auth/logout", { method: "POST", headers: { "x-reunilo": "1" } }).then((r) => r.status)`);
+  await send("Page.navigate", { url: `${srv.url}/pro/` }, p);
+  await waitFor(p, `document.readyState === "complete" && !!document.querySelector(".seg .thumb[style]")`, "página do Pro");
+  const priceTxt = () => evalIn(p, `[document.getElementById("p-now").textContent, document.getElementById("p-pay").textContent, document.getElementById("p-cta").getAttribute("href")].join(" | ")`);
+  let t = await priceTxt();
+  check(t.includes("R$ 150") && t.includes("Pix Automático") && t.includes("plano=anual&moeda=brl"), "Pro: padrão anual em reais com Pix");
+  await evalIn(p, `document.querySelector('[data-k="interval"] [data-v="month"]').click(); true`);
+  t = await priceTxt();
+  check(t.includes("R$ 15") && !t.includes("Pix") && t.includes("plano=mensal&moeda=brl"), "Pro: mensal em reais só no cartão");
+  await evalIn(p, `document.querySelector('[data-k="currency"] [data-v="usd"]').click(); true`);
+  t = await priceTxt();
+  check(t.includes("US$ 3") && t.includes("plano=mensal&moeda=usd"), "Pro: mensal em dólar");
+  await evalIn(p, `document.querySelector('[data-k="interval"] [data-v="month"]').focus(); document.querySelector('[data-k="interval"]').dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })); true`);
+  t = await priceTxt();
+  check(t.includes("US$ 30") && t.includes("plano=anual&moeda=usd"), "Pro: setas do teclado trocam para o anual");
+  await evalIn(p, `document.getElementById("p-cta").click(); true`);
+  await waitFor(p, `location.pathname === "/app/" && !!document.getElementById("login-form")`, "do botão Assinar para o login do app");
+  check((await evalIn(p, `localStorage.getItem("reunilo:plano")`)) === JSON.stringify({ interval: "year", currency: "usd" }), "app guarda o plano escolhido no site para depois do login");
 
   check(consoleErrors.length === 0, `sem erros no console${consoleErrors.length ? ": " + consoleErrors.join(" | ") : ""}`);
 } catch (err) {

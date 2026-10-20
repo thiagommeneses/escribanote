@@ -54,3 +54,37 @@ export async function refund(db, userId, n, ref) {
 export async function balanceOf(db, userId) {
   return (await db.one("SELECT balance FROM credit_balances WHERE user_id = $1", [userId]))?.balance ?? 0;
 }
+
+// Soma meses no calendário, sem passar do último dia do mês (31/01 + 1 mês = 28 ou 29/02).
+export function addMonths(date, n) {
+  const d = new Date(date);
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + n);
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, last));
+  return d;
+}
+
+// Plano anual: a fatura concede o 1º lote; este laço (de hora em hora) concede os lotes dos meses 2 a 12.
+// A chave `year:<assinatura>:<início do período>:<mês>` impede conceder o mesmo mês duas vezes.
+export async function grantMonthly(db, credits, now = new Date()) {
+  const subs = await db.query(
+    `SELECT user_id, stripe_subscription_id, current_period_start, current_period_end FROM subscriptions
+     WHERE billing_interval = 'year' AND status IN ('active', 'trialing') AND current_period_start IS NOT NULL`,
+  );
+  let granted = 0;
+  for (const s of subs.rows) {
+    const start = new Date(s.current_period_start);
+    for (let m = 1; m < 12; m++) {
+      const at = addMonths(start, m);
+      if (at > now) break;
+      const end = s.current_period_end ? new Date(s.current_period_end) : null;
+      if (end && at >= end) break;
+      const next = addMonths(start, m + 1);
+      const renews = end && next > end ? end : next;
+      if (await grantCycle(db, s.user_id, `year:${s.stripe_subscription_id}:${start.toISOString().slice(0, 10)}:${m}`, renews, credits)) granted++;
+    }
+  }
+  return granted;
+}

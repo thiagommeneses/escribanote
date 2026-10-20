@@ -1,3 +1,159 @@
+// Movimento do site: título revelado palavra por palavra, revelação na rolagem, o "caminho da fala"
+// acompanhando a leitura e o palco do herói inclinando com o ponteiro. Com movimento reduzido, tudo aparece pronto.
+(() => {
+  "use strict";
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.documentElement.classList.add("js");
+
+
+  // Título: cada palavra numa máscara, com atraso crescente. O texto continua um só para leitores de tela.
+  for (const h of document.querySelectorAll(".split")) {
+    if (reduce) break;
+    h.setAttribute("aria-label", h.textContent.replace(/\s+/g, " ").trim());
+    let i = 0;
+    const wrap = (node) => {
+      for (const child of [...node.childNodes]) {
+        if (child.nodeType === 3) {
+          const frag = document.createDocumentFragment();
+          for (const part of child.textContent.split(/(\s+)/)) {
+            if (!part) continue;
+            if (/^\s+$/.test(part)) frag.append(" ");
+            else {
+              const w = document.createElement("span");
+              w.className = "w";
+              w.setAttribute("aria-hidden", "true");
+              w.innerHTML = `<span style="--i:${i++}"></span>`;
+              w.firstChild.textContent = part;
+              frag.append(w);
+            }
+          }
+          child.replaceWith(frag);
+        } else if (child.nodeType === 1) wrap(child);
+      }
+    };
+    wrap(h);
+  }
+
+  // Revelação na rolagem; dentro de um grupo, os itens entram em cascata.
+  for (const g of document.querySelectorAll("[data-reveal-group]")) [...g.querySelectorAll("[data-reveal]")].forEach((el, i) => el.style.setProperty("--d", i));
+  const items = document.querySelectorAll("[data-reveal]");
+  if (reduce || !("IntersectionObserver" in window)) items.forEach((el) => el.classList.add("in"));
+  else {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) {
+        e.target.classList.add("in");
+        io.unobserve(e.target);
+      }
+    }, { rootMargin: "0px 0px -12% 0px", threshold: 0.08 });
+    items.forEach((el) => io.observe(el));
+  }
+
+  // O caminho da fala: o passo que está no meio da tela acende, e o diagrama acompanha.
+  const pv = document.querySelector(".pv");
+  const steps = document.querySelectorAll(".path-steps li");
+  if (pv && steps.length) {
+    const set = (n) => {
+      pv.dataset.at = String(n);
+      steps.forEach((li, i) => li.classList.toggle("on", i <= n));
+    };
+    if (reduce) set(4);
+    else {
+      set(0);
+      const so = new IntersectionObserver((entries) => {
+        for (const e of entries) if (e.isIntersecting) set(Number(e.target.dataset.step) + (e.target.dataset.step === "3" ? 1 : 0));
+      }, { rootMargin: "-45% 0px -45% 0px" });
+      steps.forEach((li) => so.observe(li));
+      // No celular o diagrama fica acima dos passos (não acompanha a rolagem): ele se anima sozinho ao aparecer.
+      if (matchMedia("(max-width: 960px)").matches) {
+        let played = false;
+        new IntersectionObserver(([e]) => {
+          if (!e.isIntersecting || played) return;
+          played = true;
+          [1, 2, 3, 4].forEach((n, k) => setTimeout(() => (pv.dataset.at = String(n)), 700 * (k + 1)));
+        }, { threshold: 0.5 }).observe(pv);
+      }
+      new IntersectionObserver(([e]) => pv.classList.toggle("go", e.isIntersecting)).observe(pv);
+    }
+  }
+
+  // Palco do herói: inclinação leve seguindo o ponteiro (só com mouse).
+  const tilt = document.querySelector(".stage-tilt");
+  if (tilt && !reduce && matchMedia("(pointer: fine)").matches) {
+    const stage = tilt.parentElement;
+    stage.addEventListener("pointermove", (e) => {
+      const r = stage.getBoundingClientRect();
+      tilt.style.setProperty("--ry", `${((e.clientX - r.left) / r.width - 0.5) * 7}deg`);
+      tilt.style.setProperty("--rx", `${((e.clientY - r.top) / r.height - 0.5) * -6}deg`);
+    });
+    stage.addEventListener("pointerleave", () => {
+      tilt.style.setProperty("--ry", "0deg");
+      tilt.style.setProperty("--rx", "0deg");
+    });
+  }
+
+  // Página do Pro: anual/mensal e real/dólar.
+  const pricing = document.getElementById("pricing");
+  if (pricing) {
+    const OFFERS = {
+      brl: {
+        year: { now: "R$ 150", per: "/ano", was: "R$ 180", note: "Equivale a R$ 12,50 por mês · 2 meses grátis", pay: ["pix:Pix Automático", "card:Cartão de crédito"], cta: "Assinar o anual" },
+        month: { now: "R$ 15", per: "/mês", was: "", note: "Cancele quando quiser. Pix só no plano anual.", pay: ["card:Cartão de crédito"], cta: "Assinar o mensal" },
+      },
+      usd: {
+        year: { now: "US$ 30", per: "/ano", was: "US$ 36", note: "US$ 2,50 por mês · 2 meses grátis", pay: ["card:Cartão de crédito"], cta: "Assinar o anual em dólar" },
+        month: { now: "US$ 3", per: "/mês", was: "", note: "Cancele quando quiser", pay: ["card:Cartão de crédito"], cta: "Assinar o mensal em dólar" },
+      },
+    };
+    const state = { interval: "year", currency: "brl" };
+    const $ = (id) => document.getElementById(id);
+    const moveThumb = (seg) => {
+      const on = seg.querySelector('[aria-checked="true"]');
+      const thumb = seg.querySelector(".thumb");
+      thumb.style.width = `${on.offsetWidth}px`;
+      thumb.style.transform = `translateX(${on.offsetLeft}px)`;
+    };
+    const render = (animate) => {
+      const o = OFFERS[state.currency][state.interval];
+      $("p-now").textContent = o.now;
+      $("p-per").textContent = o.per;
+      $("p-was").textContent = o.was;
+      $("p-was").hidden = !o.was;
+      $("p-note").textContent = o.note;
+      $("p-pay").innerHTML = o.pay.map((x) => { const [k, t] = x.split(":"); return `<span class="chip ${k}">${t}</span>`; }).join("");
+      const cta = $("p-cta");
+      cta.textContent = o.cta;
+      cta.href = `../app/#/conta?plano=${state.interval === "year" ? "anual" : "mensal"}&moeda=${state.currency}`;
+      if (animate && !reduce) for (const el of [$("p-price"), $("p-note"), $("p-pay")]) {
+        el.classList.remove("swap");
+        void el.offsetWidth;
+        el.classList.add("swap");
+      }
+      document.querySelectorAll(".seg").forEach(moveThumb);
+    };
+    for (const seg of document.querySelectorAll(".seg")) {
+      const btns = [...seg.querySelectorAll("button")];
+      const pick = (b) => {
+        btns.forEach((x) => { x.setAttribute("aria-checked", String(x === b)); x.tabIndex = x === b ? 0 : -1; });
+        state[seg.dataset.k] = b.dataset.v;
+        render(true);
+      };
+      btns.forEach((b) => b.addEventListener("click", () => pick(b)));
+      // Setas do teclado, como num grupo de rádio.
+      seg.addEventListener("keydown", (e) => {
+        if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+        const i = btns.findIndex((x) => x.getAttribute("aria-checked") === "true");
+        const b = btns[(i + (e.key === "ArrowRight" ? 1 : btns.length - 1)) % btns.length];
+        pick(b);
+        b.focus();
+        e.preventDefault();
+      });
+    }
+    render(false);
+    addEventListener("resize", () => document.querySelectorAll(".seg").forEach(moveThumb));
+    document.fonts?.ready.then(() => document.querySelectorAll(".seg").forEach(moveThumb));
+  }
+})();
+
 // Demonstração do widget no topo: as falas entram uma a uma, a legenda errada é
 // corrigida pelo reconhecimento e a decisão recebe o marca-texto.
 (() => {
@@ -70,11 +226,14 @@
     setTimeout(loop, i === 0 ? 5200 : 2600);
   };
   // Só anima enquanto o widget está visível.
+  // Já começa com a primeira fala na tela: um widget vazio parece quebrado no primeiro segundo.
+  speak(0);
+  i = 1;
   let started = false;
   new IntersectionObserver((entries) => {
     if (entries[0].isIntersecting && !started) {
       started = true;
-      setTimeout(loop, 700);
+      setTimeout(loop, 1400);
     }
   }).observe(body);
 

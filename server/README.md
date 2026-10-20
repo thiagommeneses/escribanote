@@ -20,7 +20,7 @@ endpoints". Autenticação: cookie `rs` (app web, com o cabeçalho `X-Reunilo: 1
 ```bash
 docker run -d --name reunilo-pg-test -e POSTGRES_PASSWORD=teste -e POSTGRES_DB=reunilo_test -p 127.0.0.1:55432:5432 postgres:17-alpine
 npm install
-npm test                                   # 35 testes contra Postgres real (IA e Stripe simuladas; SDKs reais checados pela rede)
+npm test                                   # 38 testes contra Postgres real (IA e Stripe simuladas; SDKs reais checados pela rede)
 node scripts/dev-server.js 8787            # API + site + app em http://127.0.0.1:8787/app/ (e-mail, IA e Stripe simulados)
 CHROME=/caminho/do/chrome node test/e2e-web.mjs [pasta]              # área logada num Chrome real
 CHROME=/caminho/do/chrome node ../extension/test/e2e-account.mjs     # extensão + app + API: conectar, sincronizar, IA da conta
@@ -69,7 +69,7 @@ faça um backup manual (abaixo).
    `STRIPE_SECRET_KEY` no `/opt/reunilo/pro.env`.
 3. No console da Anthropic, crie uma chave só para o servidor, com limite de gasto mensal, e coloque em
    `ANTHROPIC_API_KEY`.
-4. Rode o script que cria produto, preços (R$ 15 e US$ 3), webhook e portal, e grava os IDs no `pro.env`:
+4. Rode o script que cria produto, preços (mensal R$ 15 e US$ 3, anual R$ 150 e US$ 30), webhook e portal, e grava os IDs no `pro.env`:
 
 ```bash
 cd /opt/reunilo

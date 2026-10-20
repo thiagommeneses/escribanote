@@ -28,6 +28,7 @@ export async function account(db, userId, config) {
       ? {
           status: sub.status,
           currency: sub.currency,
+          interval: sub.billing_interval || "month",
           periodEnd: iso(sub.current_period_end),
           cancelAtPeriodEnd: sub.cancel_at_period_end,
           paymentMethod: sub.payment_method,

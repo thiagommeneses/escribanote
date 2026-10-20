@@ -9,6 +9,11 @@
   <link rel="icon" href="../img/icon.png">
   <link rel="stylesheet" href="../fonts.css">
   <link rel="stylesheet" href="app.css">
+  <script>
+    // Quem chega do site pode trazer uma transição entre páginas que esta página não usa; o navegador a pula
+    // e rejeita as promessas dela. É esperado; não deve aparecer como erro.
+    for (const ev of ["pageswap", "pagereveal"]) addEventListener(ev, (e) => { for (const k of ["ready", "finished", "updateCallbackDone"]) e.viewTransition?.[k]?.catch(() => {}); });
+  </script>
 </head>
 <body>
   <header class="top">

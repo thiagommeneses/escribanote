@@ -1,13 +1,20 @@
 // Assinatura pela Stripe: Checkout (BRL com cartão e Pix Automático; USD com cartão), Portal e webhooks.
 import { audit } from "./auth.js";
-import { grantCycle } from "./credits.js";
+import { addMonths, grantCycle } from "./credits.js";
 import { clientIp, fail } from "./http.js";
 
 const toDate = (sec) => (sec ? new Date(sec * 1000) : null);
 
 // Campos que mudaram de lugar entre versões da API da Stripe.
 const periodEnd = (sub) => sub.items?.data?.[0]?.current_period_end ?? sub.current_period_end ?? null;
+const periodStart = (sub) => sub.items?.data?.[0]?.current_period_start ?? sub.current_period_start ?? null;
 const invoiceSubscription = (inv) => inv.subscription ?? inv.parent?.subscription_details?.subscription ?? null;
+// "year" ou "month": pelo preço recorrente da Stripe ou, sem ele, pelos IDs configurados.
+function intervalOf(sub, config) {
+  const price = sub.items?.data?.[0]?.price;
+  if (price?.recurring?.interval) return price.recurring.interval;
+  return [config.stripe.priceBrlYear, config.stripe.priceUsdYear].includes(price?.id) ? "year" : "month";
+}
 const idOf = (v) => (typeof v === "string" ? v : v?.id ?? null);
 
 export function registerBilling(app, { db, config, stripe }) {
@@ -32,8 +39,10 @@ export function registerBilling(app, { db, config, stripe }) {
     need();
     if (req.session.kind !== "web") fail(403, "web_only", "Assine pelo app do Reunilo no navegador.");
     const currency = req.body?.currency === "usd" ? "usd" : "brl";
-    const price = currency === "usd" ? config.stripe.priceUsd : config.stripe.priceBrl;
-    if (!price) fail(503, "billing_unavailable", "Este plano ainda não está disponível nesta moeda.");
+    const interval = req.body?.interval === "month" ? "month" : "year";
+    const s = config.stripe;
+    const price = { brl: { month: s.priceBrl, year: s.priceBrlYear }, usd: { month: s.priceUsd, year: s.priceUsdYear } }[currency][interval];
+    if (!price) fail(503, "billing_unavailable", "Este plano ainda não está disponível. Tente mais tarde.");
     const current = await db.one("SELECT status FROM subscriptions WHERE user_id = $1", [req.user.id]);
     if (["active", "trialing", "past_due"].includes(current?.status)) fail(409, "already_pro", "Você já assina o Reunilo Pro.");
     const customer = await customerFor(req.user);
@@ -47,18 +56,17 @@ export function registerBilling(app, { db, config, stripe }) {
       cancel_url: `${config.publicUrl}/app/#/conta`,
       allow_promotion_codes: true,
       locale: currency === "brl" ? "pt-BR" : "auto",
+      payment_method_types: ["card"],
     };
-    if (currency === "brl") {
+    if (currency === "brl" && interval === "year") {
+      // Pix só no plano anual: Pix Automático com débito uma vez por ano, até o teto autorizado no app do banco.
       params.payment_method_types = ["card", "pix"];
-      // Pix Automático: o cliente autoriza no app do banco um débito mensal de até R$ 20 (o plano custa R$ 15).
       params.payment_method_options = {
-        pix: { mandate_options: { amount: config.stripe.pixMandateMax, amount_type: "maximum", payment_schedule: "monthly", reference: "Reunilo Pro" } },
+        pix: { mandate_options: { amount: s.pixMandateMax, amount_type: "maximum", payment_schedule: "yearly", reference: "Reunilo Pro anual" } },
       };
-    } else {
-      params.payment_method_types = ["card"];
     }
     const session = await stripe.checkout.sessions.create(params);
-    await audit(db, req.user.id, "checkout", { currency }, clientIp(req));
+    await audit(db, req.user.id, "checkout", { currency, interval }, clientIp(req));
     return { url: session.url };
   });
 
@@ -86,12 +94,15 @@ export function registerBilling(app, { db, config, stripe }) {
     if (!userId) return null;
     const item = sub.items?.data?.[0];
     await db.query(
-      `INSERT INTO subscriptions (user_id, stripe_customer_id, stripe_subscription_id, status, currency, price_id, current_period_end, cancel_at_period_end, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+      `INSERT INTO subscriptions (user_id, stripe_customer_id, stripe_subscription_id, status, currency, price_id, current_period_end, cancel_at_period_end,
+         billing_interval, current_period_start, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
        ON CONFLICT (user_id) DO UPDATE SET stripe_customer_id = EXCLUDED.stripe_customer_id, stripe_subscription_id = EXCLUDED.stripe_subscription_id,
          status = EXCLUDED.status, currency = EXCLUDED.currency, price_id = EXCLUDED.price_id, current_period_end = EXCLUDED.current_period_end,
-         cancel_at_period_end = EXCLUDED.cancel_at_period_end, updated_at = now()`,
-      [userId, idOf(sub.customer), sub.id, sub.status, sub.currency, item?.price?.id ?? null, toDate(periodEnd(sub)), !!sub.cancel_at_period_end],
+         cancel_at_period_end = EXCLUDED.cancel_at_period_end, billing_interval = EXCLUDED.billing_interval,
+         current_period_start = EXCLUDED.current_period_start, updated_at = now()`,
+      [userId, idOf(sub.customer), sub.id, sub.status, sub.currency, item?.price?.id ?? null, toDate(periodEnd(sub)), !!sub.cancel_at_period_end,
+        intervalOf(sub, config), toDate(periodStart(sub))],
     );
     return userId;
   }
@@ -121,11 +132,14 @@ export function registerBilling(app, { db, config, stripe }) {
         if (!["subscription_create", "subscription_cycle"].includes(o.billing_reason)) return;
         const userId = await userForCustomer(idOf(o.customer));
         if (!userId) return;
-        const line = o.lines?.data?.[0];
-        const renews = toDate(line?.period?.end) || (await db.one("SELECT current_period_end FROM subscriptions WHERE user_id = $1", [userId]))?.current_period_end;
-        await grantCycle(db, userId, `invoice:${o.id}`, renews, config.credits);
         const subId = idOf(invoiceSubscription(o));
         if (subId) await saveSubscription(await stripe.subscriptions.retrieve(subId));
+        const line = o.lines?.data?.[0];
+        const sub = await db.one("SELECT current_period_end, billing_interval FROM subscriptions WHERE user_id = $1", [userId]);
+        // No anual a fatura é uma por ano, mas os créditos vêm todo mês: o próximo lote chega em 1 mês (grantMonthly).
+        const start = toDate(line?.period?.start) || new Date();
+        const renews = sub?.billing_interval === "year" ? addMonths(start, 1) : toDate(line?.period?.end) || sub?.current_period_end;
+        await grantCycle(db, userId, `invoice:${o.id}`, renews, config.credits);
         return;
       }
       case "mandate.updated": {

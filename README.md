@@ -62,7 +62,14 @@ que fica apenas no servidor e nunca entra no repositório.
 
 ## Reunilo Pro
 
-A versão paga, de **R$ 15/mês ou US$ 3/mês** (Pix Automático ou cartão, pela Stripe), com:
+A versão paga, opcional, pela Stripe ([página do Pro](https://reunilo.meneseslabs.com.br/pro/)):
+
+| Plano | Real | Dólar | Pagamento |
+| --- | --- | --- | --- |
+| Anual (2 meses grátis) | R$ 150/ano | US$ 30/ano | Pix Automático ou cartão (em dólar, só cartão) |
+| Mensal | R$ 15/mês | US$ 3/mês | Cartão |
+
+Inclui:
 
 - **Conta online:** as reuniões da extensão vão para a conta e aparecem em qualquer computador, com
   sincronização por versão (nada se perde quando dois lugares editam a mesma reunião).
@@ -72,8 +79,9 @@ A versão paga, de **R$ 15/mês ou US$ 3/mês** (Pix Automático ou cartão, pel
   e tarefas custam 1; pergunta sobre todas as reuniões custa 2.
 - **Links de leitura** com validade e revogação, para quem não usa o Reunilo.
 
-Estado em 20/10/2026: servidor, app web e extensão prontos e testados, publicados na VPS. Falta ligar as
-chaves da Stripe e da Anthropic e fazer o beta. Plano técnico em [`docs/TDD-reunilo-pro.md`](docs/TDD-reunilo-pro.md);
+Estado em 20/10/2026: servidor, app web, extensão 2.5.0 e página do Pro publicados. Falta ligar as
+chaves da Stripe e da Anthropic e fazer o beta. Specs do site e da assinatura em
+[`docs/SPEC-site-e-assinatura.md`](docs/SPEC-site-e-assinatura.md). Plano técnico em [`docs/TDD-reunilo-pro.md`](docs/TDD-reunilo-pro.md);
 operação em [`server/README.md`](server/README.md).
 
 ## Privacidade

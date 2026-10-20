@@ -8,6 +8,12 @@
   <link rel="icon" href="img/icon.png">
   <link rel="stylesheet" href="fonts.css">
   <link rel="stylesheet" href="styles.css">
+  <script>
+    // Transição entre páginas: se a navegação for rápida demais o navegador pula a animação e rejeita
+    // as promessas dela. É esperado; não deve aparecer como erro. Fica no <head> porque o "pagereveal"
+    // acontece antes dos scripts com defer.
+    for (const ev of ["pageswap", "pagereveal"]) addEventListener(ev, (e) => { for (const k of ["ready", "finished", "updateCallbackDone"]) e.viewTransition?.[k]?.catch(() => {}); });
+  </script>
   <style>
     .legal { max-width: 46rem; padding-bottom: 6rem; }
     .legal h1 { font-size: var(--step-3); margin-bottom: 0.6rem; }
@@ -19,6 +25,8 @@
 <body>
   <header class="nav">
     <a class="wordmark" href="./"><span class="rec" aria-hidden="true"></span>Reunilo</a>
+    <nav aria-label="Seções"><a class="nav-pro" href="pro/">Pro</a></nav>
+    <a class="nav-login" href="app/">Entrar</a>
     <a class="btn btn-ink" href="./#instalar">Baixar grátis</a>
   </header>
   <main>
@@ -52,7 +60,7 @@
           uma vez do Hugging Face. Só arquivos públicos do modelo são baixados; o áudio nunca é enviado.</li>
       </ul>
 
-      <h2>Reunilo Pro (conta online)</h2>
+      <h2 id="pro">Reunilo Pro (conta online)</h2>
       <p>Se você criar uma conta e assinar o Pro, tratamos estes dados para prestar o serviço contratado (LGPD, art. 7º, V):</p>
       <ul>
         <li><b>Conta:</b> seu e-mail e a data de criação. O acesso é por um link enviado ao seu e-mail; não guardamos senha.</li>
@@ -62,7 +70,7 @@
         <li><b>IA inclusa:</b> quando você pede uma ata, revisão ou resposta, o texto da reunião é enviado pelo nosso servidor à
           Anthropic (Claude), que processa o pedido e, pelos termos da API, não usa esses dados para treinar modelos. Registramos
           quantos créditos e tokens cada pedido usou, sem guardar o texto do pedido fora da reunião.</li>
-        <li><b>Pagamento:</b> feito pela Stripe (cartão ou Pix Automático). Os dados do cartão e da conta bancária ficam com a
+        <li><b>Pagamento:</b> feito pela Stripe (cartão no plano mensal; cartão ou Pix Automático no plano anual). Os dados do cartão e da conta bancária ficam com a
           Stripe; guardamos só o identificador da assinatura, o status e a moeda.</li>
         <li><b>Links de compartilhamento:</b> quem recebe um link vê a reunião sem conta, até o link vencer ou ser revogado.
           Contamos quantas vezes cada link foi aberto.</li>
@@ -74,6 +82,26 @@
         criptografados e guardados por 14 dias. Reuniões apagadas ficam 30 dias na lixeira. Você pode exportar tudo e apagar a
         conta a qualquer momento na área da conta: isso apaga as reuniões da nuvem e cancela a assinatura na hora; as cópias nos
         backups somem em até 14 dias. As reuniões no seu computador continuam com você.</p>
+
+      <h2 id="direitos">Seus direitos (LGPD, GDPR e leis dos EUA)</h2>
+      <p>Tratamos os dados conforme a Lei Geral de Proteção de Dados (LGPD, Lei 13.709/2018). Se você está na União Europeia,
+        garantimos os mesmos direitos do Regulamento Geral de Proteção de Dados (GDPR); se está nos Estados Unidos, os direitos
+        previstos nas leis estaduais de privacidade, como a da Califórnia (CCPA/CPRA). Na prática, você pode:</p>
+      <ul>
+        <li><b>Acessar e levar seus dados:</b> exportar todas as reuniões em JSON na área da conta, a qualquer momento.</li>
+        <li><b>Corrigir:</b> editar títulos, nomes e falas das reuniões; pedir a correção de outros dados pelo contato.</li>
+        <li><b>Apagar:</b> apagar reuniões ou a conta inteira na área da conta, sem precisar pedir a ninguém.</li>
+        <li><b>Saber com quem compartilhamos:</b> só com os subprocessadores listados acima, para prestar o serviço.</li>
+        <li><b>Não ter os dados vendidos:</b> não vendemos nem compartilhamos dados pessoais para publicidade, e não usamos
+          as suas reuniões para treinar modelos de IA.</li>
+        <li><b>Revogar o consentimento:</b> desconectar a extensão da conta a qualquer momento; a partir daí nada mais é enviado.</li>
+        <li><b>Reclamar:</b> à Autoridade Nacional de Proteção de Dados (ANPD), à autoridade de proteção de dados do seu país na
+          União Europeia ou ao órgão estadual competente nos EUA.</li>
+      </ul>
+      <p>O Reunilo não possui certificações de segurança de terceiros (como SOC 2 ou ISO 27001). O que fazemos está descrito
+        nesta política: criptografia em trânsito (HTTPS) e em repouso (AES-256), backups criptografados, acesso ao servidor
+        restrito por chave e registro de ações sensíveis. Pedidos sobre seus dados: use o <a href="./#contato">formulário de contato</a>;
+        respondemos em até 15 dias.</p>
 
       <h2>Seus controles</h2>
       <ul>

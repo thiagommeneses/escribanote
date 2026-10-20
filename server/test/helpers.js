@@ -69,7 +69,7 @@ export async function setup(overrides = {}) {
   const config = loadConfig({
     publicUrl: "https://reunilo.test",
     dataKey: randomBytes(32).toString("base64"),
-    stripe: { secretKey: "sk_test", webhookSecret: WEBHOOK_SECRET, priceBrl: "price_brl", priceUsd: "price_usd", pixMandateMax: 2000 },
+    stripe: { secretKey: "sk_test", webhookSecret: WEBHOOK_SECRET, priceBrl: "price_brl", priceBrlYear: "price_brl_year", priceUsd: "price_usd", priceUsdYear: "price_usd_year", pixMandateMax: 18000 },
     ...overrides,
   });
   config.origin = "https://reunilo.test";

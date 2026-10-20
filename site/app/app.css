@@ -243,3 +243,38 @@ p { margin: 0; }
   .back { display: inline-flex !important; }
 }
 .back { display: none; }
+
+/* ---------- assinar ---------- */
+.subscribe { gap: 18px; overflow: hidden; position: relative; }
+.subscribe::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, var(--rec), var(--marker)); }
+.sub-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 14px; }
+.sub-head h2 { font-size: 22px; max-width: 26ch; }
+.eyebrow-sm { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--rec); margin: 0 0 4px; }
+.segs { display: flex; gap: 8px; flex-wrap: wrap; }
+.seg { display: inline-flex; padding: 3px; border: 1px solid var(--rule); border-radius: 999px; background: var(--paper-2); }
+.seg-btn { border: 0; background: transparent; border-radius: 999px; padding: 6px 13px; font: 600 13px var(--sans); color: var(--ink-2); cursor: pointer;
+  transition: background-color 0.25s var(--ease), color 0.25s var(--ease), box-shadow 0.25s var(--ease); }
+.seg-btn[aria-checked="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px oklch(0% 0 0 / 0.12), 0 0 0 1px var(--rule); }
+.seg-btn .save { font-size: 11px; color: var(--ok); margin-left: 2px; }
+.offer { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 22px; align-items: start; }
+.offer-price { display: grid; gap: 6px; padding: 18px; border-radius: 12px; background: var(--paper-2); animation: offer-in 0.45s var(--ease); }
+.offer-price .was { color: var(--ink-3); font-size: 14px; }
+.offer-price .amount { font: 400 40px/1 var(--serif); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.offer-price .amount small { font: 500 14px var(--sans); color: var(--ink-3); margin-left: 3px; }
+.offer-price .note { font-size: 13px; color: var(--ok); font-weight: 600; }
+.offer-price .pay { font-size: 13px; color: var(--ink-2); }
+.offer-price .btn.big { justify-content: center; padding: 11px 18px; font-size: 15px; margin-top: 6px; }
+.offer .feat { align-self: center; }
+.trust { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.trust > div { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; font-size: 13px; color: var(--ink-2); }
+.trust b { color: var(--ink); font-size: 13.5px; }
+.trust b::before { content: "🔒 "; }
+@keyframes offer-in { from { opacity: 0; transform: translateY(6px); } }
+@media (max-width: 760px) {
+  .offer, .trust { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { .offer-price { animation: none; } .seg-btn { transition: none; } }
+
+/* Quem vem do site (Pro → Assinar) entra no app com a mesma transição suave. */
+@view-transition { navigation: auto; }
+@media (prefers-reduced-motion: reduce) { @view-transition { navigation: none; } }

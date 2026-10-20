@@ -70,9 +70,9 @@ servidor e taxas.
 
 ### ✅ Dentro do escopo (V1)
 
-- **Planos**: Reunilo Free (como hoje, sem conta) e **Reunilo Pro** a **R$ 15/mês** (Brasil) ou
-  **US$ 3/mês** (demais países), cobrado pela Stripe com **Pix Automático ou cartão** no Brasil e
-  cartão no exterior. Sem teste grátis.
+- **Planos**: Reunilo Free (como hoje, sem conta) e **Reunilo Pro**. Mensal: **R$ 15** ou **US$ 3**, só
+  cartão. Anual (2 meses grátis, preço promocional): **R$ 150** com **Pix Automático ou cartão**, ou
+  **US$ 30** com cartão. Pix só no anual (decidido em 2026-10-20). Sem teste grátis.
 - **Conta**: login com Google ou com link mágico por e-mail; uma conta por pessoa (sem times na V1).
 - **Sincronização** da extensão com a nuvem: reuniões, notas, destaques, tags, títulos, nomes de
   participantes e ajustes. Envio automático ao fim de cada reunião e a cada poucos minutos durante a
@@ -98,7 +98,6 @@ servidor e taxas.
 
 ### 🔮 Considerações futuras (V2+)
 
-- Plano anual (R$ 150/ano, US$ 30/ano) para diluir a taxa fixa da Stripe.
 - Pacote extra de IA e modelos maiores sob demanda.
 - Times com espaços compartilhados (o maior gatilho de upgrade do Tactiq).
 - Integrações de exportação (Notion, Google Docs) e conector MCP.
@@ -147,8 +146,9 @@ graph LR
 **1. Assinar o Pro**
 1. O usuário clica em "Assinar o Pro" (site, extensão ou app web) e entra com Google ou por e-mail.
 2. A API cria a sessão de Checkout na Stripe com o preço da moeda certa (BRL ou USD). No Brasil, o
-   usuário escolhe **Pix Automático** ou **cartão**; fora do Brasil, cartão. A Stripe aceita Pix em
-   assinaturas recorrentes desde abril de 2026: o usuário autoriza o débito mensal no app do banco uma vez.
+   usuário escolhe anual (**Pix Automático** ou **cartão**) ou mensal (**cartão**); em dólar, cartão. A
+   Stripe aceita Pix em assinaturas recorrentes desde abril de 2026: o usuário autoriza o débito anual no
+   app do banco uma vez.
 3. A Stripe confirma o pagamento por webhook; a API marca a conta como Pro e abre o ciclo de cota de IA.
 4. O app web mostra a confirmação e oferece "Conectar a extensão".
 
@@ -365,8 +365,8 @@ limite global de gasto de IA por dia, com alerta, protege contra surpresas.
 | Extensão | Token de dispositivo (`Authorization: Bearer`), só o hash no banco. CORS liberado apenas para `chrome-extension://ohbnmfogdcbgegnpcaphidkjinplednd`. A entrega do token usa `externally_connectable` |
 | App web | Páginas estáticas em `/app`, com rotas pelo fragmento (`/app/#/r/{id}`); sem build, como a extensão |
 | Rotas no Caddy | `/api/v1/*` e `/s/*` vão para a API; `/api/contato*` para o formulário; o resto é o site estático |
-| Cobrança | Stripe Checkout em modo assinatura. BRL com cartão e Pix Automático (mandato mensal de até R$ 20, nome "Reunilo Pro" no app do banco); USD só cartão. Portal da Stripe para trocar a forma de pagamento e cancelar |
-| Créditos | Concedidos no webhook `invoice.paid` de cada ciclo: saldo = mín(saldo + 15, 30). Reserva atômica antes da chamada; devolução se falhar |
+| Cobrança | Stripe Checkout em modo assinatura, 4 preços (`reunilo_pro_{brl,usd}_{monthly,yearly}`). Anual em BRL: cartão e Pix Automático (mandato `yearly` de até R$ 180, "Reunilo Pro anual" no app do banco). Mensal e USD: só cartão. Portal da Stripe para trocar a forma de pagamento e cancelar (troca mensal↔anual fica para depois do beta) |
+| Créditos | Mensal: concedidos no `invoice.paid` de cada ciclo. Anual: a fatura concede o 1º lote e um laço de hora em hora (`grantMonthly`) concede os meses 2 a 12, uma vez por mês (chave `year:<assinatura>:<início>:<mês>`). Saldo = mín(saldo + 15, 30). Reserva atômica antes da chamada; devolução se falhar |
 | Teto de gasto | Gasto de IA do dia somado no banco; acima do teto (padrão US$ 20/dia) a IA inclusa pausa e avisa |
 | Backups | `pg_dump` diário, criptografado, guardado 14 dias na VPS; cópia para fora da VPS segue em aberto |
 | Monitoramento | Uptime Kuma e Dozzle, que já rodam na VPS, mais `/api/v1/health` |
@@ -377,10 +377,12 @@ limite global de gasto de IA por dia, com alerta, protege contra surpresas.
 
 | Parte | Estado | Onde |
 | --- | --- | --- |
-| API (contas, reuniões, busca, IA, créditos, Stripe, links, exclusão) | ✅ Pronta, 35 testes | `server/` |
-| Área logada | ✅ Pronta, teste em Chrome real (14 verificações) | `site/app/` |
+| API (contas, reuniões, busca, IA, créditos, Stripe mensal e anual, links, exclusão) | ✅ Pronta, 38 testes | `server/` |
+| Área logada | ✅ Pronta, teste em Chrome real (26 verificações, inclui o site e a assinatura) | `site/app/` |
+| Site com o Pro (home redesenhada, `/pro/`, menu "Pro" e "Entrar") | ✅ Publicado; spec em `docs/SPEC-site-e-assinatura.md` | `site/` |
 | Extensão 2.5.0 (conectar, sincronizar, IA da conta) | ✅ Pronta, 33 testes unitários + 16 verificações ponta a ponta | `extension/` |
-| Produção na VPS (banco, API, backups, app) | ✅ No ar em `reunilo.meneseslabs.com.br/app`, sem link no site | `site/docker-compose.yml` |
+| Produção na VPS (banco, API, backups, app) | ✅ No ar em `reunilo.meneseslabs.com.br/app` | `site/docker-compose.yml` |
+| Extensão 2.5.0 no site | ✅ Publicada (zip + `latest.json`) | `site/download/` |
 | Backup | ✅ Diário, criptografado; restauração testada | `server/README.md` |
 | Política de privacidade com o Pro | ✅ Publicada (inclui a transferência internacional: VPS em Boston) | `site/privacidade.html` |
 | Stripe (produto, preços, webhook, portal) | ⏳ Script pronto; falta a chave da conta | `server/scripts/stripe-setup.js` |
@@ -391,10 +393,10 @@ limite global de gasto de IA por dia, com alerta, protege contra surpresas.
 
 1. Colocar `STRIPE_SECRET_KEY` (teste) e `ANTHROPIC_API_KEY` no `pro.env` e rodar `stripe-setup.js` (ver `server/README.md`).
 2. Testar uma assinatura de ponta a ponta no modo de teste da Stripe: Pix (e-mail `succeed_immediately@...`) e cartão `4242 4242 4242 4242`.
-3. Cadastrar `/api/v1/health` no Uptime Kuma e guardar `DATA_KEY` e `BACKUP_PASSPHRASE` fora da VPS.
+3. Cadastrar `/api/v1/health` no Uptime Kuma. (`DATA_KEY` e `BACKUP_PASSPHRASE` já têm cópia fora da VPS, desde 2026-10-20.)
 4. Beta fechado com 10 a 20 pessoas (cupom de desconto pela Stripe), medindo custo de IA e erros por uma semana.
-5. Trocar para as chaves `sk_live_...`, rodar `stripe-setup.js` de novo e publicar a extensão 2.5.0 no site.
-6. Abrir: seção do Pro e preços no site, botão "Entrar" apontando para `/app`.
+5. Trocar para as chaves `sk_live_...` e rodar `stripe-setup.js` de novo.
+6. ~~Seção do Pro e preços no site, "Entrar" apontando para `/app`, extensão 2.5.0 no site~~ (feito em 2026-10-20).
 
 ---
 

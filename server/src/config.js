@@ -27,10 +27,13 @@ export function loadConfig(overrides = {}) {
     stripe: {
       secretKey: env.STRIPE_SECRET_KEY || "",
       webhookSecret: env.STRIPE_WEBHOOK_SECRET || "",
+      // Mensal só no cartão; anual no cartão ou Pix Automático (BRL) com 2 meses grátis.
       priceBrl: env.STRIPE_PRICE_BRL || "",
+      priceBrlYear: env.STRIPE_PRICE_BRL_YEAR || "",
       priceUsd: env.STRIPE_PRICE_USD || "",
+      priceUsdYear: env.STRIPE_PRICE_USD_YEAR || "",
       portalConfig: env.STRIPE_PORTAL_CONFIG || "",
-      pixMandateMax: num(env.PIX_MANDATE_MAX_CENTS, 2000), // teto do débito automático (R$ 20)
+      pixMandateMax: num(env.PIX_MANDATE_MAX_CENTS, 18000), // teto do débito anual automático (R$ 180; o plano custa R$ 150)
     },
     sessionDays: 30,
     loginTokenMinutes: 15,

@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import Stripe from "stripe";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { grantMonthly } from "./credits.js";
 import { createDb, migrate } from "./db.js";
 import { createMailer } from "./mail.js";
 
@@ -33,6 +34,18 @@ async function purge() {
 }
 setInterval(purge, 3600_000).unref();
 purge();
+
+// Créditos mensais de quem paga o plano anual.
+async function monthly() {
+  try {
+    const n = await grantMonthly(db, config.credits);
+    if (n) app.log.info({ granted: n }, "créditos mensais do plano anual");
+  } catch (err) {
+    app.log.error({ err }, "créditos mensais");
+  }
+}
+setInterval(monthly, 3600_000).unref();
+monthly();
 
 const stop = async () => {
   await app.close();

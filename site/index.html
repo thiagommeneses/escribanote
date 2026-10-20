@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Reunilo — transcrição de reuniões que fica com você</title>
-  <meta name="description" content="Transcrição ao vivo do Google Meet, Microsoft Teams, Zoom e huddles do Slack, com destaques, notas, ata por IA e reconhecimento de alta precisão. Sem conta, sem nuvem, sem limite.">
+  <meta name="description" content="Transcrição ao vivo do Google Meet, Microsoft Teams, Zoom e huddles do Slack, com destaques, notas, ata por IA e reconhecimento de alta precisão. Grátis, sem conta e guardada só no seu computador.">
   <meta property="og:title" content="Reunilo — transcrição de reuniões que fica com você">
   <meta property="og:description" content="Meet, Teams, Zoom e Slack transcritos ao vivo. Destaques, notas, ata por IA. Tudo salvo só no seu computador.">
   <meta property="og:image" content="https://reunilo.meneseslabs.com.br/img/og.png">
@@ -15,18 +15,27 @@
   <link rel="preload" href="fonts/hanken-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="fonts.css">
   <link rel="stylesheet" href="styles.css">
+  <script>
+    // Transição entre páginas: se a navegação for rápida demais o navegador pula a animação e rejeita
+    // as promessas dela. É esperado; não deve aparecer como erro. Fica no <head> porque o "pagereveal"
+    // acontece antes dos scripts com defer.
+    for (const ev of ["pageswap", "pagereveal"]) addEventListener(ev, (e) => { for (const k of ["ready", "finished", "updateCallbackDone"]) e.viewTransition?.[k]?.catch(() => {}); });
+  </script>
 </head>
-<body>
+<body class="home">
   <a class="skip" href="#conteudo">Pular para o conteúdo</a>
+  <div class="progress" aria-hidden="true"></div>
 
   <header class="nav">
-    <a class="wordmark" href="#" aria-label="Reunilo, início"><span class="rec" aria-hidden="true"></span>Reunilo</a>
+    <a class="wordmark" href="./" aria-label="Reunilo, início"><span class="rec" aria-hidden="true"></span>Reunilo</a>
     <nav aria-label="Seções">
-      <a href="#reconhecimento">Reconhecimento</a>
+      <a href="#caminho">Privacidade</a>
       <a href="#recursos">Recursos</a>
-      <a href="#privacidade">Privacidade</a>
+      <a href="#reconhecimento">Reconhecimento</a>
       <a href="#perguntas">Perguntas</a>
+      <a class="nav-pro" href="pro/">Pro <span class="badge">novo</span></a>
     </nav>
+    <a class="nav-login" href="app/">Entrar</a>
     <a class="btn btn-ink" href="#instalar">Baixar grátis</a>
   </header>
 
@@ -34,94 +43,90 @@
     <!-- ============ HERO ============ -->
     <section class="hero">
       <div class="hero-copy">
+        <a class="announce" href="pro/"><span class="announce-tag">Novo</span>Reunilo Pro: suas reuniões em todos os computadores <span aria-hidden="true">→</span></a>
         <p class="eyebrow">Para Google Meet, Microsoft Teams, Zoom e Slack</p>
-        <h1>Cada palavra da reunião, <em>anotada</em>. E guardada só com você.</h1>
+        <h1 class="split">Cada palavra da reunião, <em>anotada</em>. E guardada só com você.</h1>
         <p class="lede">O Reunilo transcreve suas reuniões ao vivo, entende quem fala rápido ou embolado, marca o que importa e
-          escreve a ata. Sem conta, sem nuvem, sem limite de reuniões.</p>
+          escreve a ata. Grátis, sem conta e sem limite. A transcrição nasce e fica no seu computador.</p>
         <div class="cta">
-          <a class="btn btn-rec" href="#instalar">Baixar para o Chrome</a>
-          <a class="link-arrow" href="#reconhecimento">Como ele entende melhor →</a>
+          <a class="btn btn-rec" href="#instalar">Baixar grátis para o Chrome</a>
+          <a class="link-arrow" href="#caminho">Para onde vai a sua fala →</a>
         </div>
         <ul class="proofs" aria-label="Destaques">
-          <li><b>0</b> servidores com a sua transcrição</li>
-          <li><b>4</b> plataformas, mesma experiência</li>
-          <li><b>∞</b> reuniões por mês</li>
+          <li><b>0</b> servidores recebem a sua reunião no plano grátis</li>
+          <li><b>4</b> plataformas com a mesma experiência</li>
+          <li><b>∞</b> reuniões por mês, sem pagar nada</li>
         </ul>
       </div>
 
       <figure class="stage" aria-label="Demonstração do widget do Reunilo transcrevendo uma reunião">
-        <div class="call" aria-hidden="true">
-          <div class="tile t1"><span>Ana</span></div>
-          <div class="tile t2"><span>Bruno</span></div>
-          <div class="tile t3"><span>Carla</span></div>
-          <div class="tile t4"><span>Você</span></div>
-        </div>
-        <div class="widget" id="demo">
-          <div class="w-head"><span class="w-dot"></span><b>Reunilo</b><span class="w-time" id="demo-time">00:00</span><span class="w-spacer"></span><span class="w-share">sua fala <b id="demo-share">0%</b></span></div>
-          <ol class="w-body" id="demo-body"></ol>
-          <div class="w-foot"><span>⭐</span><span>📝</span><span>📷</span><span>✨ Perguntar à IA</span></div>
+        <div class="stage-tilt">
+          <div class="call" aria-hidden="true">
+            <div class="tile t1"><span>Ana</span></div>
+            <div class="tile t2"><span>Bruno</span></div>
+            <div class="tile t3"><span>Carla</span></div>
+            <div class="tile t4"><span>Você</span></div>
+          </div>
+          <div class="widget" id="demo">
+            <div class="w-head"><span class="w-dot"></span><b>Reunilo</b><span class="w-time" id="demo-time">00:00</span><span class="w-spacer"></span><span class="w-share">sua fala <b id="demo-share">0%</b></span></div>
+            <ol class="w-body" id="demo-body"></ol>
+            <div class="w-foot"><span>⭐</span><span>📝</span><span>📷</span><span>✨ Perguntar à IA</span></div>
+          </div>
+          <div class="local-chip" aria-hidden="true"><span class="lock"></span>Salvo neste computador</div>
         </div>
         <figcaption>Demonstração: o reconhecimento corrige o que a legenda errou e o destaque marca a decisão.</figcaption>
       </figure>
     </section>
 
-    <div class="platforms" aria-label="Plataformas compatíveis">
-      <span>Funciona com</span><b>Google Meet</b><i aria-hidden="true">·</i><b>Microsoft Teams</b><i aria-hidden="true">·</i><b>Zoom</b><i aria-hidden="true">·</i><b>Slack</b><span>inclusive o app do Slack no Windows</span>
+    <div class="platforms" aria-label="Plataformas compatíveis: Google Meet, Microsoft Teams, Zoom e Slack, inclusive o app do Slack no Windows">
+      <div class="marquee" aria-hidden="true">
+        <div class="marquee-track">
+          <span>Funciona com</span><b>Google Meet</b><i>·</i><b>Microsoft Teams</b><i>·</i><b>Zoom</b><i>·</i><b>Slack</b><span>inclusive o app do Slack no Windows</span><i>·</i>
+          <span>Funciona com</span><b>Google Meet</b><i>·</i><b>Microsoft Teams</b><i>·</i><b>Zoom</b><i>·</i><b>Slack</b><span>inclusive o app do Slack no Windows</span><i>·</i>
+        </div>
+      </div>
     </div>
 
-    <!-- ============ RECONHECIMENTO ============ -->
-    <section class="recog" id="reconhecimento">
-      <div class="section-head">
-        <p class="eyebrow">Reconhecimento em três camadas</p>
-        <h2>Falou rápido? Embolou? <em>O Reunilo entendeu.</em></h2>
-        <p>Legenda automática erra justamente quando a conversa esquenta. Por isso o Reunilo não depende de uma
-          só fonte: ele cruza três camadas e mantém o original guardado, caso você queira conferir.</p>
+    <!-- ============ O CAMINHO DA FALA ============ -->
+    <section class="path" id="caminho" aria-labelledby="path-title">
+      <div class="section-head" data-reveal>
+        <p class="eyebrow">Privacidade não é um plano pago</p>
+        <h2 id="path-title">Sua fala faz um caminho curto: <em>da reunião para o seu computador.</em> E para por aí.</h2>
       </div>
-
-      <ol class="layers">
-        <li>
-          <span class="n">1</span>
-          <div>
-            <h3>Captura direta das legendas</h3>
-            <p>Lê as legendas da plataforma pelo canal de dados da chamada, versão por versão, sem perder as
-              correções que o Meet faz enquanto a pessoa ainda está falando. Se o canal mudar, ele lê a tela.</p>
-            <p class="tiny">E avisa quando a legenda está no idioma errado, o motivo nº 1 de transcrição ruim.</p>
+      <div class="path-grid">
+        <ol class="path-steps">
+          <li data-step="0"><span class="k">01</span><div><h3>A reunião acontece no navegador</h3><p>O Reunilo lê as legendas da plataforma e, se você quiser, o áudio da aba. Não entra como "bot" e não aparece na lista de participantes.</p></div></li>
+          <li data-step="1"><span class="k">02</span><div><h3>A transcrição é feita aí mesmo</h3><p>O modo de alta precisão roda o Whisper <b>dentro do navegador</b>, na sua placa de vídeo. O áudio não sai da máquina.</p></div></li>
+          <li data-step="2"><span class="k">03</span><div><h3>E fica guardada com você</h3><p>Transcrição, notas, destaques e capturas vão para o armazenamento do seu navegador e, se quiser, para uma pasta de backup que você escolhe.</p></div></li>
+          <li data-step="3"><span class="k">04</span><div><h3>Nuvem? Só se você escolher</h3><p>Sem conta conectada, a extensão não fala com nenhum servidor do Reunilo. Não há rastreador nem telemetria. A conta Pro é opcional.</p></div></li>
+        </ol>
+        <div class="path-visual" aria-hidden="true">
+          <div class="pv">
+            <div class="pv-node pv-meet"><span class="pv-ico">◉</span>Reunião<small>Meet · Teams · Zoom · Slack</small></div>
+            <div class="pv-wire pv-w1"><i></i><i></i><i></i></div>
+            <div class="pv-node pv-browser"><span class="pv-ico">✎</span>Reunilo no navegador<small>legenda + Whisper local</small></div>
+            <div class="pv-wire pv-w2"><i></i><i></i><i></i></div>
+            <div class="pv-node pv-disk"><span class="pv-ico pv-lock"></span>Seu computador<small>só aqui, por padrão</small></div>
+            <div class="pv-cloud"><span class="pv-ico">☁</span>Servidores de terceiros<small>bloqueado: nada é enviado</small></div>
           </div>
-        </li>
-        <li>
-          <span class="n">2</span>
-          <div>
-            <h3>Alta precisão no seu computador</h3>
-            <p>Opcionalmente, ouve o áudio da reunião e transcreve de novo com o Whisper, um modelo de reconhecimento
-              de fala que roda <b>dentro do navegador</b>, usando a placa de vídeo quando disponível. O modelo é baixado uma única vez e o áudio nunca sai da máquina.</p>
-          </div>
-        </li>
-        <li>
-          <span class="n">3</span>
-          <div>
-            <h3>Revisão com o seu vocabulário</h3>
-            <p>Cadastre nomes, siglas e jargões ("Q4", "OKR", "Meneses"). A revisão por IA (com a sua chave) corrige o
-              que ainda passou, pelo contexto, e marca cada ajuste.</p>
-          </div>
-        </li>
-      </ol>
-
-      <div class="diff" aria-label="Exemplo de correção">
-        <p class="diff-label">Legenda original</p>
-        <p class="diff-line raw">a gente precisa fechar o orçamento do <s>quiu quatro</s> até <s>sesta</s> e o <s>ó que erre</s> do time de vendas</p>
-        <p class="diff-label">Reunilo</p>
-        <p class="diff-line fixed">a gente precisa fechar o orçamento do <ins>Q4</ins> até <ins>sexta</ins> e o <ins>OKR</ins> do time de vendas</p>
+        </div>
+      </div>
+      <div class="privacy-grid" data-reveal-group>
+        <p data-reveal><b>Sem conta.</b> Instalou, usou. Não há cadastro, login ou e-mail de boas-vindas no plano grátis.</p>
+        <p data-reveal><b>Sem telemetria.</b> Nenhum rastreador, nenhum serviço de análise. Nem neste site.</p>
+        <p data-reveal><b>IA só quando você pede.</b> A ata e as perguntas usam a sua chave da API do Claude e só enviam a transcrição no clique.</p>
+        <p data-reveal><b>Código aberto.</b> O código é legível e público (AGPL-3.0): qualquer pessoa pode conferir o que ele faz.</p>
       </div>
     </section>
 
     <!-- ============ RECURSOS ============ -->
     <section class="features" id="recursos">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <p class="eyebrow">Durante e depois</p>
         <h2>Tudo o que um bom escrivão faria. <em>Sem pedir licença ao servidor.</em></h2>
       </div>
 
-      <article class="feat feat-wide">
+      <article class="feat feat-wide" data-reveal>
         <div class="feat-copy">
           <span class="num">01</span>
           <h3>Um widget discreto dentro da reunião</h3>
@@ -138,14 +143,14 @@
       </article>
 
       <div class="feat-pair">
-        <article class="feat">
+        <article class="feat" data-reveal>
           <span class="num">02</span>
           <h3>Pergunte à IA no meio da conversa</h3>
           <p>Entrou atrasado? "O que eu perdi?" Precisa intervir? "Sugira 3 perguntas." Na hora da ata, um clique gera
             resumo, decisões, itens de ação com responsáveis e pendências.</p>
           <div class="shot"><img src="img/5-app-ia.png" alt="Aba de IA com ata e sugestões de perguntas" loading="lazy" width="1400" height="757"></div>
         </article>
-        <article class="feat">
+        <article class="feat" data-reveal>
           <span class="num">03</span>
           <h3>Quem falou, quanto e quando</h3>
           <p>Parcela de fala, palavras por minuto, perguntas feitas, maior monólogo e uma linha do tempo da conversa.
@@ -154,43 +159,111 @@
         </article>
       </div>
 
-      <ul class="feat-list">
-        <li><span class="num">04</span><b>Memória entre reuniões.</b> Encontre qualquer frase em todas as transcrições e veja as reuniões anteriores com as mesmas pessoas, com um botão para recapitular o que ficou pendente.</li>
-        <li><span class="num">05</span><b>Exporte do seu jeito.</b> Cópia formatada para colar no Google Docs, Notion ou e-mail, PDF com capturas, Markdown, texto, legendas SRT/WebVTT e JSON.</li>
-        <li><span class="num">06</span><b>Você no controle.</b> Pergunte antes de transcrever, pause quando quiser e avise os participantes com uma mensagem pronta.</li>
+      <ul class="feat-list" data-reveal-group>
+        <li data-reveal><span class="num">04</span><b>Memória entre reuniões.</b> Encontre qualquer frase em todas as transcrições e veja as reuniões anteriores com as mesmas pessoas, com um botão para recapitular o que ficou pendente.</li>
+        <li data-reveal><span class="num">05</span><b>Exporte do seu jeito.</b> Cópia formatada para colar no Google Docs, Notion ou e-mail, PDF com capturas, Markdown, texto, legendas SRT/WebVTT e JSON.</li>
+        <li data-reveal><span class="num">06</span><b>Você no controle.</b> Pergunte antes de transcrever, pause quando quiser e avise os participantes com uma mensagem pronta.</li>
       </ul>
     </section>
 
-    <!-- ============ PRIVACIDADE ============ -->
-    <section class="privacy" id="privacidade">
-      <div class="privacy-inner">
-        <p class="eyebrow">Privacidade não é um plano pago</p>
-        <h2>Suas reuniões não são <em>matéria-prima</em> de ninguém.</h2>
-        <div class="privacy-grid">
-          <p><b>Sem conta.</b> Instalou, usou. Não há cadastro, login ou e-mail de boas-vindas.</p>
-          <p><b>Sem nuvem.</b> A transcrição, as notas e as capturas ficam no armazenamento do seu navegador.</p>
-          <p><b>Sem telemetria.</b> Nenhum rastreador e nenhum serviço de análise. O código não fala com servidores do Reunilo, porque eles não existem.</p>
-          <p><b>IA só quando você pede.</b> Ata e perguntas usam a sua chave da API do Claude e só enviam a transcrição no clique.</p>
-        </div>
+    <!-- ============ RECONHECIMENTO ============ -->
+    <section class="recog" id="reconhecimento">
+      <div class="section-head" data-reveal>
+        <p class="eyebrow">Reconhecimento em três camadas</p>
+        <h2>Falou rápido? Embolou? <em>O Reunilo entendeu.</em></h2>
+        <p>Legenda automática erra justamente quando a conversa esquenta. Por isso o Reunilo não depende de uma
+          só fonte: ele cruza três camadas e mantém o original guardado, caso você queira conferir.</p>
+      </div>
+
+      <ol class="layers" data-reveal-group>
+        <li data-reveal>
+          <span class="n">1</span>
+          <div>
+            <h3>Captura direta das legendas</h3>
+            <p>Lê as legendas da plataforma pelo canal de dados da chamada, versão por versão, sem perder as
+              correções que o Meet faz enquanto a pessoa ainda está falando. Se o canal mudar, ele lê a tela.</p>
+            <p class="tiny">E avisa quando a legenda está no idioma errado, o motivo nº 1 de transcrição ruim.</p>
+          </div>
+        </li>
+        <li data-reveal>
+          <span class="n">2</span>
+          <div>
+            <h3>Alta precisão no seu computador</h3>
+            <p>Opcionalmente, ouve o áudio da reunião e transcreve de novo com o Whisper, um modelo de reconhecimento
+              de fala que roda <b>dentro do navegador</b>, usando a placa de vídeo quando disponível. O modelo é baixado uma única vez e o áudio nunca sai da máquina.</p>
+          </div>
+        </li>
+        <li data-reveal>
+          <span class="n">3</span>
+          <div>
+            <h3>Revisão com o seu vocabulário</h3>
+            <p>Cadastre nomes, siglas e jargões ("Q4", "OKR", "Meneses"). A revisão por IA corrige o
+              que ainda passou, pelo contexto, e marca cada ajuste.</p>
+          </div>
+        </li>
+      </ol>
+
+      <div class="diff" data-reveal aria-label="Exemplo de correção">
+        <p class="diff-label">Legenda original</p>
+        <p class="diff-line raw">a gente precisa fechar o orçamento do <s>quiu quatro</s> até <s>sesta</s> e o <s>ó que erre</s> do time de vendas</p>
+        <p class="diff-label">Reunilo</p>
+        <p class="diff-line fixed">a gente precisa fechar o orçamento do <ins>Q4</ins> até <ins>sexta</ins> e o <ins>OKR</ins> do time de vendas</p>
+      </div>
+    </section>
+
+    <!-- ============ DOIS JEITOS ============ -->
+    <section class="ways" id="planos" aria-labelledby="ways-title">
+      <div class="section-head" data-reveal>
+        <p class="eyebrow">Dois jeitos de usar</p>
+        <h2 id="ways-title">Grátis e local, <em>para sempre</em>. Com a nuvem só se você quiser.</h2>
+      </div>
+      <div class="ways-grid">
+        <article class="way way-free" data-reveal>
+          <p class="way-kicker">Reunilo</p>
+          <p class="way-price">R$ 0 <small>para sempre</small></p>
+          <p class="way-lede">Tudo o que está nesta página, sem conta e sem limite. Nada sai do seu computador.</p>
+          <ul class="ticks">
+            <li>Transcrição ao vivo no Meet, Teams, Zoom e Slack</li>
+            <li>Alta precisão com o Whisper local</li>
+            <li>Destaques, notas, capturas, análise de fala e exportações</li>
+            <li>IA com a sua própria chave da API, se quiser</li>
+            <li>Backup numa pasta do seu computador</li>
+          </ul>
+          <a class="btn btn-rec" href="#instalar">Baixar grátis</a>
+        </article>
+        <article class="way way-pro" data-reveal>
+          <p class="way-kicker">Reunilo <em>Pro</em> <span class="badge">opcional</span></p>
+          <p class="way-price">R$ 12,50 <small>por mês no plano anual</small></p>
+          <p class="way-lede">Para quem usa mais de um computador e quer a ata pronta sem configurar nada.</p>
+          <ul class="ticks">
+            <li>Reuniões sincronizadas entre computadores, numa conta sua</li>
+            <li>Área web com busca em todas as falas</li>
+            <li>IA inclusa, sem chave: 15 créditos por mês</li>
+            <li>Links de leitura para quem não usa o Reunilo</li>
+            <li>Cifrado (AES-256) e conforme a LGPD</li>
+          </ul>
+          <a class="btn btn-light" href="pro/">Conhecer o Pro</a>
+          <p class="way-fine">R$ 150/ano (Pix ou cartão) ou R$ 15/mês (cartão). Também em dólar.</p>
+        </article>
       </div>
     </section>
 
     <!-- ============ COMPARATIVO ============ -->
     <section class="compare" aria-labelledby="cmp-title">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <p class="eyebrow">Comparativo</p>
         <h2 id="cmp-title">O que muda em relação aos transcritores em nuvem</h2>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap" data-reveal>
         <table>
           <thead><tr><th scope="col"></th><th scope="col">Transcritores em nuvem típicos</th><th scope="col" class="us">Reunilo</th></tr></thead>
           <tbody>
-            <tr><th scope="row">Onde fica a transcrição</th><td>Servidores da empresa</td><td class="us">No seu computador</td></tr>
+            <tr><th scope="row">Onde fica a transcrição</th><td>Servidores da empresa</td><td class="us">No seu computador (no Pro, também na sua conta, cifrada)</td></tr>
             <tr><th scope="row">Conta obrigatória</th><td>Sim</td><td class="us">Não</td></tr>
             <tr><th scope="row">Limite mensal no plano grátis</th><td>Reuniões e créditos de IA</td><td class="us">Nenhum</td></tr>
             <tr><th scope="row">Rastreadores e analytics</th><td>Comuns</td><td class="us">Nenhum</td></tr>
             <tr><th scope="row">Reconhecimento próprio</th><td>Depende da legenda da plataforma</td><td class="us">Legenda + Whisper local + glossário</td></tr>
-            <tr><th scope="row">Legendas SRT/WebVTT</th><td>Raro</td><td class="us">Sim</td></tr>
+            <tr><th scope="row">Plano pago com IA inclusa</th><td>Em geral US$ 8 ou mais por mês</td><td class="us">R$ 12,50 por mês no anual</td></tr>
             <tr><th scope="row">Análise de fala por pessoa</th><td>Básica</td><td class="us">Parcela, ritmo, perguntas e linha do tempo</td></tr>
           </tbody>
         </table>
@@ -199,18 +272,18 @@
 
     <!-- ============ INSTALAR ============ -->
     <section class="install" id="instalar">
-      <div class="install-copy">
+      <div class="install-copy" data-reveal>
         <p class="eyebrow">Instalação em 1 minuto</p>
         <h2>Leve o Reunilo para a sua próxima reunião.</h2>
         <p>Enquanto a versão da Chrome Web Store não sai, a instalação é manual e leva três passos. Funciona no
           Chrome, Edge, Brave e outros navegadores baseados em Chromium.</p>
-        <a class="btn btn-rec" id="download" href="download/reunilo-2.4.0.zip" download>Baixar o Reunilo <span id="dl-version"></span></a>
+        <a class="btn btn-rec" id="download" href="download/reunilo-2.5.0.zip" download>Baixar o Reunilo <span id="dl-version"></span></a>
         <p class="tiny">Arquivo .zip · código legível, sem ofuscação · nenhum instalador</p>
       </div>
-      <ol class="steps">
-        <li><b>Descompacte</b> o arquivo baixado numa pasta que você não vá apagar.</li>
-        <li><b>Abra</b> <code>chrome://extensions</code> e ative o <b>Modo do desenvolvedor</b> no canto superior direito.</li>
-        <li><b>Clique</b> em <b>Carregar sem compactação</b> e escolha a pasta. Fixe o ícone do Reunilo na barra.</li>
+      <ol class="steps" data-reveal-group>
+        <li data-reveal><b>Descompacte</b> o arquivo baixado numa pasta que você não vá apagar.</li>
+        <li data-reveal><b>Abra</b> <code>chrome://extensions</code> e ative o <b>Modo do desenvolvedor</b> no canto superior direito.</li>
+        <li data-reveal><b>Clique</b> em <b>Carregar sem compactação</b> e escolha a pasta. Fixe o ícone do Reunilo na barra.</li>
       </ol>
     </section>
 
@@ -225,6 +298,10 @@
           <p>O Reunilo não entra na reunião como um "bot" e não aparece na lista de participantes. Por transparência,
             o widget tem um botão que copia um aviso pronto para você colar no chat. E você pode configurar o Reunilo
             para perguntar antes de transcrever cada reunião.</p></details>
+        <details><summary>O Reunilo é mesmo grátis? Qual a diferença para o Pro?</summary>
+          <p>Sim: a extensão é grátis, sem limite de reuniões e sem conta, e continua assim. O <a href="pro/">Reunilo Pro</a> é
+            opcional: guarda uma cópia cifrada das reuniões numa conta sua, para abrir em qualquer computador e na área web, e
+            inclui IA sem precisar de chave. Custa R$ 150 por ano (Pix ou cartão) ou R$ 15 por mês (cartão).</p></details>
         <details><summary>Funciona com o Slack e outros apps instalados?</summary>
           <p>Sim, no Windows. Abra <b>Gravar do computador</b> no painel do Reunilo, compartilhe a <b>tela inteira</b> com o
             <b>áudio do sistema</b> e entre no huddle pelo app do Slack, como sempre. O Reunilo ouve o som do computador e o seu
@@ -238,11 +315,12 @@
           <p>Ele é opcional. Com placa de vídeo compatível (WebGPU), o modelo roda com folga em tempo real. Em
             computadores mais simples, escolha o modelo menor nos ajustes ou use só a captura de legendas e a revisão por IA.</p></details>
         <details><summary>Quanto custa a IA?</summary>
-          <p>O Reunilo é gratuito. A IA é opcional e usa a sua própria chave da API do Claude, então você paga direto
-            à Anthropic, pelo uso. Dá para escolher entre os modelos Opus, Sonnet e Haiku conforme o custo.</p></details>
+          <p>No plano grátis, a IA é opcional e usa a sua própria chave da API do Claude: você paga direto à Anthropic, pelo uso,
+            e escolhe entre os modelos Opus, Sonnet e Haiku. No Pro, a IA vem inclusa, com 15 créditos por mês que acumulam até 30.</p></details>
         <details><summary>E se eu trocar de computador?</summary>
-          <p>Use "Exportar backup" na lista de reuniões e "Importar" no outro computador. Como não há nuvem, você
-            decide para onde os dados vão.</p></details>
+          <p>No plano grátis, escolha uma pasta de backup nos ajustes (as reuniões são copiadas para lá sozinhas) ou use
+            "Exportar backup" e "Importar". Os ajustes viajam com o seu perfil do Chrome. Com o Pro, as reuniões aparecem
+            sozinhas em todos os computadores conectados à sua conta.</p></details>
         <details><summary>Quem faz o Reunilo?</summary>
           <p>O Reunilo é um produto da <a href="https://meneseslabs.com.br">meneseslabs</a>, criado por
             <b>Thiago M. Meneses</b>, feito no Brasil e pensado para reuniões em português. Dúvidas, sugestões ou
@@ -272,9 +350,9 @@
   </main>
 
   <footer class="foot">
-    <a class="wordmark" href="#"><span class="rec" aria-hidden="true"></span>Reunilo</a>
+    <a class="wordmark" href="./"><span class="rec" aria-hidden="true"></span>Reunilo</a>
     <p>Transcrição de reuniões que fica com você.</p>
-    <nav aria-label="Rodapé"><a href="privacidade.html">Política de privacidade</a><a href="#instalar">Baixar</a></nav>
+    <nav aria-label="Rodapé"><a href="pro/">Reunilo Pro</a><a href="app/">Entrar</a><a href="privacidade.html">Política de privacidade</a><a href="https://github.com/thiagommeneses/reunilo">Código</a></nav>
     <a class="made" href="https://meneseslabs.com.br"><img src="img/meneseslabs.svg" alt="" width="28" height="22">um produto <b>meneses<span>labs</span></b></a>
   </footer>
 
