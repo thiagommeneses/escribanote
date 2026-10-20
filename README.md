@@ -7,7 +7,7 @@ destaques, notas, análise de fala e ata.
 O Reunilo é uma extensão do Chrome. Na versão grátis, tudo fica no seu computador: sem conta, sem
 servidor, sem telemetria e sem limite de reuniões. Até a versão 2.3 o projeto se chamava **Escriba**.
 
-- **Site:** https://escriba.meneseslabs.com.br (muda quando os domínios do Reunilo forem registrados)
+- **Site:** https://reunilo.meneseslabs.com.br
 - **Versão atual:** 2.4.0
 
 ## O que tem aqui
@@ -86,4 +86,4 @@ Hugging Face e fica no cache do navegador. Política completa em
 versão modificada, ou oferecê-la como serviço pela rede, precisa publicar o código-fonte sob a mesma
 licença.
 
-Feito por Thiago M. Meneses ([meneseslabs](https://escriba.meneseslabs.com.br)).
+Feito por Thiago M. Meneses ([meneseslabs](https://meneseslabs.com.br)).

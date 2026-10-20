@@ -1,4 +1,4 @@
-# Reunilo — escriba.meneseslabs.com.br
+# Reunilo — reunilo.meneseslabs.com.br
 # Robôs de coleta para treino de IA: não autorizados.
 User-agent: GPTBot
 User-agent: ClaudeBot

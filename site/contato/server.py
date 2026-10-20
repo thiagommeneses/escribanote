@@ -121,7 +121,7 @@ def enviar_email(r):
     msg["Message-ID"] = make_msgid(domain=SMTP["user"].split("@")[-1])
     msg.set_content(
         f"{r['mensagem']}\n\n—\n{r['nome']} <{r['email']}>\n"
-        f"Enviado pelo formulário de escriba.meneseslabs.com.br em {r['quando']}.\n"
+        f"Enviado pelo formulário de reunilo.meneseslabs.com.br em {r['quando']}.\n"
         "Responda este e-mail para falar direto com a pessoa."
     )
     try:

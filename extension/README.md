@@ -1,6 +1,6 @@
 # Reunilo 2.4 — Transcrição de Reuniões
 
-Site: https://escriba.meneseslabs.com.br (o endereço muda quando os domínios do Reunilo forem registrados)
+Site: https://reunilo.meneseslabs.com.br
 
 Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, **Microsoft Teams** e
 **Zoom** (pelo navegador) e, com o gravador do computador, **huddles do Slack** e outros apps instalados.

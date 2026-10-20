@@ -17,7 +17,7 @@
 
 O **Reunilo** (até a versão 2.3, chamado Escriba) é uma extensão do Chrome que transcreve reuniões do Google Meet, Teams e Zoom e, desde a
 versão 2.2, huddles do Slack e outros apps do computador (Whisper local). Ele foi construído como uma
-alternativa melhor ao Tactiq. A versão 2.3.0 está publicada em escriba.meneseslabs.com.br. Ela é **100%
+alternativa melhor ao Tactiq. A versão 2.4.0 está publicada em reunilo.meneseslabs.com.br. Ela é **100%
 local**: as transcrições ficam no `chrome.storage` do navegador, com backup opcional numa pasta do
 computador; os ajustes sincronizam pela conta do Chrome, e a IA usa a chave de API do próprio usuário.
 
