@@ -603,11 +603,14 @@ function previousWithSame(s) {
 
 async function renderAI() {
   const s = state.session;
-  const { apiKey } = await chrome.storage.local.get("apiKey");
+  const { apiKey, account } = await chrome.storage.local.get(["apiKey", "account"]);
   const model = MODELS.find((m) => m.id === state.settings.aiModel);
+  const pro = account?.token && account.plan === "pro" && !account.invalid;
   $("ai-hint").textContent = apiKey
     ? `Modelo: ${model ? model.label : state.settings.aiModel}. A transcrição só é enviada quando você pede.`
-    : "Cadastre sua chave da API do Claude em Ajustes para usar a IA.";
+    : pro
+      ? `IA da conta Reunilo Pro: ${account.balance ?? 0} créditos. Ata, revisão e pergunta custam 1 crédito cada.`
+      : "Para usar a IA, cadastre sua chave da API do Claude em Ajustes ou conecte a sua conta Reunilo Pro.";
 
   // Revisão
   if (state.busy !== "review") {
@@ -894,6 +897,7 @@ async function renderList() {
   const hits = state.searchHits;
   if (hits) items = items.filter((m) => hits.has(m.id));
   renderBackupBanner();
+  renderAccount();
   if (!items.length) {
     $("list").innerHTML = `<div class="list-empty">${
       state.index.length
@@ -1015,6 +1019,7 @@ async function renderSettings() {
     .map((c) => `<li>${esc(NAMES[c.name] || c.description || c.name)}: ${c.shortcut ? c.shortcut.split("+").map((k) => `<kbd>${esc(k)}</kbd>`).join("+") : '<span class="muted">sem atalho</span>'}</li>`)
     .join("");
   renderBackup();
+  renderAccount();
   const bytes = await chrome.storage.local.getBytesInUse(null);
   const index = await send({ type: "list" });
   $("usage").textContent = `${index.length} reuniões · ${(bytes / 1024 / 1024).toFixed(2)} MB usados neste computador.`;
@@ -1074,6 +1079,67 @@ $("tag-editor").addEventListener("click", (e) => {
 });
 $("tag-add").addEventListener("click", () => saveTags([...tags(), { id: "t" + Date.now().toString(36), label: "Nova tag", emoji: "🏷", color: "#64748b" }]));
 $("tag-reset").addEventListener("click", () => saveTags(DEFAULT_TAGS));
+
+// ---------------- Conta Reunilo Pro ----------------
+async function renderAccount() {
+  const r = await send({ type: "account-state" }).catch(() => null);
+  const a = r?.account;
+  $("acct-off").hidden = !!a;
+  $("acct-on").hidden = !a;
+  if (a) {
+    const st = $("acct-status");
+    if (a.invalid) {
+      st.className = "bk-status warn";
+      st.textContent = `A conexão com ${a.email || "a conta"} expirou. Desconecte e conecte de novo.`;
+    } else if (a.plan !== "pro") {
+      st.className = "bk-status warn";
+      st.textContent = `Conectado como ${a.email}, sem o Pro ativo: a sincronização e a IA inclusa estão pausadas.`;
+    } else {
+      st.className = "bk-status ok";
+      st.textContent = `Conectado como ${a.email} · Pro · ${a.balance ?? 0} créditos de IA.`;
+    }
+    const s = r.sync;
+    $("acct-sync").textContent = !s.consent
+      ? "Aguardando você escolher quais reuniões enviar (aviso no topo da lista)."
+      : s.error
+        ? `A última sincronização falhou: ${s.error}`
+        : s.lastSyncAt
+          ? `Última sincronização: ${new Date(s.lastSyncAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}.`
+          : "Sincronização ligada.";
+  }
+  const banner = $("sync-banner");
+  const show = a && a.plan === "pro" && !a.invalid && !r.sync.consent;
+  banner.hidden = !show;
+  if (show) $("sync-banner-text").textContent = r.pending
+    ? `Conta conectada (${a.email}). Enviar as ${r.pending} reuniões deste computador para a conta?`
+    : `Conta conectada (${a.email}). As próximas reuniões vão para a conta sozinhas.`;
+}
+
+async function openAccountWeb(path) {
+  const r = await send({ type: "account-state" }).catch(() => null);
+  const base = r?.account?.web || "https://reunilo.meneseslabs.com.br/app/";
+  chrome.tabs.create({ url: base + path });
+}
+
+$("acct-connect").addEventListener("click", () => openAccountWeb("#/conectar"));
+$("acct-web").addEventListener("click", () => openAccountWeb(""));
+$("acct-sync-now").addEventListener("click", async () => {
+  await send({ type: "sync-now" });
+  toast("Sincronizando");
+  setTimeout(renderAccount, 1500);
+});
+$("acct-off-btn").addEventListener("click", async () => {
+  await send({ type: "account-disconnect" });
+  toast("Conta desconectada; as reuniões continuam neste computador");
+  renderAccount();
+});
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-sync-consent]");
+  if (!b) return;
+  await send({ type: "sync-consent", mode: b.dataset.syncConsent });
+  toast(b.dataset.syncConsent === "all" ? "Enviando as reuniões para a conta" : "Só as próximas reuniões vão para a conta");
+  renderAccount();
+});
 
 // ---------------- Backup na pasta do computador ----------------
 async function backupInfo() {
@@ -1190,6 +1256,7 @@ $("wipe").addEventListener("click", async () => {
 let pending = null;
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "backup-updated") return refreshBackupUi();
+  if (msg.type === "account-updated") return renderAccount();
   if (msg.type === "index-updated") {
     if (!$("view-list").hidden) renderList();
     return;

@@ -31,6 +31,8 @@
             <input id="list-search" type="search" placeholder="Buscar em todas as transcrições…" aria-label="Buscar reuniões"></div>
           <div class="filters" id="filters"></div>
         </div>
+        <div id="sync-banner" class="banner bk-banner" hidden><span id="sync-banner-text"></span>
+          <span class="row"><button type="button" class="btn sm primary" data-sync-consent="all">Enviar todas</button><button type="button" class="btn sm" data-sync-consent="new">Só as próximas</button></span></div>
         <div id="bk-banner" class="banner warn bk-banner" hidden>O backup automático está pausado: o Chrome pede para confirmar o acesso à pasta.
           <button type="button" class="btn sm" data-bk-resume>Retomar</button></div>
         <div id="list" class="meetings"></div>
@@ -153,7 +155,7 @@
 
             <label class="field"><span>Glossário: nomes, siglas e termos da sua equipe (um por linha)</span>
               <textarea name="glossary" rows="4" placeholder="Q4&#10;OKR&#10;Thiago Meneses&#10;meneseslabs"></textarea></label>
-            <label class="switch"><input type="checkbox" name="autoReview"><span></span>Revisar com IA automaticamente durante a reunião (usa sua chave de API)</label>
+            <label class="switch"><input type="checkbox" name="autoReview"><span></span>Revisar com IA automaticamente durante a reunião (usa sua chave de API ou 1 crédito do Pro por reunião)</label>
           </div>
 
           <div class="card">
@@ -180,7 +182,7 @@
               <div class="row"><input name="apiKey" type="password" placeholder="sk-ant-…" class="grow"><button type="button" class="btn sm primary" id="save-key">Salvar</button></div></label>
             <span id="key-status" class="muted tiny"></span>
             <label class="field"><span>Modelo</span><select name="aiModel" id="model-select"></select></label>
-            <label class="switch"><input type="checkbox" name="autoAta"><span></span>Gerar a ata automaticamente quando a reunião terminar</label>
+            <label class="switch"><input type="checkbox" name="autoAta"><span></span>Gerar a ata automaticamente quando a reunião terminar (sem chave, usa 1 crédito do Pro)</label>
           </div>
 
           <div class="card">
@@ -189,6 +191,24 @@
             <div class="row"><button type="button" class="btn sm" id="grant-shots">Autorizar capturas pelo widget</button><span id="shots-status" class="muted tiny"></span></div>
             <ul class="kbd-list" id="kbd-list"></ul>
             <button type="button" class="btn sm ghost" id="edit-shortcuts">Alterar atalhos</button>
+          </div>
+
+          <div class="card" id="account-card">
+            <h3>Conta Reunilo Pro</h3>
+            <div id="acct-off">
+              <p class="muted">Com o Reunilo Pro (R$ 15/mês), suas reuniões ficam salvas na conta e aparecem em qualquer computador,
+                numa área web com busca em todas as falas, e a IA funciona sem chave de API: 15 créditos por mês, que acumulam até 30.</p>
+              <div class="row"><button type="button" class="btn sm primary" id="acct-connect">Entrar ou assinar o Pro</button></div>
+            </div>
+            <div id="acct-on" hidden>
+              <p id="acct-status" class="bk-status"></p>
+              <p id="acct-sync" class="muted tiny"></p>
+              <div class="row">
+                <button type="button" class="btn sm" id="acct-sync-now">Sincronizar agora</button>
+                <button type="button" class="btn sm" id="acct-web">Abrir o Reunilo na web</button>
+                <button type="button" class="btn sm ghost" id="acct-off-btn">Desconectar</button>
+              </div>
+            </div>
           </div>
 
           <div class="card" id="backup-card">

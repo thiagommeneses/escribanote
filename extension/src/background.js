@@ -6,6 +6,8 @@ import {
 } from "./lib/transcript.js";
 import { getSettings, DEFAULTS, HQ_MODELS, pushSyncedSettings, pullSyncedSettings } from "./lib/settings.js";
 import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, writeSettingsFile } from "./lib/backup.js";
+import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
+import { mergeDocs, sameContent } from "./lib/sync.js";
 import { streamClaude, ataRequest, chatRequest, reviewRequest, parseReview, API_ORIGIN } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
 import { computeStats, findMe } from "./lib/stats.js";
@@ -31,6 +33,8 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (settings?.syncSettings !== false && !(await pullSyncedSettings())) await pushSyncedSettings({ ...DEFAULTS, ...settings }).catch(() => {});
 });
 chrome.runtime.onStartup.addListener(() => adoptSyncedSettings());
+// Conta: ao acordar o service worker, atualiza o plano e retoma a sincronização pendente.
+setTimeout(() => accountTick().catch(() => {}), 3000);
 
 // ---------------- Ajustes na conta do Chrome ----------------
 // Vence a cópia alterada por último (_at). Ao reinstalar, os ajustes voltam da conta.
@@ -115,6 +119,7 @@ async function saveDirty() {
   patch.index = index;
   await chrome.storage.local.set(patch);
   queueBackup(ids);
+  queueSync(ids);
 }
 
 // ---------------- Backup na pasta do computador ----------------
@@ -246,12 +251,11 @@ async function endSession(tabId) {
 
 async function maybeAutoAta(s) {
   const settings = await getSettings();
-  const { apiKey } = await chrome.storage.local.get("apiKey");
-  if (!settings.autoAta || !apiKey || s.summary || s.entries.length + s.asr.length < 8) return;
-  if (!(await chrome.permissions.contains({ origins: [API_ORIGIN] }))) return;
+  if (!settings.autoAta || s.summary || s.entries.length + s.asr.length < 8) return;
+  const ai = await aiProvider();
+  if (!ai) return;
   try {
-    const req = ataRequest(s, settings.tags, settings.glossary);
-    s.summary = await streamClaude({ apiKey, model: settings.aiModel, ...req });
+    s.summary = await runAta(ai, s, settings);
     await changed(s, { now: true });
   } catch {
     // Sem rede ou chave inválida: o usuário pode gerar a ata manualmente depois.
@@ -269,6 +273,61 @@ async function aiReady() {
   return apiKey;
 }
 
+// A IA usa a chave própria quando há uma; senão, os créditos da conta Reunilo Pro.
+async function aiProvider() {
+  const apiKey = await aiReady();
+  if (apiKey) return { kind: "key", apiKey };
+  const acct = await getAccount();
+  if (acct && acct.plan === "pro" && !acct.invalid) return { kind: "account" };
+  return null;
+}
+const NO_AI = "Para usar a IA, cadastre sua chave de API em Ajustes ou conecte a sua conta Reunilo Pro.";
+
+// Documento enviado à IA da conta (sem capturas de tela).
+const forAccount = (s) => ({ ...s, shots: [] });
+
+async function accountCall(fn) {
+  try {
+    const r = await fn();
+    if (r && typeof r.balance === "number") setAccount({ balance: r.balance }).then(notifyAccount);
+    return r;
+  } catch (err) {
+    if (err instanceof AccountError && typeof err.body?.balance === "number") setAccount({ balance: err.body.balance }).then(notifyAccount);
+    if (err instanceof AccountError && err.status === 401) await setAccount({ invalid: true }).then(notifyAccount);
+    throw err;
+  }
+}
+
+async function runAta(ai, s, settings, { onDelta, signal } = {}) {
+  if (ai.kind === "key") {
+    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...ataRequest(s, settings.tags, settings.glossary), onDelta, signal });
+  }
+  const done = await accountCall(() =>
+    accountStream("/ai/summary", { meeting: forAccount(s), tags: settings.tags, glossary: settings.glossary }, { onDelta, signal }),
+  );
+  return { text: done.text, model: done.model, stopReason: "end_turn", createdAt: Date.now(), via: "account" };
+}
+
+async function runChat(ai, s, messages, settings, { previous, onDelta, signal } = {}) {
+  if (ai.kind === "key") {
+    const reqBody = chatRequest(s, messages, { tags: settings.tags, previous, glossary: settings.glossary });
+    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...reqBody, maxTokens: 8000, onDelta, signal });
+  }
+  const done = await accountCall(() =>
+    accountStream("/ai/ask", { meeting: forAccount(s), history: messages.map((m) => ({ role: m.role, text: m.text })), tags: settings.tags, glossary: settings.glossary }, { onDelta, signal }),
+  );
+  return { text: done.text, model: done.model };
+}
+
+async function runReview(ai, s, items, context, settings) {
+  if (ai.kind === "key") {
+    const res = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...reviewRequest(items, { glossary: settings.glossary, context }), maxTokens: 8000 });
+    return parseReview(res.text, items);
+  }
+  const r = await accountCall(() => accountFetch("/ai/review", { method: "POST", body: { meetingId: s.id, items, context, glossary: settings.glossary } }));
+  return r.fixes || {};
+}
+
 // Revisão automática durante a reunião: a cada ~20 s, em lote, só falas já estabilizadas.
 async function scheduleReview(s) {
   const settings = await getSettings();
@@ -282,8 +341,8 @@ async function scheduleReview(s) {
 // Revisa as falas ainda não revisadas. force: inclui falas recentes (ex.: botão "Revisar").
 async function reviewPending(s, { force = false, onProgress } = {}) {
   if (reviewing.has(s.id)) return { skipped: true };
-  const apiKey = await aiReady();
-  if (!apiKey) throw new Error("Cadastre e autorize sua chave de API em Ajustes para revisar com IA.");
+  const ai = await aiProvider();
+  if (!ai) throw new Error(NO_AI);
   const settings = await getSettings();
   reviewing.add(s.id);
   try {
@@ -296,9 +355,7 @@ async function reviewPending(s, { force = false, onProgress } = {}) {
       const items = batch.map((e) => ({ id: e.id, speaker: speakerName(s, e.speakerId), text: e.original }));
       const firstIdx = all.indexOf(batch[0]);
       const context = all.slice(Math.max(0, firstIdx - 8), firstIdx).map((e) => ({ id: e.id, speaker: speakerName(s, e.speakerId), text: e.text }));
-      const req = reviewRequest(items, { glossary: settings.glossary, context });
-      const res = await streamClaude({ apiKey, model: settings.aiModel, ...req, maxTokens: 8000 });
-      const fixes = parseReview(res.text, items);
+      const fixes = await runReview(ai, s, items, context, settings);
       for (const it of items) {
         s.reviewed[it.id] = true;
         if (fixes[it.id]) {
@@ -635,6 +692,32 @@ async function handle(msg, sender) {
       return (await allSessions()).map(({ aliases, ...rest }) => rest);
     case "import":
       return importSessions(msg.sessions);
+    case "account-state":
+      return { account: await publicAccount(), sync: await getSyncMeta(), pending: await pendingCount() };
+    case "account-refresh":
+      await refreshAccount().catch(() => {});
+      return { account: await publicAccount() };
+    case "sync-now":
+      await pullSync().catch(() => {});
+      queueSync((await loadIndex()).map((m) => m.id), { now: true });
+      return { ok: true };
+    case "sync-consent": {
+      const meta = await getSyncMeta();
+      meta.consent = msg.mode === "new" ? "new" : "all";
+      if (msg.mode === "new") for (const m of await loadIndex()) meta.localOnly[m.id] = true;
+      await saveSyncMeta(meta);
+      if (meta.consent === "all") queueSync((await loadIndex()).map((m) => m.id), { now: true });
+      notifyAccount();
+      return { ok: true };
+    }
+    case "account-disconnect": {
+      const acct = await getAccount();
+      if (acct?.deviceId) await accountFetch(`/devices/${acct.deviceId}`, { method: "DELETE" }).catch(() => {});
+      await setAccount(null);
+      await chrome.storage.local.remove("sync");
+      notifyAccount();
+      return { ok: true };
+    }
     case "backup-flush": {
       // all: depois de escolher a pasta ou em "Fazer backup agora"
       if (msg.all) queueBackup(["settings", ...(await loadIndex()).map((m) => m.id)]);
@@ -648,6 +731,210 @@ async function handle(msg, sender) {
     default:
       return undefined;
   }
+}
+
+// ---------------- Conta Reunilo Pro: sincronização ----------------
+// A extensão continua sendo a fonte durante a reunião; a conta recebe cópias com controle de versão.
+const SYNC_LIVE_MS = 120_000;
+const SYNC_IDLE_MS = 5_000;
+const PULL_EVERY_MS = 10 * 60_000;
+const syncQueue = new Set();
+const syncSkip = new Set(); // gravadas por causa da própria sincronização: não voltam para a fila
+let syncTimer = null;
+let syncing = false;
+
+async function getSyncMeta() {
+  const { sync } = await chrome.storage.local.get("sync");
+  return { consent: null, versions: {}, remoteDeleted: {}, localOnly: {}, pending: [], lastPull: null, lastSyncAt: null, error: null, ...(sync || {}) };
+}
+const saveSyncMeta = (meta) => chrome.storage.local.set({ sync: meta });
+
+async function publicAccount() {
+  const a = await getAccount();
+  if (!a) return null;
+  const { token, ...rest } = a;
+  return { ...rest, web: `${await accountBase()}/app/` };
+}
+
+async function pendingCount() {
+  const meta = await getSyncMeta();
+  return (await loadIndex()).filter((m) => !(m.id in meta.versions) && !meta.localOnly[m.id] && !meta.remoteDeleted[m.id]).length;
+}
+
+function notifyAccount() {
+  chrome.runtime.sendMessage({ type: "account-updated" }).catch(() => {});
+}
+
+async function syncActive() {
+  const a = await getAccount();
+  if (!a || a.invalid || a.plan !== "pro") return false;
+  return !!(await getSyncMeta()).consent;
+}
+
+function queueSync(ids, { now = false } = {}) {
+  ids = ids.filter((id) => !(syncSkip.has(id) && syncSkip.delete(id)));
+  if (!ids.length && !now) return;
+  for (const id of ids) syncQueue.add(id);
+  const live = ids.some((id) => sessionTab.has(id));
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => flushSync().catch(() => {}), now ? 0 : live ? SYNC_LIVE_MS : SYNC_IDLE_MS);
+}
+
+async function refreshAccount() {
+  if (!(await getAccount())) return null;
+  try {
+    const me = await accountFetch("/me");
+    const a = await setAccount({ email: me.email, plan: me.plan, balance: me.credits?.balance ?? 0, renewsAt: me.credits?.renewsAt || null, invalid: false, checkedAt: Date.now() });
+    notifyAccount();
+    return a;
+  } catch (err) {
+    if (err.status === 401) {
+      await setAccount({ invalid: true });
+      notifyAccount();
+    }
+    throw err;
+  }
+}
+
+async function accountTick() {
+  const a = await getAccount();
+  if (!a) return;
+  if (!a.checkedAt || Date.now() - a.checkedAt > 30 * 60_000) await refreshAccount().catch(() => {});
+  if (!(await syncActive())) return;
+  const meta = await getSyncMeta();
+  if (!meta.lastPull || Date.now() - new Date(meta.lastPull).getTime() > PULL_EVERY_MS) await pullSync().catch(() => {});
+  if (meta.pending.length) queueSync(meta.pending, { now: true });
+}
+setInterval(() => accountTick().catch(() => {}), PULL_EVERY_MS);
+
+// Envia uma reunião; em conflito, mescla com a versão da conta e tenta de novo.
+async function pushOne(id, meta) {
+  const s = await getSession(id);
+  if (!s) return;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const r = await accountFetch(`/meetings/${encodeURIComponent(id)}`, { method: "PUT", body: { doc: { ...s, shots: [] }, baseVersion: meta.versions[id] ?? null } });
+      meta.versions[id] = r.version;
+      return;
+    } catch (err) {
+      if (err.status === 409) {
+        const remote = await accountFetch(`/meetings/${encodeURIComponent(id)}`);
+        const merged = mergeDocs(s, remote.doc);
+        Object.assign(s, merged);
+        cache.set(id, s);
+        dirty.add(id);
+        meta.versions[id] = remote.version;
+        continue;
+      }
+      if (err.status === 410) {
+        meta.remoteDeleted[id] = true; // apagada na conta: fica só no computador
+        return;
+      }
+      throw err;
+    }
+  }
+}
+
+async function flushSync() {
+  clearTimeout(syncTimer);
+  syncTimer = null;
+  if (syncing) return;
+  const meta = await getSyncMeta();
+  const ids = [...new Set([...meta.pending, ...syncQueue])];
+  syncQueue.clear();
+  if (!ids.length || !(await getAccount())) return;
+  if (!(await syncActive())) {
+    meta.pending = ids.filter((id) => !meta.localOnly[id]);
+    return saveSyncMeta(meta);
+  }
+  syncing = true;
+  const left = [];
+  try {
+    for (const id of ids) {
+      if (meta.localOnly[id] || meta.remoteDeleted[id]) continue;
+      try {
+        await pushOne(id, meta);
+      } catch (err) {
+        left.push(id);
+        meta.error = err.message;
+        if (err.status === 401 || err.status === 402) {
+          if (err.status === 401) await setAccount({ invalid: true });
+          else await setAccount({ plan: "free" });
+          left.push(...ids.slice(ids.indexOf(id) + 1));
+          break;
+        }
+      }
+    }
+    if (dirty.size) {
+      for (const id of dirty) syncSkip.add(id); // a versão mesclada já foi enviada
+      await saveDirty();
+    }
+    meta.pending = [...new Set(left)];
+    if (!left.length) meta.error = null;
+    meta.lastSyncAt = Date.now();
+  } finally {
+    syncing = false;
+    await saveSyncMeta(meta);
+    notifyAccount();
+  }
+}
+
+// Baixa o que mudou em outros computadores ou no app web.
+async function pullSync() {
+  if (!(await syncActive())) return;
+  const meta = await getSyncMeta();
+  const since = meta.lastPull || new Date(0).toISOString();
+  const r = await accountFetch(`/meetings?changedSince=${encodeURIComponent(since)}`);
+  let index = await loadIndex();
+  for (const item of r.items) {
+    if (item.deleted) {
+      meta.remoteDeleted[item.id] = true;
+      continue;
+    }
+    delete meta.remoteDeleted[item.id];
+    if (meta.versions[item.id] === item.version) continue;
+    const remote = await accountFetch(`/meetings/${encodeURIComponent(item.id)}`);
+    const local = await getSession(item.id);
+    const merged = local ? mergeDocs(local, remote.doc) : normalize({ ...remote.doc, shots: [] });
+    delete merged.blocks;
+    cache.set(item.id, local ? Object.assign(local, merged) : merged);
+    dirty.add(item.id);
+    meta.versions[item.id] = remote.version;
+    if (local && !sameContent(merged, remote.doc)) syncQueue.add(item.id); // havia novidades aqui também
+  }
+  meta.lastPull = r.serverTime;
+  await saveSyncMeta(meta);
+  if (dirty.size) {
+    // grava sem reenviar o que acabou de chegar da conta (o que tinha novidade local já está em syncQueue)
+    for (const id of dirty) if (!syncQueue.has(id)) syncSkip.add(id);
+    await saveDirty();
+    chrome.runtime.sendMessage({ type: "index-updated" }).catch(() => {});
+  }
+  if (syncQueue.size) queueSync([], { now: true });
+}
+
+// O app web (logado) entrega o token do dispositivo por mensagem externa.
+chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+  handleExternal(msg, sender).then(sendResponse, (err) => sendResponse({ ok: false, reason: err.message }));
+  return true;
+});
+
+async function handleExternal(msg, sender) {
+  const allowed = new URL(await accountBase()).origin;
+  if (!sender.origin || sender.origin !== allowed) return { ok: false, reason: "origem não autorizada" };
+  if (msg?.type === "reunilo-ping") return { ok: true, version: chrome.runtime.getManifest().version };
+  if (msg?.type !== "reunilo-connect") return { ok: false, reason: "mensagem desconhecida" };
+  if (typeof msg.token !== "string" || msg.token.length < 20) return { ok: false, reason: "token inválido" };
+  await setAccount({ token: msg.token, email: String(msg.email || ""), deviceId: String(msg.deviceId || ""), connectedAt: Date.now(), invalid: false });
+  const meta = await getSyncMeta();
+  meta.versions = {};
+  meta.remoteDeleted = {};
+  meta.lastPull = null;
+  meta.error = null;
+  await saveSyncMeta(meta);
+  await refreshAccount().catch(() => {});
+  notifyAccount();
+  return { ok: true, pending: meta.consent ? 0 : (await loadIndex()).length };
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -673,11 +960,8 @@ chrome.runtime.onConnect.addListener((port) => {
       const s = await getSession(req.id);
       if (!s) throw new Error("Reunião não encontrada.");
       const settings = await getSettings();
-      const { apiKey } = await chrome.storage.local.get("apiKey");
-      if (!apiKey) throw new Error("Cadastre sua chave de API em Ajustes.");
-      if (!(await chrome.permissions.contains({ origins: [API_ORIGIN] }))) {
-        throw new Error("Autorize o acesso à API do Claude em Ajustes.");
-      }
+      const ai = await aiProvider();
+      if (!ai) throw new Error(NO_AI);
       const onDelta = (text) => post({ type: "delta", text });
 
       if (req.action === "review") {
@@ -687,7 +971,7 @@ chrome.runtime.onConnect.addListener((port) => {
       }
 
       if (req.action === "ata") {
-        s.summary = await streamClaude({ apiKey, model: settings.aiModel, ...ataRequest(s, settings.tags, settings.glossary), onDelta, signal: abort.signal });
+        s.summary = await runAta(ai, s, settings, { onDelta, signal: abort.signal });
         await changed(s, { now: true });
         post({ type: "done", text: s.summary.text });
         return;
@@ -702,8 +986,7 @@ chrome.runtime.onConnect.addListener((port) => {
       chat.messages.push({ role: "user", text: req.question, at: Date.now() });
       post({ type: "chat", chatId: chat.id });
       const previous = req.previousId ? await getSession(req.previousId) : null;
-      const reqBody = chatRequest(s, chat.messages, { tags: settings.tags, previous, glossary: settings.glossary });
-      const result = await streamClaude({ apiKey, model: settings.aiModel, ...reqBody, maxTokens: 8000, onDelta, signal: abort.signal });
+      const result = await runChat(ai, s, chat.messages, settings, { previous, onDelta, signal: abort.signal });
       chat.messages.push({ role: "assistant", text: result.text, at: Date.now() });
       await changed(s, { now: true });
       post({ type: "done", text: result.text, chatId: chat.id });

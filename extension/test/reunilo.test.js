@@ -397,3 +397,45 @@ test("Gravador do computador: eco da caixa de som no microfone é descartado", (
     [["system", "A entrega fica para sexta-feira."], ["system", "Quem cuida do contrato?"], ["mic", "Eu cuido disso amanhã."], ["system", "Ótimo, obrigado."]],
   );
 });
+
+// ---------------- Sincronização com a conta: mescla de versões ----------------
+import { mergeDocs, sameContent } from "../src/lib/sync.js";
+
+const doc = (over = {}) => ({
+  id: "m", title: "Reunião", startedAt: 1000, updatedAt: 2000, endedAt: null, speakers: { a: "Ana" },
+  entries: [{ id: "1", at: 1100, updatedAt: 1200, speakerId: "a", text: "Olá", kind: "caption" }],
+  asr: [], chats: [], notes: { text: "", items: [] }, highlights: {}, fixes: {}, reviewed: {}, aliases: {}, langs: {}, shots: [], summary: null,
+  ...over,
+});
+
+test("Sincronização: falas dos dois lados são somadas, sem duplicar", () => {
+  const local = doc({ updatedAt: 3000, entries: [...doc().entries, { id: "2", at: 1300, updatedAt: 1400, speakerId: "a", text: "Tudo bem?", kind: "caption" }] });
+  const remote = doc({ updatedAt: 2500, entries: [...doc().entries, { id: "3", at: 1250, updatedAt: 1260, speakerId: "b", text: "Oi", kind: "caption" }] });
+  const m = mergeDocs(local, remote);
+  assert.deepEqual(m.entries.map((e) => e.id), ["1", "3", "2"]);
+});
+
+test("Sincronização: a mesma fala editada nos dois lados fica com a versão mais recente", () => {
+  const local = doc({ entries: [{ id: "1", at: 1100, updatedAt: 1500, speakerId: "a", text: "Olá a todos", kind: "caption" }] });
+  const remote = doc({ entries: [{ id: "1", at: 1100, updatedAt: 1200, speakerId: "a", text: "Olá", kind: "caption" }] });
+  assert.equal(mergeDocs(local, remote).entries[0].text, "Olá a todos");
+});
+
+test("Sincronização: título e ata vêm do lado alterado por último; nomes, notas e conversas se juntam", () => {
+  const local = doc({ updatedAt: 1500, title: "Antigo", speakers: { a: "Ana" }, notes: { text: "nota local", items: [{ id: "n1", at: 1, text: "x" }] }, chats: [{ id: "c1", createdAt: 1, messages: [{ role: "user", text: "?" }] }], shots: [{ id: "s1" }] });
+  const remote = doc({ updatedAt: 4000, title: "Orçamento Q4", speakers: { b: "Bruno" }, summary: { text: "## Resumo" }, notes: { text: "", items: [{ id: "n2", at: 2, text: "y" }] }, chats: [{ id: "c2", createdAt: 2, messages: [] }] });
+  const m = mergeDocs(local, remote);
+  assert.equal(m.title, "Orçamento Q4");
+  assert.equal(m.summary.text, "## Resumo");
+  assert.deepEqual(m.speakers, { a: "Ana", b: "Bruno" });
+  assert.equal(m.notes.text, "nota local");
+  assert.deepEqual(m.notes.items.map((n) => n.id), ["n1", "n2"]);
+  assert.deepEqual(m.chats.map((c) => c.id), ["c1", "c2"]);
+  assert.deepEqual(m.shots, [{ id: "s1" }], "capturas locais não se perdem");
+  assert.equal(m.updatedAt, 4000);
+});
+
+test("Sincronização: sameContent ignora capturas e carimbo de tempo", () => {
+  assert.ok(sameContent(doc({ updatedAt: 1, shots: [{ id: "x" }] }), doc({ updatedAt: 9 })));
+  assert.ok(!sameContent(doc(), doc({ title: "Outro" })));
+});

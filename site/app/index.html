@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="same-origin">
+  <title>Reunilo</title>
+  <link rel="icon" href="../img/icon.png">
+  <link rel="stylesheet" href="../fonts.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <a class="logo" href="#/"><span class="rec" aria-hidden="true"></span>Reunilo</a>
+    <nav class="nav" aria-label="Seções">
+      <a href="#/" data-nav="lib">Reuniões</a>
+      <a href="#/perguntar" data-nav="ask">Perguntar às reuniões</a>
+      <a href="#/conta" data-nav="account">Conta</a>
+    </nav>
+    <div class="top-right">
+      <button type="button" class="pill credits" id="credits" hidden title="Créditos de IA disponíveis"></button>
+      <button type="button" class="kbd-hint" id="palette-open" title="Paleta de comandos">Ctrl K</button>
+    </div>
+  </header>
+
+  <main id="view" class="view" tabindex="-1"></main>
+
+  <div class="palette" id="palette" hidden>
+    <div class="palette-box" role="dialog" aria-label="Paleta de comandos">
+      <input id="palette-input" placeholder="Ir para uma reunião ou ação…" autocomplete="off" aria-label="Buscar">
+      <ul id="palette-list" role="listbox"></ul>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
