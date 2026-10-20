@@ -110,8 +110,8 @@ servidor e taxas.
 
 ### Visão geral da arquitetura
 
-Tudo roda na VPS atual (Hostinger KVM 1: 1 vCPU, 4 GB RAM, 50 GB de disco, Ubuntu 24.04 com Docker e
-Caddy), ao lado do site e do formulário de contato. O site estático continua igual; entram três peças:
+Tudo roda na VPS atual (Hostinger KVM 1: 1 vCPU, 4 GB de RAM com ~1,9 GB livres, disco de 48 GB com
+**74% em uso** em 20/10/2026; Ubuntu 24.04 com Docker e Caddy), ao lado do site e do formulário de contato. O site estático continua igual; entram três peças:
 um **app web** estático (a área logada), uma **API** e um **Postgres**. A extensão continua funcionando
 sem conta; com o Pro, ela sincroniza com a API.
 
@@ -184,58 +184,57 @@ sequenceDiagram
 ```
 
 **4. Usar a IA inclusa**
-1. Extensão ou app web pede `POST /ai/{tipo}` (ata, revisão ou pergunta) com o id da reunião.
-2. A API reserva 1 crédito do tipo de forma atômica; sem saldo, responde 402 com a data da renovação.
+1. Extensão ou app web pede `POST /api/v1/ai/{ação}` com o id da reunião (o app web) ou com a reunião
+   inteira (a extensão, que tem a versão mais recente durante a reunião ao vivo).
+2. A API reserva os créditos da ação de forma atômica; sem saldo, responde 402 com a data da renovação.
 3. A API monta o prompt no servidor (o mesmo das versões locais) e chama o Claude em streaming.
 4. Ao terminar, confirma o consumo e grava tokens e custo; se a chamada falhar, devolve o crédito.
 5. O resultado é salvo na reunião (ata, correções ou resposta) e sincroniza com a extensão.
 
 ### APIs e endpoints
 
-| Endpoint                         | Método | Descrição                                              | Request                    | Response                    |
-| -------------------------------- | ------ | ------------------------------------------------------ | -------------------------- | --------------------------- |
-| `/v1/auth/email`                 | POST   | Envia link mágico de login                             | `{email}`                  | `202`                       |
-| `/v1/auth/google`                | POST   | Login com Google (token de identidade)                 | `{idToken}`                | `SessionDto`                |
-| `/v1/auth/device`                | POST   | Cria token de dispositivo para a extensão              | `{deviceName}`             | `{token, deviceId}`         |
-| `/v1/me`                         | GET    | Conta, plano, uso de IA do ciclo                       | -                          | `AccountDto`                |
-| `/v1/meetings`                   | GET    | Lista paginada, filtros, `changedSince` para sync      | query                      | `MeetingSummary[]`, cursor  |
-| `/v1/meetings/{id}`              | GET    | Documento completo da reunião                          | -                          | `MeetingDoc`                |
-| `/v1/meetings/{id}`              | PUT    | Cria ou atualiza (controle de versão otimista)         | `MeetingDoc + baseVersion` | `{version}` ou `409`        |
-| `/v1/meetings/{id}`              | DELETE | Apaga (lixeira por 30 dias)                            | -                          | `204`                       |
-| `/v1/search`                     | GET    | Busca em todas as transcrições                         | `q`, filtros               | resultados com trecho       |
-| `/v1/ai/{summary,review,ask}`    | POST   | IA inclusa, em streaming (SSE)                         | `{meetingId, question?}`   | stream + `usage`            |
-| `/v1/shares`                     | POST   | Cria link de compartilhamento                          | `{meetingId, expiresAt}`   | `{url}`                     |
-| `/v1/shares/{token}`             | DELETE | Revoga link                                            | -                          | `204`                       |
-| `/s/{token}`                     | GET    | Página pública só leitura                              | -                          | HTML                        |
-| `/v1/billing/checkout`           | POST   | Sessão de Checkout da Stripe                           | `{currency}`               | `{url}`                     |
-| `/v1/billing/portal`             | POST   | Portal do cliente (cartão, cancelar, recibos)          | -                          | `{url}`                     |
-| `/v1/billing/webhook`            | POST   | Eventos da Stripe (assinatura verificada)              | evento Stripe              | `200`                       |
-| `/v1/export`                     | POST   | Exporta tudo (mesmo JSON do backup local)              | -                          | link de download            |
-| `/v1/me`                         | DELETE | Apaga conta e dados (LGPD)                             | confirmação                | `202`                       |
+Todas as rotas ficam em `https://reunilo.meneseslabs.com.br/api/v1/...` (mesmo endereço do site e do app,
+sem CORS para o navegador; a extensão é liberada pelo ID fixo).
 
-**Exemplo: uso de IA**
+| Endpoint | Método | Descrição | Autenticação |
+| --- | --- | --- | --- |
+| `/api/v1/auth/email` | POST | Envia o link mágico de login (`{email}`); sempre 202, sem revelar se a conta existe | — |
+| `/api/v1/auth/verify` | POST | Troca o token do link por uma sessão (`{token}`) | — |
+| `/api/v1/auth/logout` | POST | Encerra a sessão atual | cookie |
+| `/api/v1/devices` | POST / GET | Cria token de dispositivo para a extensão / lista dispositivos | cookie |
+| `/api/v1/devices/{id}` | DELETE | Desconecta um dispositivo | cookie |
+| `/api/v1/me` | GET | Conta, plano, créditos, fim do ciclo | cookie ou token |
+| `/api/v1/me` | DELETE | Apaga conta e dados (LGPD), cancela a assinatura | cookie |
+| `/api/v1/meetings` | GET | Lista; `changedSince` para sincronizar (inclui apagadas) | cookie ou token |
+| `/api/v1/meetings/{id}` | GET / PUT / DELETE | Documento; grava com `baseVersion` (409 em conflito); lixeira de 30 dias | cookie ou token |
+| `/api/v1/search` | GET | Busca em todas as falas, notas, atas e títulos, com trecho | cookie ou token |
+| `/api/v1/ai/{summary,review,ask,ask_all}` | POST | IA inclusa; `summary` e `ask*` em streaming (SSE) | cookie ou token |
+| `/api/v1/shares` | POST / GET | Cria / lista links de uma reunião | cookie |
+| `/api/v1/shares/{id}` | DELETE | Revoga um link | cookie |
+| `/s/{token}` | GET | Página pública só leitura (`noindex`) | — |
+| `/api/v1/billing/checkout` | POST | Checkout da Stripe (`{currency: brl|usd}`) | cookie |
+| `/api/v1/billing/portal` | POST | Portal do cliente (forma de pagamento, recibos, cancelar) | cookie |
+| `/api/v1/billing/webhook` | POST | Eventos da Stripe, com assinatura verificada | assinatura Stripe |
+| `/api/v1/export` | GET | Exporta tudo (mesmo JSON do backup local) | cookie |
+| `/api/v1/health` | GET | Saúde (banco, versão) para o monitor | — |
+
+**Exemplo: conta e créditos**
 
 ```json
-// GET /v1/me
+// GET /api/v1/me
 {
-  "id": "usr_8f2c",
+  "id": "0b8e…",
   "email": "pessoa@exemplo.com",
   "plan": "pro",
-  "currency": "BRL",
-  "periodEnd": "2026-11-20T00:00:00Z",
-  "ai": {
-    "summary": { "used": 2, "limit": 5 },
-    "review":  { "used": 0, "limit": 5 },
-    "ask":     { "used": 5, "limit": 5 }
-  }
+  "subscription": { "status": "active", "currency": "brl", "periodEnd": "2026-11-20T00:00:00Z", "cancelAtPeriodEnd": false },
+  "credits": { "balance": 12, "perCycle": 15, "max": 30 }
 }
 
-// POST /v1/ai/ask sem saldo -> 402
+// POST /api/v1/ai/ask sem saldo -> 402
 {
-  "error": "quota_exhausted",
-  "kind": "ask",
-  "renewsAt": "2026-11-20T00:00:00Z",
-  "hint": "Use a sua própria chave de API em Ajustes para continuar agora."
+  "error": "no_credits",
+  "message": "Seus créditos de IA acabaram. Eles renovam em 20/11.",
+  "renewsAt": "2026-11-20T00:00:00Z"
 }
 ```
 
@@ -255,7 +254,8 @@ sequenceDiagram
 - `shares`: token (aleatório, 128 bits), meeting_id, criado_em, expira_em, revogado_em, acessos.
 - `subscriptions`: user_id, cliente e assinatura na Stripe, status, preço, moeda, fim do ciclo,
   cancelamento agendado.
-- `ai_quota`: user_id, ciclo (início/fim), tipo (summary, review, ask), usados, limite.
+- `credit_balances` e `credit_ledger`: saldo por usuário e o histórico de cada concessão, uso e
+  devolução (com chave única por fatura, para a concessão do ciclo nunca entrar duas vezes).
 - `ai_requests`: user_id, meeting_id, tipo, modelo, tokens de entrada/saída/cache, custo estimado, status,
   duração. Base para o painel de custo e para detectar abuso.
 - `stripe_events`: id do evento (único) e processado_em, para idempotência dos webhooks.
@@ -318,29 +318,58 @@ até um saldo máximo de 30. Uma chamada que falha não consome crédito.
 **Sem teste grátis**: a versão gratuita já funciona sem limite de tempo; o Pro começa pago, o que também
 evita abuso da IA inclusa.
 
-**Modelo de IA**: um modelo da faixa intermediária ou rápida da família Claude 5 (ex.: Claude Sonnet 5.5
-para atas e revisões, Claude Haiku 5.5 para perguntas), com *prompt caching* da transcrição para que
-várias perguntas sobre a mesma reunião saiam mais baratas. Escolha final depois de medir a qualidade e o
-custo com reuniões reais (ver "Questões em aberto").
+**Modelos de IA** (configuráveis no servidor):
+
+| Ação | Modelo | Por quê |
+| --- | --- | --- |
+| Ata, revisão, pergunta sobre todas as reuniões | `claude-sonnet-5-5` (US$ 2 / US$ 10 por milhão de tokens) | Qualidade de texto e de correção |
+| Pergunta, e-mail de follow-up, tarefas | `claude-haiku-5-5` (US$ 0,10 / US$ 0,50) | Respostas curtas; 20 vezes mais barato |
+
+A transcrição vai no prompt de sistema com *prompt caching*: perguntas seguidas sobre a mesma reunião
+leem do cache. A **revisão** custa 1 crédito por reunião a cada 24 h, porque a extensão revisa em lotes
+durante a reunião; os lotes seguintes da mesma reunião nesse período não cobram de novo.
 
 ### Economia por assinante (estimativa)
 
 Uma reunião de 1 h tem cerca de 15 mil tokens. Uso típico de 15 créditos em um mês (o acúmulo até 30 dobra o pior caso de um único mês, mas não a média):
 
-| Item | Tokens de entrada | Tokens de saída |
+| Ação (reunião de 1 h, ~16 mil tokens) | Modelo | Custo aproximado |
 | --- | --- | --- |
-| 5 atas | ~80 mil | ~8 mil |
-| 5 revisões | ~80 mil | ~10 mil |
-| 5 perguntas ou e-mails (transcrição em cache) | ~80 mil, quase tudo em cache | ~3 mil |
+| Ata | Sonnet 5.5 (16 mil entrada + 1,5 mil saída) | US$ 0,05 |
+| Revisão | Sonnet 5.5 (16 mil + 3 mil) | US$ 0,06 |
+| Pergunta / follow-up / tarefas | Haiku 5.5 (16 mil + 0,5 mil) | US$ 0,002 |
+| Pergunta sobre todas as reuniões | Sonnet 5.5 (até ~60 mil + 1 mil) | US$ 0,13 |
+
+Pior caso realista de um mês (30 créditos acumulados, todos em atas): ~US$ 1,50. Caso típico (5 atas,
+5 revisões, 5 perguntas): ~US$ 0,56, ou ~19% de US$ 3.
 
 | | R$ 15 (Brasil) | US$ 3 (exterior) |
 | --- | --- | --- |
 | Taxa Stripe (cartão, aprox.) | ~R$ 1,00 (≈ 6,6%); Pix costuma sair mais barato (conferir a tabela da Stripe) | ~US$ 0,40 (≈ 13%, mais se for cartão internacional) |
-| IA no uso máximo | estimar com a tabela de preços vigente da Anthropic; meta abaixo de 30% da receita | idem |
+| IA (caso típico) | ~R$ 3 (≈ 20%) | ~US$ 0,56 (≈ 19%) |
 | Servidor | VPS atual, custo marginal ~0 até alguns milhares de assinantes | idem |
 
 A margem é boa no Brasil e apertada em dólar por causa da taxa fixa; o plano anual (V2) resolve isso. Um
 limite global de gasto de IA por dia, com alerta, protege contra surpresas.
+
+### Decisões de implementação (20/10/2026)
+
+| Tema | Decisão |
+| --- | --- |
+| API | Node.js 24 + Fastify, em contêiner. Reaproveita as bibliotecas da extensão (`transcript`, `format`, `ai`, `stats`): a ata da conta sai igual à da chave própria |
+| IA | SDK oficial `@anthropic-ai/sdk`, com chave própria do servidor e limite de gasto mensal no console da Anthropic |
+| Banco | Postgres 17 em contêiner, só na rede interna do Docker. Busca com `tsvector` em português, sem acento |
+| Documento da reunião | JSON comprimido (gzip, ~5x menor) e criptografado com AES-256-GCM antes de gravar |
+| Login | Link mágico por e-mail (válido por 15 min, uso único). O token vai no fragmento da URL (`#`), que não aparece em logs. Google fica para depois |
+| Sessão web | Cookie `HttpOnly`, `Secure`, `SameSite=Lax`, de 30 dias; escrita exige o cabeçalho `X-Reunilo` e a origem correta (CSRF) |
+| Extensão | Token de dispositivo (`Authorization: Bearer`), só o hash no banco. CORS liberado apenas para `chrome-extension://ohbnmfogdcbgegnpcaphidkjinplednd`. A entrega do token usa `externally_connectable` |
+| App web | Páginas estáticas em `/app`, com rotas pelo fragmento (`/app/#/r/{id}`); sem build, como a extensão |
+| Rotas no Caddy | `/api/v1/*` e `/s/*` vão para a API; `/api/contato*` para o formulário; o resto é o site estático |
+| Cobrança | Stripe Checkout em modo assinatura. BRL com cartão e Pix Automático (mandato mensal de até R$ 20, nome "Reunilo Pro" no app do banco); USD só cartão. Portal da Stripe para trocar a forma de pagamento e cancelar |
+| Créditos | Concedidos no webhook `invoice.paid` de cada ciclo: saldo = mín(saldo + 15, 30). Reserva atômica antes da chamada; devolução se falhar |
+| Teto de gasto | Gasto de IA do dia somado no banco; acima do teto (padrão US$ 20/dia) a IA inclusa pausa e avisa |
+| Backups | `pg_dump` diário, criptografado, guardado 14 dias na VPS; cópia para fora da VPS segue em aberto |
+| Monitoramento | Uptime Kuma e Dozzle, que já rodam na VPS, mais `/api/v1/health` |
 
 ---
 
@@ -350,6 +379,7 @@ limite global de gasto de IA por dia, com alerta, protege contra surpresas.
 | ----- | ------- | ------------- | --------- |
 | Custo de IA acima do previsto (reuniões longas, uso máximo por todos) | Alto | Média | Créditos por tamanho da reunião, cache de prompt, modelo menor para perguntas, teto diário de gasto com alerta, painel de custo por usuário |
 | Taxa fixa da Stripe come a margem em US$ 3 | Médio | Alta | Plano anual na V2; cobrar em BRL no Brasil (taxa menor); revisar o preço em USD após 3 meses de dados |
+| Disco da VPS já 74% cheio (13 GB livres) | Médio | Alta | Documentos comprimidos (~20 KB por hora de reunião); limpar imagens Docker antigas antes do lançamento; alerta a 80% |
 | VPS única: queda ou perda de disco | Alto | Média | Backup diário criptografado fora da VPS com teste mensal de restauração; a extensão é local-first e continua funcionando sem a API |
 | Vazamento de dados (transcrições são sensíveis) | Alto | Baixa | Criptografia do documento no banco, TLS, tokens com hash, isolamento por usuário em toda consulta, revisão OWASP, logs sem conteúdo |
 | Conflitos de sincronização causando perda de falas | Alto | Baixa | Versão otimista, mescla por id de fala, lixeira de 30 dias, a cópia local nunca é apagada pela sincronização |
