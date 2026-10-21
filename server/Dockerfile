@@ -1,4 +1,4 @@
-# API do Reunilo Pro. Contexto do build: a raiz do repositório (usa as bibliotecas da extensão).
+# API do Escribanote Pro. Contexto do build: a raiz do repositório (usa as bibliotecas da extensão).
 FROM node:24-alpine
 ENV NODE_ENV=production
 WORKDIR /srv/server

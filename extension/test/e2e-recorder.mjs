@@ -16,7 +16,7 @@ if (!CHROME || !systemWav || !micWav) {
 }
 const EXT = resolve(import.meta.dirname, "..");
 const PORT = 9700 + Math.floor(Math.random() * 100);
-const profile = process.env.PROFILE || mkdtempSync(join(tmpdir(), "reunilo-rec-"));
+const profile = process.env.PROFILE || mkdtempSync(join(tmpdir(), "escribanote-rec-"));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const chrome = spawn(CHROME, ["--headless=new", "--no-sandbox", "--no-first-run", `--user-data-dir=${profile}`,
   `--remote-debugging-port=${PORT}`, `--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`,

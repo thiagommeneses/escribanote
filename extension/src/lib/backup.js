@@ -6,8 +6,8 @@
 const DB_NAME = "escriba"; // nome antigo do produto: mantido para não perder a pasta já escolhida
 const STORE = "kv";
 const DIR_KEY = "backupDir";
-export const BACKUP_FOLDER = "Reunilo";
-export const SETTINGS_FILE = "reunilo-ajustes.json";
+export const BACKUP_FOLDER = "Escribanote";
+export const SETTINGS_FILE = "escribanote-ajustes.json";
 
 function openDb() {
   return new Promise((ok, fail) => {
@@ -43,10 +43,10 @@ export async function backupPermission(dir, ask = false) {
   return state;
 }
 
-// Quem escolhe uma pasta qualquer (ex.: Documentos) ganha uma subpasta "Reunilo" dentro dela.
-// A pasta "Escriba" (nome antigo do produto) continua valendo.
+// Quem escolhe uma pasta qualquer (ex.: Documentos) ganha uma subpasta "Escribanote" dentro dela.
+// As pastas "Escriba" e "Reunilo" (nomes antigos do produto) continuam valendo.
 export async function resolveBackupFolder(picked) {
-  return [BACKUP_FOLDER, "Escriba"].includes(picked.name) ? picked : picked.getDirectoryHandle(BACKUP_FOLDER, { create: true });
+  return [BACKUP_FOLDER, "Escriba", "Reunilo"].includes(picked.name) ? picked : picked.getDirectoryHandle(BACKUP_FOLDER, { create: true });
 }
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -64,7 +64,7 @@ async function writeJson(dir, name, data) {
 }
 
 export function writeSessionFile(dir, s) {
-  return writeJson(dir, backupFileName(s), { app: "reunilo", version: 2, exportedAt: Date.now(), sessions: [s] });
+  return writeJson(dir, backupFileName(s), { app: "escribanote", version: 2, exportedAt: Date.now(), sessions: [s] });
 }
 
 export async function removeSessionFile(dir, id) {
@@ -74,7 +74,7 @@ export async function removeSessionFile(dir, id) {
 }
 
 export function writeSettingsFile(dir, settings) {
-  return writeJson(dir, SETTINGS_FILE, { app: "reunilo", version: 2, exportedAt: Date.now(), settings });
+  return writeJson(dir, SETTINGS_FILE, { app: "escribanote", version: 2, exportedAt: Date.now(), settings });
 }
 
 // Lê todos os .json da pasta: arquivos do backup automático, do "Exportar backup" e de ajustes.

@@ -1,13 +1,13 @@
-# Reunilo 2.5 — Transcrição de Reuniões
+# Escribanote 2.5 — Transcrição de Reuniões
 
-Site: https://reunilo.meneseslabs.com.br
+Site: https://escribanote.meneseslabs.com.br
 
 Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, **Microsoft Teams** e
 **Zoom** (pelo navegador) e, com o gravador do computador, **huddles do Slack** e outros apps instalados.
 É uma alternativa independente à Tactiq, escrita do zero, que guarda tudo no seu computador.
 
-Até a versão 2.3 o projeto se chamava **Escriba**. A 2.4 só troca o nome: o ID da extensão continua o
-mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
+Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
+nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
 ## Huddles do Slack e outros apps (novo na 2.2)
 
@@ -26,11 +26,11 @@ gravação aparece na lista como qualquer reunião: destaques, notas, IA, análi
 Limites: o Chrome só captura o áudio do sistema no **Windows** e no **ChromeOS**. O Slack não informa quem está
 falando, então as outras pessoas aparecem juntas como "Participantes" (dá para renomear depois).
 
-## Conta Reunilo Pro (novo na 2.5)
+## Conta Escribanote Pro (novo na 2.5)
 
-Opcional. Em **Ajustes › Conta Reunilo Pro › Entrar ou assinar o Pro**, o app web abre, a pessoa entra
+Opcional. Em **Ajustes › Conta Escribanote Pro › Entrar ou assinar o Pro**, o app web abre, a pessoa entra
 pelo link enviado ao e-mail e clica em **Conectar este navegador**. O app entrega um token de dispositivo
-à extensão por `externally_connectable` (só aceito vindo de `reunilo.meneseslabs.com.br`); o token fica
+à extensão por `externally_connectable` (só aceito vindo de `escribanote.meneseslabs.com.br`); o token fica
 no service worker, e o app da extensão só vê o e-mail, o plano e os créditos.
 
 - **Permissão antes de enviar:** depois de conectar, a lista mostra "Enviar as N reuniões deste computador?"
@@ -48,9 +48,9 @@ no service worker, e o app da extensão só vê o e-mail, o plano e os créditos
 
 
 - **Backup automático numa pasta** (Ajustes → Backup e sincronização → Escolher pasta…). Cada reunião vira
-  um arquivo `AAAA-MM-DD_HHhMM_<id>.json` dentro de uma subpasta `Reunilo` (uma pasta `Escriba`, do nome antigo, também vale), gravado pelo service worker
+  um arquivo `AAAA-MM-DD_HHhMM_<id>.json` dentro de uma subpasta `Escribanote` (as pastas `Escriba` e `Reunilo`, dos nomes antigos, também valem), gravado pelo service worker
   (em lotes de 15 s e na hora em que a reunião termina); apagar uma reunião apaga o arquivo. Os ajustes vão
-  para `reunilo-ajustes.json` (sem a chave de API). Capturas de tela não entram no backup.
+  para `escribanote-ajustes.json` (sem a chave de API). Capturas de tela não entram no backup.
 - **Restaurar**: depois de reinstalar ou em outro computador, "Restaurar de uma pasta de backup" (na tela
   inicial vazia ou em Ajustes) lê todos os `.json` da pasta, inclusive arquivos do "Exportar backup".
   Uma pasta do OneDrive/Google Drive leva as reuniões para outros computadores.
@@ -65,7 +65,7 @@ no service worker, e o app da extensão só vê o e-mail, o plano e os créditos
 
 1. **Captura direta das legendas**, versão por versão. Na leitura pela tela (plano B), o texto que o Meet
    descarta quando alguém fala rápido é acumulado em vez de perdido. Falas curtas repetidas ("sim", "ok")
-   não são mais fundidas. O Reunilo **avisa quando a legenda está no idioma errado**, a causa nº 1 de
+   não são mais fundidas. O Escribanote **avisa quando a legenda está no idioma errado**, a causa nº 1 de
    transcrição ruim.
 2. **Alta precisão local (Whisper):** captura o áudio da aba (e, se quiser, o seu microfone), corta nas
    pausas e transcreve de novo no próprio computador. Quem fala sem pausa é cortado no ponto mais
@@ -115,12 +115,12 @@ Teste real dentro da extensão (Chromium, só processador) com um trecho de 22 s
   Markdown, TXT, SRT, WebVTT e JSON.
 - **Ata automática** quando a reunião termina (opcional).
 - A sessão continua de onde parou se a página da reunião for recarregada.
-- Atalhos: <kbd>Alt+Shift+E</kbd> abre o Reunilo, <kbd>Alt+Shift+H</kbd> destaca, <kbd>Alt+Shift+S</kbd> faz uma
+- Atalhos: <kbd>Alt+Shift+E</kbd> abre o Escribanote, <kbd>Alt+Shift+H</kbd> destaca, <kbd>Alt+Shift+S</kbd> faz uma
   captura e <kbd>Alt+Shift+P</kbd> pausa.
 
 ## Em relação à Tactiq
 
-| | Tactiq | Reunilo (grátis) |
+| | Tactiq | Escribanote (grátis) |
 |---|---|---|
 | Onde ficam os dados | Na nuvem da Tactiq, exige conta | **Só no seu computador**, sem conta |
 | Limites no plano grátis | 10 transcrições e 5 créditos de IA por mês | **Sem limites**; a IA usa a sua chave |
@@ -136,13 +136,13 @@ Teste real dentro da extensão (Chromium, só processador) com um trecho de 22 s
 
 1. Abra `chrome://extensions` e ative o **Modo do desenvolvedor**.
 2. Clique em **Carregar sem compactação** e escolha a pasta `extension/` deste repositório (ou a pasta
-   `reunilo/` do zip baixado no site). Quem já usava o Escriba pode trocar a pasta sem perder nada: o ID
+   `escribanote/` do zip baixado no site). Quem já usava o Escriba ou o Reunilo pode trocar a pasta sem perder nada: o ID
    da extensão é o mesmo.
 3. Desative a Tactiq para as duas não transcreverem a mesma reunião.
 4. Opcional: em **Ajustes**, informe seu nome na reunião (para "sua parcela de fala") e a chave da API do
    Claude (para a IA).
 
-> **Capturas de tela:** o Chrome só libera a captura depois que você clica no ícone do Reunilo na aba da
+> **Capturas de tela:** o Chrome só libera a captura depois que você clica no ícone do Escribanote na aba da
 > reunião ou usa <kbd>Alt+Shift+S</kbd>. Para capturar sempre pelo widget, use "Autorizar capturas pelo
 > widget" em Ajustes.
 
@@ -152,7 +152,7 @@ Teste real dentro da extensão (Chromium, só processador) com um trecho de 22 s
 página da reunião (main world)        isolated world                     service worker            app
  src/main/meet.js  ─┐                  src/content/bridge.js               src/background.js         src/app/
  src/main/teams.js ─┼─ CustomEvent ─▶  (consentimento, pausa, lotes,  ─▶  (sessões, destaques,  ─▶  app.html (painel/aba)
- src/main/zoom.js  ─┘  "reunilo:evt"    legendas ocultas, plano B)         notas, capturas, IA,      print.html (PDF)
+ src/main/zoom.js  ─┘  "escribanote:evt"    legendas ocultas, plano B)         notas, capturas, IA,      print.html (PDF)
  (proto.js, core.js)                   src/content/widget.js (Shadow DOM)  atalhos, ata automática)
 ```
 

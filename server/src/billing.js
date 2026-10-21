@@ -37,14 +37,14 @@ export function registerBilling(app, { db, config, stripe }) {
 
   app.post("/api/v1/billing/checkout", auth, async (req) => {
     need();
-    if (req.session.kind !== "web") fail(403, "web_only", "Assine pelo app do Reunilo no navegador.");
+    if (req.session.kind !== "web") fail(403, "web_only", "Assine pelo app do Escribanote no navegador.");
     const currency = req.body?.currency === "usd" ? "usd" : "brl";
     const interval = req.body?.interval === "month" ? "month" : "year";
     const s = config.stripe;
     const price = { brl: { month: s.priceBrl, year: s.priceBrlYear }, usd: { month: s.priceUsd, year: s.priceUsdYear } }[currency][interval];
     if (!price) fail(503, "billing_unavailable", "Este plano ainda não está disponível. Tente mais tarde.");
     const current = await db.one("SELECT status FROM subscriptions WHERE user_id = $1", [req.user.id]);
-    if (["active", "trialing", "past_due"].includes(current?.status)) fail(409, "already_pro", "Você já assina o Reunilo Pro.");
+    if (["active", "trialing", "past_due"].includes(current?.status)) fail(409, "already_pro", "Você já assina o Escribanote Pro.");
     const customer = await customerFor(req.user);
     const params = {
       mode: "subscription",
@@ -62,7 +62,7 @@ export function registerBilling(app, { db, config, stripe }) {
       // Pix só no plano anual: Pix Automático com débito uma vez por ano, até o teto autorizado no app do banco.
       params.payment_method_types = ["card", "pix"];
       params.payment_method_options = {
-        pix: { mandate_options: { amount: s.pixMandateMax, amount_type: "maximum", payment_schedule: "yearly", reference: "Reunilo Pro anual" } },
+        pix: { mandate_options: { amount: s.pixMandateMax, amount_type: "maximum", payment_schedule: "yearly", reference: "Escribanote Pro anual" } },
       };
     }
     const session = await stripe.checkout.sessions.create(params);

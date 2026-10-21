@@ -9,8 +9,8 @@ import "../src/main/zoom.js";
 import { createSession, applyEvent, toBlocks } from "../src/lib/transcript.js";
 import { toSrt, toVtt, toMarkdown, toText, fileName } from "../src/lib/format.js";
 
-const { encode } = globalThis.ReuniloProto;
-const Meet = globalThis.ReuniloMeet;
+const { encode } = globalThis.EscribanoteProto;
+const Meet = globalThis.EscribanoteMeet;
 
 test("Meet captions_v2: decodifica utterance (esquema observado no Meet)", () => {
   const bytes = encode([
@@ -77,7 +77,7 @@ test("decodificadores não lançam exceção com lixo", () => {
 
 test("Teams: recognitionResults depois de prefixo binário", () => {
   const payload = '\u0001\u0002xx{"recognitionResults":[{"id":"abc/4","userId":"8:orgid:u1","timestampAudioSent":1234,"text":"Vamos começar"}]}';
-  assert.deepEqual(globalThis.ReuniloTeams.captionsFromPayload(payload), [
+  assert.deepEqual(globalThis.EscribanoteTeams.captionsFromPayload(payload), [
     { id: "1234/8:orgid:u1", speakerId: "8:orgid:u1", version: 4, text: "Vamos começar", lang: undefined },
   ]);
 });
@@ -87,9 +87,9 @@ test("Zoom: detecta mensagens novas no newLTMessage", () => {
   const b = { msgId: "2", text: "tudo bem?", user: { zoomID: 11, displayName: "Davi" } };
   const prev = { 1: a };
   const next = { 1: a, 2: b };
-  const changed = globalThis.ReuniloZoom.changedMessages(prev, next);
+  const changed = globalThis.EscribanoteZoom.changedMessages(prev, next);
   assert.equal(changed.length, 1);
-  assert.equal(globalThis.ReuniloZoom.toCaption(changed[0]).speakerName, "Davi");
+  assert.equal(globalThis.EscribanoteZoom.toCaption(changed[0]).speakerName, "Davi");
 });
 
 function session() {

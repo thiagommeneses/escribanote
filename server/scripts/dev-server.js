@@ -58,5 +58,5 @@ export async function startDevServer({ port = 8787 } = {}) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const s = await startDevServer({ port: Number(process.argv[2]) || 8787 });
-  console.log(`Reunilo (dev) em ${s.url}/app/`);
+  console.log(`Escribanote (dev) em ${s.url}/app/`);
 }

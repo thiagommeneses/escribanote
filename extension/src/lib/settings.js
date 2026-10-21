@@ -60,7 +60,7 @@ export const DEFAULTS = {
   syncSettings: true, // ajustes na conta do Chrome (chrome.storage.sync)
   tags: DEFAULT_TAGS,
   notifyMessage:
-    "Olá! Estou transcrevendo esta reunião com o Reunilo para gerar a ata. A transcrição fica salva só no meu computador.",
+    "Olá! Estou transcrevendo esta reunião com o Escribanote para gerar a ata. A transcrição fica salva só no meu computador.",
 };
 
 export async function getSettings() {

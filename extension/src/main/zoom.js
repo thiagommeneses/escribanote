@@ -56,13 +56,13 @@
     };
   }
 
-  root.ReuniloZoom = { changedMessages, toCaption };
+  root.EscribanoteZoom = { changedMessages, toCaption };
 
   if (typeof location === "undefined" || !ZOOM_HOST.test(location.host)) return;
-  if (root.__reuniloZoomHooked) return;
-  root.__reuniloZoomHooked = true;
+  if (root.__escribanoteZoomHooked) return;
+  root.__escribanoteZoomHooked = true;
 
-  const { emit, safe } = root.ReuniloCore;
+  const { emit, safe } = root.EscribanoteCore;
   let store = null;
   let prev = null;
   let topic = null;

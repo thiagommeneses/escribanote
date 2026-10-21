@@ -13,7 +13,7 @@ export async function subscriptionOf(db, userId) {
 
 export async function requirePro(db, userId) {
   if (!isPro(await subscriptionOf(db, userId))) {
-    fail(402, "pro_required", "Este recurso faz parte do Reunilo Pro.");
+    fail(402, "pro_required", "Este recurso faz parte do Escribanote Pro.");
   }
 }
 
@@ -205,8 +205,8 @@ export function registerMeetings(app, { db, sealer }) {
 
   app.get("/api/v1/export", auth, async (req, reply) => {
     const rows = await db.many("SELECT doc FROM meetings WHERE user_id = $1 AND deleted_at IS NULL ORDER BY started_at", [req.user.id]);
-    reply.header("content-disposition", `attachment; filename="reunilo-backup-${new Date().toISOString().slice(0, 10)}.json"`);
-    return { app: "reunilo", version: 2, exportedAt: Date.now(), sessions: rows.map((r) => sealer.open(r.doc)) };
+    reply.header("content-disposition", `attachment; filename="escribanote-backup-${new Date().toISOString().slice(0, 10)}.json"`);
+    return { app: "escribanote", version: 2, exportedAt: Date.now(), sessions: rows.map((r) => sealer.open(r.doc)) };
   });
 }
 

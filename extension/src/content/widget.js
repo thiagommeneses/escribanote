@@ -1,10 +1,10 @@
 // Widget flutuante dentro da reunião (isolated world, Shadow DOM).
-// Depende do window.__reuniloBus criado por bridge.js.
+// Depende do window.__escribanoteBus criado por bridge.js.
 (() => {
   "use strict";
-  if (window.top !== window || window.__reuniloWidget) return;
-  window.__reuniloWidget = true;
-  const bus = window.__reuniloBus;
+  if (window.top !== window || window.__escribanoteWidget) return;
+  window.__escribanoteWidget = true;
+  const bus = window.__escribanoteBus;
   if (!bus) return;
   const state = bus.state;
 
@@ -57,7 +57,7 @@
   const send = (msg) => chrome.runtime.sendMessage(msg);
 
   // ---------- Montagem ----------
-  const hostEl = document.createElement("reunilo-widget");
+  const hostEl = document.createElement("escribanote-widget");
   hostEl.style.cssText = "all: initial; position: fixed; z-index: 2147483000; right: 16px; bottom: 96px;";
   const root = hostEl.attachShadow({ mode: "closed" });
   root.innerHTML = `
@@ -129,11 +129,11 @@
     .banner { margin: 4px 10px 6px 0; padding: 7px 10px; border-radius: 10px; background: rgba(138,180,248,.1); color: #d2e3fc; font-size: 12px; }
     .banner.warn { background: rgba(253,214,99,.12); color: #fde293; }
   </style>
-  <div class="pill" id="pill" hidden><span class="dot" id="pdot"></span><b>Reunilo</b><span class="muted" id="ptime"></span></div>
+  <div class="pill" id="pill" hidden><span class="dot" id="pdot"></span><b>Escribanote</b><span class="muted" id="ptime"></span></div>
   <div class="card" id="card" style="position:relative">
     <header id="drag">
       <span class="dot" id="dot"></span>
-      <span class="brand">Reunilo</span>
+      <span class="brand">Escribanote</span>
       <span class="rec" id="rec"></span>
       <span class="hqchip" id="hqchip" hidden title="Alta precisão ativa: Whisper rodando neste computador">🎧 HQ</span>
       <span class="spacer"></span>
@@ -160,7 +160,7 @@
       <span class="spacer"></span>
       <button class="ib" id="caps" title="Mostrar/ocultar legendas nativas"></button>
       <button class="ib" id="notify" title="Avisar os participantes">${svg("megaphone")}</button>
-      <button class="ib" id="open" title="Abrir no Reunilo">${svg("open")}</button>
+      <button class="ib" id="open" title="Abrir no Escribanote">${svg("open")}</button>
     </footer>
     <div class="toast" id="toast"></div>
   </div>`;
@@ -451,7 +451,7 @@
 
   $("notify").addEventListener("click", async () => {
     try {
-      await navigator.clipboard.writeText(state.settings.notifyMessage || "Estou transcrevendo esta reunião com o Reunilo.");
+      await navigator.clipboard.writeText(state.settings.notifyMessage || "Estou transcrevendo esta reunião com o Escribanote.");
       toast("Aviso copiado — cole no chat da reunião");
     } catch {
       toast("Não foi possível copiar o aviso");

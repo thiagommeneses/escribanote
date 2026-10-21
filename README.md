@@ -1,14 +1,14 @@
-# Reunilo
+# Escribanote
 
 **Transcrição de reuniões local e privada** para Google Meet, Microsoft Teams, Zoom e huddles do Slack,
 com reconhecimento de alta precisão (Whisper rodando no seu computador), revisão por IA com glossário,
 destaques, notas, análise de fala e ata.
 
-O Reunilo é uma extensão do Chrome. Na versão grátis, tudo fica no seu computador: sem conta, sem
-servidor, sem telemetria e sem limite de reuniões. Até a versão 2.3 o projeto se chamava **Escriba**.
+O Escribanote é uma extensão do Chrome. Na versão grátis, tudo fica no seu computador: sem conta, sem
+servidor, sem telemetria e sem limite de reuniões. Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**.
 
-- **Site:** https://reunilo.meneseslabs.com.br
-- **Versão atual:** extensão 2.5.0 (com a conta Pro), API 1.0.0
+- **Site:** https://escribanote.meneseslabs.com.br
+- **Versão atual:** extensão 2.6.0 (com a conta Pro), API 1.0.0
 
 ## O que tem aqui
 
@@ -16,8 +16,8 @@ servidor, sem telemetria e sem limite de reuniões. Até a versão 2.3 o projeto
 | --- | --- |
 | [`extension/`](extension/) | A extensão do Chrome (Manifest V3): código, testes e [documentação completa](extension/README.md) |
 | [`site/`](site/) | O site de divulgação, o app web do Pro (`site/app`), o formulário de contato e o `docker-compose.yml` da VPS |
-| [`server/`](server/) | A API do Reunilo Pro: contas, sincronização, busca, IA inclusa, Stripe e links públicos ([manual](server/README.md)) |
-| [`docs/`](docs/) | Documentos de design, como o [TDD do Reunilo Pro](docs/TDD-reunilo-pro.md) |
+| [`server/`](server/) | A API do Escribanote Pro: contas, sincronização, busca, IA inclusa, Stripe e links públicos ([manual](server/README.md)) |
+| [`docs/`](docs/) | Documentos de design, como o [TDD do Escribanote Pro](docs/TDD-escribanote-pro.md) |
 
 ## Recursos
 
@@ -34,14 +34,14 @@ servidor, sem telemetria e sem limite de reuniões. Até a versão 2.3 o projeto
 
 ## Instalar
 
-**Pelo site:** baixe o zip, descompacte e siga os passos abaixo com a pasta `reunilo/`.
+**Pelo site:** baixe o zip, descompacte e siga os passos abaixo com a pasta `escribanote/`.
 
 **Pelo código:**
 1. Clone este repositório.
 2. Abra `chrome://extensions`, ative o **Modo do desenvolvedor** e clique em **Carregar sem compactação**.
 3. Escolha a pasta `extension/`.
 
-Quem já usava o Escriba pode trocar a pasta sem perder nada: o ID da extensão é o mesmo.
+Quem já usava o Escriba ou o Reunilo pode trocar a pasta sem perder nada: o ID da extensão é o mesmo.
 
 ## Desenvolver
 
@@ -60,9 +60,9 @@ O site é estático, servido por Caddy em Docker (`site/docker-compose.yml`). O 
 (`site/contato/server.py`, só biblioteca padrão do Python) lê as credenciais de um arquivo `contato.env`
 que fica apenas no servidor e nunca entra no repositório.
 
-## Reunilo Pro
+## Escribanote Pro
 
-A versão paga, opcional, pela Stripe ([página do Pro](https://reunilo.meneseslabs.com.br/pro/)):
+A versão paga, opcional, pela Stripe ([página do Pro](https://escribanote.meneseslabs.com.br/pro/)):
 
 | Plano | Real | Dólar | Pagamento |
 | --- | --- | --- | --- |
@@ -77,16 +77,16 @@ Inclui:
   transcrição, análise de fala, paleta de comandos (`Ctrl K`), tema escuro e celular.
 - **IA sem chave:** 15 créditos por mês, que acumulam até 30. Ata, revisão, pergunta, e-mail de follow-up
   e tarefas custam 1; pergunta sobre todas as reuniões custa 2.
-- **Links de leitura** com validade e revogação, para quem não usa o Reunilo.
+- **Links de leitura** com validade e revogação, para quem não usa o Escribanote.
 
-Estado em 20/10/2026: servidor, app web, extensão 2.5.0 e página do Pro publicados. Falta ligar as
+Estado em 20/10/2026: servidor, app web, extensão 2.6.0 e página do Pro publicados. Falta ligar as
 chaves da Stripe e da Anthropic e fazer o beta. Specs do site e da assinatura em
-[`docs/SPEC-site-e-assinatura.md`](docs/SPEC-site-e-assinatura.md). Plano técnico em [`docs/TDD-reunilo-pro.md`](docs/TDD-reunilo-pro.md);
+[`docs/SPEC-site-e-assinatura.md`](docs/SPEC-site-e-assinatura.md). Plano técnico em [`docs/TDD-escribanote-pro.md`](docs/TDD-escribanote-pro.md);
 operação em [`server/README.md`](server/README.md).
 
 ## Privacidade
 
-A versão grátis não envia nada para servidor nenhum (o Reunilo Pro, opcional, guarda as reuniões na conta,
+A versão grátis não envia nada para servidor nenhum (o Escribanote Pro, opcional, guarda as reuniões na conta,
 criptografadas). A única conexão de rede é com a API do Claude, e
 só quando você pede algo à IA usando a sua própria chave. O modelo do Whisper é baixado uma vez do
 Hugging Face e fica no cache do navegador. Política completa em

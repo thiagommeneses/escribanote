@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Fatia | FAT-01 — "Visitante entende que o Reunilo é local e grátis, descobre o Pro e consegue assinar no plano certo" |
+| Fatia | FAT-01 — "Visitante entende que o Escribanote é local e grátis, descobre o Pro e consegue assinar no plano certo" |
 | Rastreabilidade | OUT-01, OUT-02 › ACT-01..03 › US-001..US-010 |
 | Autor / Data | Thiago M. Meneses (decisões) · Claude (redação) · 2026-10-20 |
 | Status | implementada (aguardando validação com usuários) |
@@ -14,12 +14,12 @@ Marcas: `[FATO]` dito pelo dono do produto ou verificado; `[HIPÓTESE]` assumido
 
 ### Problema e resultado
 
-- **OUT-01 (negócio):** gerar as primeiras assinaturas do Reunilo Pro sem perder instalações do plano grátis. Linha de base: 0 assinantes, Pro ainda não lançado `[FATO]`.
+- **OUT-01 (negócio):** gerar as primeiras assinaturas do Escribanote Pro sem perder instalações do plano grátis. Linha de base: 0 assinantes, Pro ainda não lançado `[FATO]`.
 - **OUT-02 (usuário):** quem chega ao site entende em segundos que a transcrição fica no próprio computador e que a nuvem é uma escolha opcional e paga `[FATO: diretriz do dono — "sem tirar o foco da segurança local que é a chave principal"]`.
 
 ### Proposta de valor
 
-*Para profissionais que fazem reuniões no Meet, Teams, Zoom ou Slack e não querem as conversas no servidor de terceiros, o Reunilo é um transcritor que roda no navegador e guarda tudo no computador, diferente dos transcritores em nuvem porque a privacidade é o padrão grátis, não um plano pago. Quem quer as reuniões em vários computadores e IA sem chave assina o Pro, que custa uma fração dos concorrentes.*
+*Para profissionais que fazem reuniões no Meet, Teams, Zoom ou Slack e não querem as conversas no servidor de terceiros, o Escribanote é um transcritor que roda no navegador e guarda tudo no computador, diferente dos transcritores em nuvem porque a privacidade é o padrão grátis, não um plano pago. Quem quer as reuniões em vários computadores e IA sem chave assina o Pro, que custa uma fração dos concorrentes.*
 
 ### Pesquisa de mesa (sem entrevistas ainda)
 
@@ -27,7 +27,7 @@ Marcas: `[FATO]` dito pelo dono do produto ou verificado; `[HIPÓTESE]` assumido
 |---|---|---|
 | O concorrente de referência cobra US$ 8/usuário/mês no Pro anual (cerca de US$ 12 no mensal) | [tactiq.io/pricing](https://tactiq.io/pricing) | `[FATO]` |
 | Concorrentes exibem selos de conformidade (SOC 2, GDPR) como argumento de confiança | sites de comparação | `[HIPÓTESE]`: selos não verificados nas páginas oficiais |
-| O Reunilo Pro custa R$ 15/mês ou US$ 3/mês; anual R$ 150 ou US$ 30 (2 meses grátis) | decisão do dono | `[FATO]` |
+| O Escribanote Pro custa R$ 15/mês ou US$ 3/mês; anual R$ 150 ou US$ 30 (2 meses grátis) | decisão do dono | `[FATO]` |
 | Pix só no anual; mensal só no cartão | decisão do dono | `[FATO]` |
 | O servidor do Pro fica em Boston (EUA); os dados ficam cifrados (AES-256-GCM) | VPS e código | `[FATO]` |
 | Não há certificação SOC 2/ISO nem DPA formal | — | `[FATO]`: nenhuma página pode alegar certificação |
@@ -50,7 +50,7 @@ Marcas: `[FATO]` dito pelo dono do produto ou verificado; `[HIPÓTESE]` assumido
 ### Crítica do site anterior (antes do redesign)
 
 - **Funciona bem:** a identidade editorial (papel, tinta, vermelho REC, marca-texto) e a demonstração do widget.
-- **Problema crítico:** o texto "o código não fala com servidores do Reunilo, porque eles não existem" fica falso quando o Pro existe. É preciso deixar claro que isso vale para o plano grátis e para quem não conecta a conta.
+- **Problema crítico:** o texto "o código não fala com servidores do Escribanote, porque eles não existem" fica falso quando o Pro existe. É preciso deixar claro que isso vale para o plano grátis e para quem não conecta a conta.
 - **Problemas moderados:**
   - O herói não tinha prova visual da tese "fica no seu computador".
   - A demonstração começa vazia, o que no primeiro segundo parece um vídeo quebrado.
@@ -71,7 +71,7 @@ Marcas: `[FATO]` dito pelo dono do produto ou verificado; `[HIPÓTESE]` assumido
   - seletor anual/mensal e real/dólar;
   - planos, segurança e conformidade;
   - perguntas frequentes.
-- No app (`/app/#/conta`), a seção "Assine o Reunilo Pro" com o mesmo seletor, as formas de pagamento por plano e o bloco de segurança.
+- No app (`/app/#/conta`), a seção "Assine o Escribanote Pro" com o mesmo seletor, as formas de pagamento por plano e o bloco de segurança.
 - Servidor:
   - quatro preços (BRL/USD × mês/ano), Pix só no anual BRL;
   - créditos mensais no plano anual.
@@ -80,7 +80,7 @@ Marcas: `[FATO]` dito pelo dono do produto ou verificado; `[HIPÓTESE]` assumido
 **Não incluído (e por quê):**
 
 - Troca de plano mensal↔anual pelo portal. Uma assinatura no Pix Automático não pode virar mensal sem cartão; fica para depois do beta.
-- Selos de certificação: o Reunilo não tem nenhuma.
+- Selos de certificação: o Escribanote não tem nenhuma.
 - Versão em inglês do site: o público inicial é o Brasil `[HIPÓTESE]`.
 
 ## 2. Histórias e critérios de aceite
@@ -97,7 +97,7 @@ AC-001.2 Dado prefers-reduced-motion, Quando abro a home, Então todo o conteúd
 ```gherkin
 AC-002.1 Dado que estou em qualquer página do site, Quando olho o menu, Então vejo "Pro" levando a /pro/ e "Entrar" levando a /app/.
 AC-002.2 Dado que rolo a home, Quando chego em "Dois jeitos de usar", Então vejo o grátis como padrão ("nada sai do seu computador") e o Pro como opcional, com o preço anual.
-AC-002.3 Dado o texto de privacidade da home, Então ele não afirma que não existem servidores do Reunilo; diz que a extensão sem conta conectada não fala com servidor nenhum.
+AC-002.3 Dado o texto de privacidade da home, Então ele não afirma que não existem servidores do Escribanote; diz que a extensão sem conta conectada não fala com servidor nenhum.
 ```
 
 ### US-003 — Escolher o plano na página do Pro (OUT-01, H-02)
@@ -145,7 +145,7 @@ AC-006.2 Quando passa cada mês do período, Então recebo mais 15 (com teto de 
 | RN-02 | Anual = 10 × o mensal: R$ 150 e US$ 30. Mostrar o preço cheio (12 ×) riscado e "2 meses grátis". |
 | RN-03 | O padrão do seletor é anual + real. |
 | RN-04 | Créditos: 15 por mês nos dois planos, acumulando até 30. |
-| RN-05 | Nenhuma página alega certificação (SOC 2, ISO) que o Reunilo não tem. |
+| RN-05 | Nenhuma página alega certificação (SOC 2, ISO) que o Escribanote não tem. |
 | RN-06 | A home mantém o grátis/local como mensagem principal; o Pro aparece depois da tese local e nunca no herói como ação principal. |
 
 ## 4. Requisitos não funcionais

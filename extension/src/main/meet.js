@@ -3,7 +3,7 @@
 // próprio Meet. Somente escuta — nunca envia nada na conexão.
 (function (root) {
   "use strict";
-  const P = root.ReuniloProto;
+  const P = root.EscribanoteProto;
 
   // captions_v2: Packet{1: Utterance{1 id, 2 version, 3: Caption{3 text, 4 lang, 6 deviceId}}}
   function decodeCaptionsV2(bytes) {
@@ -77,13 +77,13 @@
     return hit;
   }
 
-  root.ReuniloMeet = { decodeCaptionsV2, decodeLegacyCaption, decodeDevices, decodeChat };
+  root.EscribanoteMeet = { decodeCaptionsV2, decodeLegacyCaption, decodeDevices, decodeChat };
 
   if (typeof location === "undefined" || location.host !== "meet.google.com") return;
-  if (!root.RTCPeerConnection || root.__reuniloMeetHooked) return;
-  root.__reuniloMeetHooked = true;
+  if (!root.RTCPeerConnection || root.__escribanoteMeetHooked) return;
+  root.__escribanoteMeetHooked = true;
 
-  const { emit, toBytes, safe } = root.ReuniloCore;
+  const { emit, toBytes, safe } = root.EscribanoteCore;
   const attached = new WeakSet();
   let lastProtocolCaption = 0;
 
@@ -139,7 +139,7 @@
   root.RTCPeerConnection = PatchedPC;
 
   // Permite ao fallback por DOM saber se o protocolo está funcionando.
-  document.addEventListener("reunilo:ping", () =>
+  document.addEventListener("escribanote:ping", () =>
     emit("protocol-health", { platform: "meet", lastProtocolCaption }),
   );
 })(globalThis);

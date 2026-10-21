@@ -22,7 +22,7 @@ test("checkout anual em reais oferece cartão e Pix Automático anual", async ()
   assert.equal(p.mode, "subscription");
   assert.deepEqual(p.payment_method_types, ["card", "pix"]);
   assert.deepEqual(p.payment_method_options.pix.mandate_options, {
-    amount: 18000, amount_type: "maximum", payment_schedule: "yearly", reference: "Reunilo Pro anual",
+    amount: 18000, amount_type: "maximum", payment_schedule: "yearly", reference: "Escribanote Pro anual",
   });
   assert.equal(p.line_items[0].price, "price_brl_year");
   assert.equal(p.client_reference_id, u.me.id);

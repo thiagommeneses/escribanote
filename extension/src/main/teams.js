@@ -36,13 +36,13 @@
     return json.recognitionResults.map(toCaption).filter(Boolean);
   }
 
-  root.ReuniloTeams = { captionsFromPayload, parseJsonTail, TEAMS_HOST };
+  root.EscribanoteTeams = { captionsFromPayload, parseJsonTail, TEAMS_HOST };
 
   if (typeof location === "undefined" || !TEAMS_HOST.test(location.host)) return;
-  if (!root.RTCPeerConnection || root.__reuniloTeamsHooked) return;
-  root.__reuniloTeamsHooked = true;
+  if (!root.RTCPeerConnection || root.__escribanoteTeamsHooked) return;
+  root.__escribanoteTeamsHooked = true;
 
-  const { emit, toBytes, inflate, safe } = root.ReuniloCore;
+  const { emit, toBytes, inflate, safe } = root.EscribanoteCore;
   const decoder = new TextDecoder();
   const attached = new WeakSet();
 

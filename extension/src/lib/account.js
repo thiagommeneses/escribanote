@@ -1,6 +1,6 @@
-// Conta Reunilo Pro: token do dispositivo (entregue pelo app web) e chamadas à API.
+// Conta Escribanote Pro: token do dispositivo (entregue pelo app web) e chamadas à API.
 // O endereço pode ser trocado em chrome.storage.local "accountApi" (só para testes).
-export const ACCOUNT_URL = "https://reunilo.meneseslabs.com.br";
+export const ACCOUNT_URL = "https://escribanote.meneseslabs.com.br";
 
 export async function accountBase() {
   const { accountApi } = await chrome.storage.local.get("accountApi");
@@ -23,7 +23,7 @@ export async function setAccount(patch) {
 
 export class AccountError extends Error {
   constructor(status, body) {
-    super(body?.message || `Erro ${status} na conta Reunilo`);
+    super(body?.message || `Erro ${status} na conta Escribanote`);
     this.status = status;
     this.code = body?.error || "error";
     this.body = body || {};
@@ -32,7 +32,7 @@ export class AccountError extends Error {
 
 export async function accountFetch(path, { method = "GET", body, signal } = {}) {
   const acct = await getAccount();
-  if (!acct) throw new AccountError(401, { error: "unauthenticated", message: "Conecte a sua conta Reunilo em Ajustes." });
+  if (!acct) throw new AccountError(401, { error: "unauthenticated", message: "Conecte a sua conta Escribanote em Ajustes." });
   let res;
   try {
     res = await fetch(`${await accountBase()}/api/v1${path}`, {
@@ -43,7 +43,7 @@ export async function accountFetch(path, { method = "GET", body, signal } = {}) 
     });
   } catch (err) {
     if (err.name === "AbortError") throw err;
-    throw new AccountError(0, { error: "offline", message: "Sem conexão com a conta Reunilo." });
+    throw new AccountError(0, { error: "offline", message: "Sem conexão com a conta Escribanote." });
   }
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) throw new AccountError(res.status, data);
@@ -53,7 +53,7 @@ export async function accountFetch(path, { method = "GET", body, signal } = {}) 
 // IA da conta em streaming (SSE). onDelta recebe o texto acumulado; devolve o evento "done".
 export async function accountStream(path, body, { onDelta, signal } = {}) {
   const acct = await getAccount();
-  if (!acct) throw new AccountError(401, { error: "unauthenticated", message: "Conecte a sua conta Reunilo em Ajustes." });
+  if (!acct) throw new AccountError(401, { error: "unauthenticated", message: "Conecte a sua conta Escribanote em Ajustes." });
   const res = await fetch(`${await accountBase()}/api/v1${path}`, {
     method: "POST",
     signal,

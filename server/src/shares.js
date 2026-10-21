@@ -95,13 +95,13 @@ function renderMeeting(doc, share) {
       .join("")}</section>`;
   }
   const until = new Date(share.expires_at).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-  body += `<footer>Compartilhado pelo <a href="https://reunilo.meneseslabs.com.br">Reunilo</a>. Este link vale até ${esc(until)}.</footer>`;
+  body += `<footer>Compartilhado pelo <a href="https://escribanote.meneseslabs.com.br">Escribanote</a>. Este link vale até ${esc(until)}.</footer>`;
   return page(doc.title, body);
 }
 
 function page(title, body) {
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow"><title>${esc(title)} · Reunilo</title><style>
+<meta name="robots" content="noindex, nofollow"><title>${esc(title)} · Escribanote</title><style>
 :root{--bg:#f7f5f0;--fg:#1f1b16;--muted:#6f675d;--line:#e4ded3;--accent:#c8442a;--card:#fff}
 @media (prefers-color-scheme:dark){:root{--bg:#16130f;--fg:#f1ece4;--muted:#a59c90;--line:#332d26;--accent:#ef7a5e;--card:#1e1a15}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 "Segoe UI",system-ui,sans-serif}

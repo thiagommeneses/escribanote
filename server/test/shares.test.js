@@ -16,7 +16,7 @@ const tokenOf = (url) => url.split("/s/")[1];
 
 test("link público mostra ata, destaques e transcrição, com o título escapado", async () => {
   const s = (await u.post("/api/v1/shares", { meetingId: "mt-1", days: 7 })).json();
-  assert.match(s.url, /^https:\/\/reunilo\.test\/s\/[\w-]{20,}$/);
+  assert.match(s.url, /^https:\/\/escribanote\.test\/s\/[\w-]{20,}$/);
   const page = await ctx.app.inject(`/s/${tokenOf(s.url)}`);
   assert.equal(page.statusCode, 200);
   assert.match(page.headers["x-robots-tag"], /noindex/);

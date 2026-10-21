@@ -98,7 +98,7 @@ $("test").addEventListener("click", async () => {
     out.textContent = r.ok
       ? `Funcionando (${where}, ${(r.ms / 1000).toFixed(1)} s para 3,6 s de fala). Ouviu: "${r.text}"`
       : `Não transcreveu direito (${where}). Ouviu: "${r.text || "nada"}"`;
-    if (r.fallback) out.textContent += " — a placa de vídeo falhou e o Reunilo passou para o processador.";
+    if (r.fallback) out.textContent += " — a placa de vídeo falhou e o Escribanote passou para o processador.";
     saveDiag({ lastTest: { ...r, model: modelKey, at: Date.now() } });
   } catch (err) {
     out.className = "test-out err";
@@ -329,7 +329,7 @@ window.addEventListener("beforeunload", (e) => {
 
 // Gancho de teste: injeta streams no lugar do compartilhamento de tela.
 if (new URLSearchParams(location.search).has("test")) {
-  globalThis.__reuniloRecorderTest = { rec, start, stop };
+  globalThis.__escribanoteRecorderTest = { rec, start, stop };
 }
 
 setup();

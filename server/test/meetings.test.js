@@ -97,8 +97,8 @@ test("lixeira: apagar, aparecer na sincronização, recusar escrita e restaurar"
 test("exportar tudo no formato do backup", async () => {
   const r = await ana.get("/api/v1/export");
   assert.equal(r.statusCode, 200);
-  assert.match(r.headers["content-disposition"], /reunilo-backup-/);
+  assert.match(r.headers["content-disposition"], /escribanote-backup-/);
   const data = r.json();
-  assert.equal(data.app, "reunilo");
+  assert.equal(data.app, "escribanote");
   assert.equal(data.sessions.length, 2);
 });

@@ -17,7 +17,7 @@ if (!CHROME) {
 const EXT = resolve(import.meta.dirname, "..");
 const EXPECTED_ID = "ohbnmfogdcbgegnpcaphidkjinplednd"; // fixado pela "key" do manifest
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const profile = mkdtempSync(join(tmpdir(), "reunilo-bk-"));
+const profile = mkdtempSync(join(tmpdir(), "escribanote-bk-"));
 let chrome, ws, seq = 0;
 const pending = new Map();
 
@@ -128,8 +128,8 @@ try {
   await msg(app, { type: "backup-flush", all: true });
   let f = await files(app);
   const sessionFile = Object.keys(f).find((n) => n.endsWith("_teste-bk-1.json"));
-  check(!!sessionFile && JSON.parse(f[sessionFile]).sessions[0].entries.length === 2, `reunião gravada na pasta Reunilo (${sessionFile})`);
-  check(!!f["reunilo-ajustes.json"], "ajustes gravados na pasta");
+  check(!!sessionFile && JSON.parse(f[sessionFile]).sessions[0].entries.length === 2, `reunião gravada na pasta Escribanote (${sessionFile})`);
+  check(!!f["escribanote-ajustes.json"], "ajustes gravados na pasta");
 
   // Ajuste alterado vai para a conta do Chrome (chrome.storage.sync).
   await evalIn(app, `(async () => { const { setSettings } = await import("/src/lib/settings.js"); await setSettings({ myName: "Pessoa de Teste" }); })()`);
@@ -141,7 +141,7 @@ try {
   await evalIn(app, `location.reload()`).catch(() => {});
   await sleep(1500);
   const status = await evalIn(app, `document.getElementById("bk-status").textContent`);
-  check(status.includes('"Reunilo"') && status.includes("último backup"), `status do backup em Ajustes: ${status}`);
+  check(status.includes('"Escribanote"') && status.includes("último backup"), `status do backup em Ajustes: ${status}`);
   await evalIn(app, `document.getElementById("backup-card").scrollIntoView({ block: "center" })`);
   const { data } = await send("Page.captureScreenshot", { format: "png" }, app);
   writeFileSync(join(OUT, "backup-settings.png"), Buffer.from(data, "base64"));

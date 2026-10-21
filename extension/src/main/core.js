@@ -4,7 +4,7 @@
 (function (root) {
   "use strict";
 
-  const EVENT = "reunilo:evt";
+  const EVENT = "escribanote:evt";
 
   function emit(kind, payload) {
     if (typeof document === "undefined") return;
@@ -49,5 +49,5 @@
     };
   }
 
-  root.ReuniloCore = { EVENT, emit, toBytes, inflate, isGzip, safe };
+  root.EscribanoteCore = { EVENT, emit, toBytes, inflate, isGzip, safe };
 })(globalThis);

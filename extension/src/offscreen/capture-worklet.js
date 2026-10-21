@@ -1,5 +1,5 @@
 // AudioWorklet: converte a entrada para mono e envia blocos de ~100 ms para o documento.
-class ReuniloCapture extends AudioWorkletProcessor {
+class EscribanoteCapture extends AudioWorkletProcessor {
   constructor() {
     super();
     this.buf = new Float32Array(1600);
@@ -24,4 +24,4 @@ class ReuniloCapture extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor("reunilo-capture", ReuniloCapture);
+registerProcessor("escribanote-capture", EscribanoteCapture);

@@ -15,7 +15,7 @@ if (!CHROME || !files.length) {
 const EXT = resolve(import.meta.dirname, "..");
 const PORT = 9800 + Math.floor(Math.random() * 100);
 // Perfil persistente opcional (PROFILE=...) para reaproveitar o modelo já baixado.
-const profile = process.env.PROFILE || mkdtempSync(join(tmpdir(), "reunilo-asr-"));
+const profile = process.env.PROFILE || mkdtempSync(join(tmpdir(), "escribanote-asr-"));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const chrome = spawn(CHROME, ["--headless=new", "--no-sandbox", "--no-first-run", `--user-data-dir=${profile}`,
   `--remote-debugging-port=${PORT}`, `--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, "about:blank"], { stdio: "ignore" });

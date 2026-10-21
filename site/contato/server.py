@@ -1,4 +1,4 @@
-"""Formulário de contato do Reunilo.
+"""Formulário de contato do Escribanote.
 
 O endereço de destino existe só aqui no servidor (variável CONTATO_PARA); a página nunca o vê.
 Defesas contra robôs, da mais barata para a mais cara:
@@ -35,7 +35,7 @@ VALIDADE = 30 * 60
 POR_IP_HORA = 5
 
 # Nome com que o servidor se apresenta ao SMTP (o padrão seria o ID do contêiner, que conta como spam).
-HELO = os.environ.get("SMTP_HELO", "reunilo.meneseslabs.com.br")
+HELO = os.environ.get("SMTP_HELO", "escribanote.meneseslabs.com.br")
 
 SMTP = {
     "host": os.environ.get("SMTP_HOST", ""),
@@ -117,14 +117,14 @@ def enviar_email(r):
     if not (SMTP["host"] and SMTP["user"] and PARA):
         return
     msg = EmailMessage()
-    msg["Subject"] = f"[Reunilo] Contato de {r['nome']}"
-    msg["From"] = formataddr(("Site do Reunilo", SMTP["user"]))
+    msg["Subject"] = f"[Escribanote] Contato de {r['nome']}"
+    msg["From"] = formataddr(("Site do Escribanote", SMTP["user"]))
     msg["To"] = PARA
     msg["Reply-To"] = formataddr((r["nome"], r["email"]))
     msg["Message-ID"] = make_msgid(domain=SMTP["user"].split("@")[-1])
     msg.set_content(
         f"{r['mensagem']}\n\n—\n{r['nome']} <{r['email']}>\n"
-        f"Enviado pelo formulário de reunilo.meneseslabs.com.br em {r['quando']}.\n"
+        f"Enviado pelo formulário de escribanote.meneseslabs.com.br em {r['quando']}.\n"
         "Responda este e-mail para falar direto com a pessoa."
     )
     try:

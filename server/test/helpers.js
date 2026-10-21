@@ -5,7 +5,7 @@ import { buildApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { createDb, migrate } from "../src/db.js";
 
-export const DB_URL = process.env.TEST_DATABASE_URL || "postgres://postgres:teste@127.0.0.1:55432/reunilo_test";
+export const DB_URL = process.env.TEST_DATABASE_URL || "postgres://postgres:teste@127.0.0.1:55432/escribanote_test";
 export const WEBHOOK_SECRET = "whsec_teste";
 const realStripe = new Stripe("sk_test_dummy");
 
@@ -67,12 +67,12 @@ export async function setup(overrides = {}) {
   await db.query("DROP TEXT SEARCH CONFIGURATION IF EXISTS pt_unaccent");
   await migrate(db);
   const config = loadConfig({
-    publicUrl: "https://reunilo.test",
+    publicUrl: "https://escribanote.test",
     dataKey: randomBytes(32).toString("base64"),
     stripe: { secretKey: "sk_test", webhookSecret: WEBHOOK_SECRET, priceBrl: "price_brl", priceBrlYear: "price_brl_year", priceUsd: "price_usd", priceUsdYear: "price_usd_year", pixMandateMax: 18000 },
     ...overrides,
   });
-  config.origin = "https://reunilo.test";
+  config.origin = "https://escribanote.test";
   const mailer = fakeMailer();
   const anthropic = fakeAnthropic();
   const stripe = fakeStripe();
@@ -89,7 +89,7 @@ export async function login(ctx, email = `pessoa${randomBytes(3).toString("hex")
   const cookie = v.cookies.find((c) => c.name === "rs");
   const me = v.json();
   const req = (method, url, payload, headers = {}) =>
-    ctx.app.inject({ method, url, payload, cookies: { rs: cookie.value }, headers: { "x-reunilo": "1", ...headers } });
+    ctx.app.inject({ method, url, payload, cookies: { rs: cookie.value }, headers: { "x-escribanote": "1", ...headers } });
   return { me, cookie: cookie.value, email, req, get: (u) => req("GET", u), post: (u, p) => req("POST", u, p), put: (u, p) => req("PUT", u, p), del: (u, p) => req("DELETE", u, p) };
 }
 

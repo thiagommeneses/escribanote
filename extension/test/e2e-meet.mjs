@@ -18,13 +18,13 @@ const SHOTS = process.argv[2] || null;
 // Cópia da extensão só para o teste: com a API do Claude já autorizada, porque o
 // Chrome headless não mostra o pedido de permissão opcional.
 const SRC = resolve(import.meta.dirname, "..");
-const EXT = mkdtempSync(join(tmpdir(), "reunilo-ext-"));
+const EXT = mkdtempSync(join(tmpdir(), "escribanote-ext-"));
 for (const d of ["manifest.json", "icons", "src", "vendor"]) cpSync(join(SRC, d), join(EXT, d), { recursive: true });
 const manifest = JSON.parse(readFileSync(join(EXT, "manifest.json"), "utf8"));
 manifest.host_permissions = ["https://api.anthropic.com/*"];
 writeFileSync(join(EXT, "manifest.json"), JSON.stringify(manifest));
 const PORT = 9300 + Math.floor(Math.random() * 500);
-const profile = mkdtempSync(join(tmpdir(), "reunilo-e2e-"));
+const profile = mkdtempSync(join(tmpdir(), "escribanote-e2e-"));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const step = (t) => console.log("✓", t);
 
@@ -90,7 +90,7 @@ async function waitFor(fn, what, ms = 6000) {
 async function widgetCall(sid, selector, fn = "function(){ return this.innerText }", arg) {
   const { root } = await send("DOM.getDocument", { depth: -1, pierce: true }, sid);
   const find = (n) => {
-    if (n.nodeName === "REUNILO-WIDGET") return n;
+    if (n.nodeName === "ESCRIBANOTE-WIDGET") return n;
     for (const c of [...(n.children || []), ...(n.shadowRoots || [])]) {
       const f = find(c);
       if (f) return f;
@@ -133,7 +133,7 @@ async function openMeet(code, title) {
   await send("Page.enable", {}, sessionId);
   await send("Emulation.setDeviceMetricsOverride", { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false }, sessionId);
   await send("Page.navigate", { url: `https://meet.google.com/${code}` }, sessionId);
-  await waitFor(() => evaluate(sessionId, "!!window.__reuniloMeetHooked && document.readyState === 'complete'"), "coletor injetado");
+  await waitFor(() => evaluate(sessionId, "!!window.__escribanoteMeetHooked && document.readyState === 'complete'"), "coletor injetado");
   // Par WebRTC local: pc1 envia, pc2 recebe pelo evento "datachannel" (como no Meet).
   await evaluate(sessionId, `(async () => {
     const pc1 = new RTCPeerConnection(), pc2 = new RTCPeerConnection();
@@ -147,7 +147,7 @@ async function openMeet(code, title) {
     await pc1.setRemoteDescription(pc2.localDescription);
     await Promise.all([__caps, __coll].map((c) => new Promise((ok) => c.readyState === "open" ? ok() : (c.onopen = ok))));
     await new Promise((r) => setTimeout(r, 300));
-    const enc = window.ReuniloProto.encode;
+    const enc = window.EscribanoteProto.encode;
     window.__device = (dev, name) => __coll.send(enc([[1, "message", [[2, "message", [[13, "message", [[1, "message", [[2, "message", [[1, "string", dev], [2, "string", name]]]]]]]]]]]]));
     window.__say = (id, v, text, dev) => __caps.send(enc([[1, "message", [[1, "varint", id], [2, "varint", v], [3, "message", [[3, "string", text], [4, "string", "pt-BR"], [6, "string", dev]]]]]]));
   })()`);
@@ -201,7 +201,7 @@ try {
   // 3) Widget dentro da reunião
   const body = await waitFor(() => widgetCall(meet, "#body"), "widget visível");
   await waitFor(async () => /vamos revisar o orçamento/.test(await widgetCall(meet, "#body")), "widget com a transcrição");
-  assert.ok(await evaluate(meet, "!!document.getElementById('reunilo-hide-captions')"), "legendas nativas deveriam estar ocultas");
+  assert.ok(await evaluate(meet, "!!document.getElementById('escribanote-hide-captions')"), "legendas nativas deveriam estar ocultas");
   step("widget mostra a transcrição ao vivo e oculta as legendas nativas");
   void body;
 
@@ -372,7 +372,7 @@ try {
 
   // Legenda em idioma errado
   const meet3 = await openMeet("lng-test-abc", "Reunião em inglês");
-  await evaluate(meet3, `(async () => { for (let i = 0; i < 4; i++) { __caps.send(window.ReuniloProto.encode([[1, "message", [[1, "varint", 900 + i], [2, "varint", 1], [3, "message", [[3, "string", "we should close this today " + i], [4, "string", "en-US"], [6, "string", ${JSON.stringify(ANA)}]]]]]])); await new Promise((r) => setTimeout(r, 150)); } })()`);
+  await evaluate(meet3, `(async () => { for (let i = 0; i < 4; i++) { __caps.send(window.EscribanoteProto.encode([[1, "message", [[1, "varint", 900 + i], [2, "varint", 1], [3, "message", [[3, "string", "we should close this today " + i], [4, "string", "en-US"], [6, "string", ${JSON.stringify(ANA)}]]]]]])); await new Promise((r) => setTimeout(r, 150)); } })()`);
   await waitFor(async () => /legendas estão em inglês/.test((await widgetCall(meet3, "#body")) || ""), "aviso de idioma");
   await screenshot(meet3, "11-aviso-idioma.png");
   step("widget avisa quando as legendas estão no idioma errado");

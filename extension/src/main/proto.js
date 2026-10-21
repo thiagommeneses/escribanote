@@ -148,5 +148,5 @@
     return new Uint8Array(out);
   }
 
-  root.ReuniloProto = { decode, tryDecode, field, str, num, msg, path, walk, encode };
+  root.EscribanoteProto = { decode, tryDecode, field, str, num, msg, path, walk, encode };
 })(globalThis);

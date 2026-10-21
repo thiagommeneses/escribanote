@@ -1,4 +1,4 @@
--- Esquema inicial do Reunilo Pro.
+-- Esquema inicial do Escribanote Pro.
 
 CREATE EXTENSION IF NOT EXISTS unaccent;
 

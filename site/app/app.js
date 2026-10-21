@@ -1,4 +1,4 @@
-// Reunilo — área logada. Rotas pelo fragmento (#/…); dados pela API; transcrição, ata, exportações
+// Escribanote — área logada. Rotas pelo fragmento (#/…); dados pela API; transcrição, ata, exportações
 // e análise com as mesmas bibliotecas da extensão (copiadas para ./lib na publicação).
 import { api, ApiError, stream } from "./api.js";
 import { QUICK_PROMPTS } from "./lib/ai.js";
@@ -122,7 +122,7 @@ function parseRoute() {
 
 // Plano escolhido na página /pro/ (#/conta?plano=anual&moeda=brl). Fica no localStorage porque o link
 // de login abre em outra aba, onde o sessionStorage não existe.
-const PLAN_KEY = "reunilo:plano";
+const PLAN_KEY = "escribanote:plano";
 function rememberPlan(params) {
   const plano = params.get("plano"), moeda = params.get("moeda");
   if (!plano && !moeda) return;
@@ -164,7 +164,7 @@ window.addEventListener("hashchange", route);
 
 function renderFatal(err) {
   setNav("");
-  view.innerHTML = `<section class="page"><h1>Não foi possível abrir o Reunilo</h1><p class="lead">${esc(err.message)}</p>
+  view.innerHTML = `<section class="page"><h1>Não foi possível abrir o Escribanote</h1><p class="lead">${esc(err.message)}</p>
     <p><button class="btn dark" data-act="reload">Tentar de novo</button></p></section>`;
 }
 
@@ -189,15 +189,15 @@ async function renderLogin(token) {
     }
   }
   view.innerHTML = `<section class="page">
-    <h1>Entre no <em>Reunilo</em></h1>
-    <p class="lead">Suas reuniões, atas e a IA inclusa do Reunilo Pro, em qualquer computador. Digite seu e-mail: enviamos um link de acesso, sem senha.</p>
+    <h1>Entre no <em>Escribanote</em></h1>
+    <p class="lead">Suas reuniões, atas e a IA inclusa do Escribanote Pro, em qualquer computador. Digite seu e-mail: enviamos um link de acesso, sem senha.</p>
     <form class="login-box" id="login-form" novalidate>
       <label class="field">E-mail<input type="email" id="login-email" autocomplete="email" required placeholder="voce@empresa.com"></label>
       <div class="row"><button class="btn primary" type="submit">Enviar link de acesso</button></div>
       <p class="err" id="login-err" role="alert"></p>
     </form>
     <div class="sent" id="login-sent" hidden></div>
-    <p class="small muted">A extensão do Reunilo continua grátis e funcionando sem conta. A conta é para o Reunilo Pro.</p>
+    <p class="small muted">A extensão do Escribanote continua grátis e funcionando sem conta. A conta é para o Escribanote Pro.</p>
   </section>`;
   $("login-email").focus();
   $("login-form").addEventListener("submit", async (e) => {
@@ -265,7 +265,7 @@ function listHtml(current) {
   const items = filtered();
   if (!state.list.length) {
     return `<div class="empty-pane small"><p>Nenhuma reunião na sua conta ainda.</p>
-      <p>${isPro() ? "Conecte a extensão: as reuniões gravadas nela aparecem aqui sozinhas." : "Com o Reunilo Pro, as reuniões da extensão aparecem aqui, em qualquer computador."}</p>
+      <p>${isPro() ? "Conecte a extensão: as reuniões gravadas nela aparecem aqui sozinhas." : "Com o Escribanote Pro, as reuniões da extensão aparecem aqui, em qualquer computador."}</p>
       <a class="btn sm ${isPro() ? "dark" : "primary"}" href="${isPro() ? "#/conectar" : "#/conta"}">${isPro() ? "Conectar a extensão" : "Conhecer o Pro"}</a></div>`;
   }
   if (!items.length) return `<p class="empty-pane small">Nenhuma reunião neste filtro.</p>`;
@@ -472,7 +472,7 @@ function renderPane() {
   });
 }
 
-const upsell = (what) => `<div class="empty-pane"><p>${what} faz parte do Reunilo Pro.</p><a class="btn sm primary" href="#/conta">Conhecer o Pro</a></div>`;
+const upsell = (what) => `<div class="empty-pane"><p>${what} faz parte do Escribanote Pro.</p><a class="btn sm primary" href="#/conta">Conhecer o Pro</a></div>`;
 
 function ataPane() {
   const s = state.meeting.doc.summary;
@@ -708,8 +708,8 @@ function renderAskAll() {
   setNav("ask");
   view.innerHTML = `<section class="page">
     <h1>Pergunte às suas <em>reuniões</em></h1>
-    <p class="lead">Uma pergunta, todas as reuniões do período: o Reunilo lê as atas e transcrições e responde citando de onde veio cada informação.</p>
-    ${isPro() ? "" : `<div class="notice">Este recurso faz parte do Reunilo Pro. <a href="#/conta">Conhecer o Pro</a></div>`}
+    <p class="lead">Uma pergunta, todas as reuniões do período: o Escribanote lê as atas e transcrições e responde citando de onde veio cada informação.</p>
+    ${isPro() ? "" : `<div class="notice">Este recurso faz parte do Escribanote Pro. <a href="#/conta">Conhecer o Pro</a></div>`}
     <div class="qa" id="qa">${state.askAll.map((x) => `<div class="q">${esc(x.q)}</div><div class="a">${x.a ? mdToHtml(x.a) : '<span class="typing"></span>'}</div>`).join("")}</div>
     <div class="panel ask-box">
       <textarea class="input" id="askall-input" placeholder="Ex.: O que decidimos sobre o orçamento de mídia este mês?" ${isPro() ? "" : "disabled"}></textarea>
@@ -774,7 +774,7 @@ async function renderAccount(params) {
   }
   const PLAN_NAMES = { brl: { month: "R$ 15/mês", year: "R$ 150/ano" }, usd: { month: "US$ 3/mês", year: "US$ 30/ano" } };
   const plan = isPro()
-    ? `<section class="panel pro"><h2>Reunilo Pro</h2>
+    ? `<section class="panel pro"><h2>Escribanote Pro</h2>
         <dl class="kv"><dt>Assinatura</dt><dd>${esc(statusText)}</dd><dt>Plano</dt><dd>${sub?.interval === "year" ? "Anual" : "Mensal"} · ${PLAN_NAMES[sub?.currency === "usd" ? "usd" : "brl"][sub?.interval === "year" ? "year" : "month"]}</dd></dl>
         <div><div class="row" style="justify-content:space-between"><b>Créditos de IA</b><span class="small muted">${c.balance} de ${c.max} · +${c.perCycle} ${c.renewsAt ? `em ${dateShort(c.renewsAt)}` : "a cada mês"}</span></div>
         <div class="meter" style="margin-top:6px"><b style="width:${Math.min(100, (c.balance / c.max) * 100)}%"></b></div>
@@ -784,11 +784,11 @@ async function renderAccount(params) {
   view.innerHTML = `<section class="page">
     <h1>Sua <em>conta</em></h1>
     ${justPaid && !isPro() ? `<div class="notice" id="paid-wait">Recebemos o seu pagamento. Estamos confirmando com a Stripe; com Pix pode levar alguns instantes.</div>` : ""}
-    ${justPaid && isPro() ? `<div class="notice ok">Assinatura confirmada. Bem-vindo ao Reunilo Pro! Agora <a href="#/conectar">conecte a extensão</a>.</div>` : ""}
+    ${justPaid && isPro() ? `<div class="notice ok">Assinatura confirmada. Bem-vindo ao Escribanote Pro! Agora <a href="#/conectar">conecte a extensão</a>.</div>` : ""}
     <section class="panel"><dl class="kv"><dt>E-mail</dt><dd>${esc(me.email)}</dd><dt>Conta criada em</dt><dd>${dateShort(me.createdAt)}</dd></dl></section>
     ${plan}
     <section class="panel"><h2>Extensão</h2>
-      <p class="small muted">Conecte a extensão do Reunilo para as reuniões irem para a conta sozinhas e a IA funcionar sem chave.</p>
+      <p class="small muted">Conecte a extensão do Escribanote para as reuniões irem para a conta sozinhas e a IA funcionar sem chave.</p>
       ${devices.length ? `<ul class="devices">${devices.map((d) => `<li><span><b>${esc(d.name)}</b><br><span class="small muted">Conectada em ${dateShort(d.createdAt)} · último uso ${dateShort(d.lastUsedAt)}</span></span><button class="btn sm ghost danger" data-act="device-off" data-id="${esc(d.id)}">Desconectar</button></li>`).join("")}</ul>` : ""}
       <div class="row"><a class="btn dark" href="#/conectar">Conectar a extensão</a></div></section>
     <section class="panel"><h2>Seus dados</h2>
@@ -818,7 +818,7 @@ function subscribeHtml({ interval = "year", currency = "brl" }) {
   const o = OFFERS[currency][interval];
   const seg = (k, v, label, on) =>
     `<button type="button" role="radio" aria-checked="${on}" class="seg-btn" data-act="plan-pick" data-k="${k}" data-v="${v}">${label}</button>`;
-  return `<div class="sub-head"><div><p class="eyebrow-sm">Reunilo Pro</p><h2>Suas reuniões em qualquer computador, com IA inclusa</h2></div>
+  return `<div class="sub-head"><div><p class="eyebrow-sm">Escribanote Pro</p><h2>Suas reuniões em qualquer computador, com IA inclusa</h2></div>
       <div class="segs">
         <div class="seg" role="radiogroup" aria-label="Cobrança">${seg("interval", "year", `Anual <span class="save">−17%</span>`, interval === "year")}${seg("interval", "month", "Mensal", interval === "month")}</div>
         <div class="seg" role="radiogroup" aria-label="Moeda">${seg("currency", "brl", "R$", currency === "brl")}${seg("currency", "usd", "US$", currency === "usd")}</div>
@@ -835,7 +835,7 @@ function subscribeHtml({ interval = "year", currency = "brl" }) {
         <li>Reuniões salvas na conta e sincronizadas entre computadores</li>
         <li>Esta área web: busca em todas as falas, ata ao lado da transcrição, análise de fala</li>
         <li>IA sem chave de API: 15 créditos por mês, que acumulam até 30</li>
-        <li>Links de leitura para quem não usa o Reunilo</li>
+        <li>Links de leitura para quem não usa o Escribanote</li>
       </ul>
     </div>
     <div class="trust" aria-label="Segurança e privacidade">
@@ -843,7 +843,7 @@ function subscribeHtml({ interval = "year", currency = "brl" }) {
       <div><b>Seus dados são seus</b><span>Não vendemos, não usamos para treinar IA e você exporta ou apaga tudo quando quiser.</span></div>
       <div><b>Direitos garantidos</b><span>Seguimos a LGPD e respeitamos os direitos do GDPR (União Europeia) e das leis de privacidade dos EUA, como a CCPA. <a href="/privacidade.html#pro">Política</a>.</span></div>
     </div>
-    <p class="small muted">Pagamento processado pela Stripe; o Reunilo não vê o número do seu cartão. A extensão continua grátis e local para sempre: o Pro é opcional.</p>`;
+    <p class="small muted">Pagamento processado pela Stripe; o Escribanote não vê o número do seu cartão. A extensão continua grátis e local para sempre: o Pro é opcional.</p>`;
 }
 function pickPlan(el) {
   const box = $("subscribe");
@@ -875,8 +875,8 @@ function renderConnect() {
   setNav("account");
   view.innerHTML = `<section class="page">
     <h1>Conectar a <em>extensão</em></h1>
-    <p class="lead">Com a extensão conectada, cada reunião vai para a sua conta sozinha e a IA funciona sem chave de API. Use o Chrome onde a extensão do Reunilo está instalada.</p>
-    ${isPro() ? "" : `<div class="notice">A conexão serve para o Reunilo Pro. <a href="#/conta">Assine primeiro</a>.</div>`}
+    <p class="lead">Com a extensão conectada, cada reunião vai para a sua conta sozinha e a IA funciona sem chave de API. Use o Chrome onde a extensão do Escribanote está instalada.</p>
+    ${isPro() ? "" : `<div class="notice">A conexão serve para o Escribanote Pro. <a href="#/conta">Assine primeiro</a>.</div>`}
     <div class="panel"><div class="row"><button class="btn primary" data-act="connect" ${isPro() ? "" : "disabled"}>Conectar este navegador</button></div>
     <p id="connect-msg" class="small" role="status"></p></div>
     <p class="small muted">Ainda não tem a extensão? <a href="/#baixar">Baixe grátis</a>, instale e volte aqui.</p></section>`;
@@ -900,16 +900,16 @@ function sendToExtension(message) {
 async function connectExtension() {
   const msg = $("connect-msg");
   msg.textContent = "Conectando…";
-  const probe = await sendToExtension({ type: "reunilo-ping" });
+  const probe = await sendToExtension({ type: "escribanote-ping" });
   if (!probe.ok) {
-    msg.innerHTML = `A extensão do Reunilo não respondeu neste navegador. Confira se ela está instalada e atualizada (versão 2.5 ou mais nova) e recarregue esta página. <a href="/#baixar">Baixar a extensão</a>`;
+    msg.innerHTML = `A extensão do Escribanote não respondeu neste navegador. Confira se ela está instalada e atualizada (versão 2.5 ou mais nova) e recarregue esta página. <a href="/#baixar">Baixar a extensão</a>`;
     return;
   }
   try {
     const browser = /Edg\//.test(navigator.userAgent) ? "Edge" : "Chrome";
     const os = /Windows/.test(navigator.userAgent) ? "Windows" : /Mac/.test(navigator.userAgent) ? "macOS" : /Linux/.test(navigator.userAgent) ? "Linux" : "";
     const dev = await api.post("/devices", { name: `Extensão no ${browser}${os ? ` (${os})` : ""}` });
-    const r = await sendToExtension({ type: "reunilo-connect", token: dev.token, email: state.me.email, deviceId: dev.id });
+    const r = await sendToExtension({ type: "escribanote-connect", token: dev.token, email: state.me.email, deviceId: dev.id });
     if (!r.ok) {
       await api.del(`/devices/${dev.id}`).catch(() => {});
       msg.textContent = `A extensão recusou a conexão (${r.reason || "erro"}).`;
@@ -1091,7 +1091,7 @@ view.addEventListener("click", async (e) => {
         return renderAccount(new URLSearchParams());
       case "export-all": {
         const data = await api.get("/export");
-        return download(`reunilo-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 1), "application/json");
+        return download(`escribanote-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 1), "application/json");
       }
       case "restore":
         await api.post(`/meetings/${encodeURIComponent(el.dataset.id)}/restore`);

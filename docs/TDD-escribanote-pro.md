@@ -1,4 +1,4 @@
-# TDD - Reunilo Pro (conta online, sincronização e IA inclusa)
+# TDD - Escribanote Pro (conta online, sincronização e IA inclusa)
 
 | Campo           | Valor                                                                 |
 | --------------- | --------------------------------------------------------------------- |
@@ -15,9 +15,9 @@
 
 ## Contexto
 
-O **Reunilo** (até a versão 2.3, chamado Escriba) é uma extensão do Chrome que transcreve reuniões do Google Meet, Teams e Zoom e, desde a
+O **Escribanote** (chamado Escriba até a versão 2.3 e Reunilo nas 2.4 e 2.5) é uma extensão do Chrome que transcreve reuniões do Google Meet, Teams e Zoom e, desde a
 versão 2.2, huddles do Slack e outros apps do computador (Whisper local). Ele foi construído como uma
-alternativa melhor ao Tactiq. A versão 2.4.0 está publicada em reunilo.meneseslabs.com.br. Ela é **100%
+alternativa melhor ao Tactiq. A versão 2.4.0 está publicada em escribanote.meneseslabs.com.br. Ela é **100%
 local**: as transcrições ficam no `chrome.storage` do navegador, com backup opcional numa pasta do
 computador; os ajustes sincronizam pela conta do Chrome, e a IA usa a chave de API do próprio usuário.
 
@@ -29,7 +29,7 @@ créditos de IA por mês, e US$ 0 no plano grátis, limitado a 10 transcrições
 **Domínio**: produtividade em reuniões (transcrição, resumo, busca, compartilhamento), cobrança por
 assinatura e IA generativa medida por uso.
 
-**Stakeholders**: usuários atuais do Reunilo Free; profissionais e pequenos times no Brasil e fora
+**Stakeholders**: usuários atuais do Escribanote Free; profissionais e pequenos times no Brasil e fora
 dele que hoje pagam ou cogitam pagar o Tactiq; o mantenedor, que precisa de receita que cubra IA,
 servidor e taxas.
 
@@ -46,7 +46,7 @@ servidor e taxas.
 - **IA exige chave de API**: para gerar ata, revisar ou perguntar, o usuário precisa criar uma conta na
   Anthropic, cadastrar cartão e colar uma chave.
   - Impacto: a maioria dos usuários não técnicos não usa a IA, que é o maior valor percebido do produto.
-- **Sem compartilhamento**: não há link para mandar a ata ou a transcrição a quem não usa o Reunilo.
+- **Sem compartilhamento**: não há link para mandar a ata ou a transcrição a quem não usa o Escribanote.
   - Impacto: o Tactiq ganha justamente no fluxo "terminei a reunião, mando o link para o time".
 - **Sem receita**: a versão grátis não gera caixa para pagar servidor, domínio e evolução.
 
@@ -70,14 +70,14 @@ servidor e taxas.
 
 ### ✅ Dentro do escopo (V1)
 
-- **Planos**: Reunilo Free (como hoje, sem conta) e **Reunilo Pro**. Mensal: **R$ 15** ou **US$ 3**, só
+- **Planos**: Escribanote Free (como hoje, sem conta) e **Escribanote Pro**. Mensal: **R$ 15** ou **US$ 3**, só
   cartão. Anual (2 meses grátis, preço promocional): **R$ 150** com **Pix Automático ou cartão**, ou
   **US$ 30** com cartão. Pix só no anual (decidido em 2026-10-20). Sem teste grátis.
 - **Conta**: login com Google ou com link mágico por e-mail; uma conta por pessoa (sem times na V1).
 - **Sincronização** da extensão com a nuvem: reuniões, notas, destaques, tags, títulos, nomes de
   participantes e ajustes. Envio automático ao fim de cada reunião e a cada poucos minutos durante a
   reunião; o histórico local existente é enviado na primeira vez, com confirmação.
-- **Área logada** (app web em `app.reunilo.com`): biblioteca, página da reunião, busca em
+- **Área logada** (app web em `app.escribanote.com`): biblioteca, página da reunião, busca em
   todas as transcrições, IA, compartilhamento, exportação, conta e cobrança (ver "Área logada: UX/UI").
 - **IA inclusa**, sem chave: **15 créditos por ciclo**, que valem em qualquer ação de IA (ata, revisão,
   pergunta, e-mail de follow-up, lista de tarefas, perguntar a todas as reuniões). Créditos não usados
@@ -116,7 +116,7 @@ sem conta; com o Pro, ela sincroniza com a API.
 
 **Componentes principais**:
 
-- **Extensão (Reunilo 3.0)**: continua local-first. Ganha um "motor de sincronização" que envia
+- **Extensão (Escribanote 3.0)**: continua local-first. Ganha um "motor de sincronização" que envia
   mudanças à API, baixa reuniões de outros dispositivos e usa a IA da conta quando não há chave própria.
 - **App web (área logada)**: SPA estática servida pelo Caddy; conversa só com a API.
 - **API**: autenticação, reuniões, busca, compartilhamento, cotas de IA, cobrança e webhooks.
@@ -129,10 +129,10 @@ sem conta; com o Pro, ela sincroniza com a API.
 
 ```mermaid
 graph LR
-    EXT[Extensão Reunilo] -->|HTTPS + token| CADDY[Caddy]
+    EXT[Extensão Escribanote] -->|HTTPS + token| CADDY[Caddy]
     WEB[App web - área logada] -->|HTTPS + cookie| CADDY
     PUB[Link compartilhado] -->|HTTPS| CADDY
-    CADDY --> API[API Reunilo]
+    CADDY --> API[API Escribanote]
     API --> DB[(Postgres)]
     API -->|Messages API| CLAUDE[Claude API]
     API -->|Checkout, Portal| STRIPE[Stripe]
@@ -193,7 +193,7 @@ sequenceDiagram
 
 ### APIs e endpoints
 
-Todas as rotas ficam em `https://reunilo.meneseslabs.com.br/api/v1/...` (mesmo endereço do site e do app,
+Todas as rotas ficam em `https://escribanote.meneseslabs.com.br/api/v1/...` (mesmo endereço do site e do app,
 sem CORS para o navegador; a extensão é liberada pelo ID fixo).
 
 | Endpoint | Método | Descrição | Autenticação |
@@ -269,10 +269,10 @@ por bastante tempo. A partir de 60% do disco, os documentos migram para um armaz
 ### Área logada: UX/UI (melhor que a do Tactiq)
 
 Princípio: **ler, achar e reaproveitar reuniões rápido**. O Tactiq separa "My Meetings", espaços e
-ferramentas de IA em telas diferentes, e esconde a IA atrás de créditos que acabam rápido. O Reunilo Pro
+ferramentas de IA em telas diferentes, e esconde a IA atrás de créditos que acabam rápido. O Escribanote Pro
 reúne tudo numa tela de três colunas, com teclado em primeiro lugar.
 
-| Área | Tactiq (Pro) | Reunilo Pro |
+| Área | Tactiq (Pro) | Escribanote Pro |
 | ---- | ------------ | ----------- |
 | Biblioteca | Lista "Transcripts"/"My Meetings" | Lista por dia com prévia da ata, plataforma, duração e participantes; filtros (plataforma, com ata, com destaques, participante, período); visões salvas |
 | Busca | Por espaço | Em **todas** as falas, notas e atas, com trecho destacado e salto direto ao momento da fala; atalho `/` |
@@ -361,11 +361,11 @@ limite global de gasto de IA por dia, com alerta, protege contra surpresas.
 | Banco | Postgres 17 em contêiner, só na rede interna do Docker. Busca com `tsvector` em português, sem acento |
 | Documento da reunião | JSON comprimido (gzip, ~5x menor) e criptografado com AES-256-GCM antes de gravar |
 | Login | Link mágico por e-mail (válido por 15 min, uso único). O token vai no fragmento da URL (`#`), que não aparece em logs. Google fica para depois |
-| Sessão web | Cookie `HttpOnly`, `Secure`, `SameSite=Lax`, de 30 dias; escrita exige o cabeçalho `X-Reunilo` e a origem correta (CSRF) |
+| Sessão web | Cookie `HttpOnly`, `Secure`, `SameSite=Lax`, de 30 dias; escrita exige o cabeçalho `X-Escribanote` e a origem correta (CSRF) |
 | Extensão | Token de dispositivo (`Authorization: Bearer`), só o hash no banco. CORS liberado apenas para `chrome-extension://ohbnmfogdcbgegnpcaphidkjinplednd`. A entrega do token usa `externally_connectable` |
 | App web | Páginas estáticas em `/app`, com rotas pelo fragmento (`/app/#/r/{id}`); sem build, como a extensão |
 | Rotas no Caddy | `/api/v1/*` e `/s/*` vão para a API; `/api/contato*` para o formulário; o resto é o site estático |
-| Cobrança | Stripe Checkout em modo assinatura, 4 preços (`reunilo_pro_{brl,usd}_{monthly,yearly}`). Anual em BRL: cartão e Pix Automático (mandato `yearly` de até R$ 180, "Reunilo Pro anual" no app do banco). Mensal e USD: só cartão. Portal da Stripe para trocar a forma de pagamento e cancelar (troca mensal↔anual fica para depois do beta) |
+| Cobrança | Stripe Checkout em modo assinatura, 4 preços (`escribanote_pro_{brl,usd}_{monthly,yearly}`). Anual em BRL: cartão e Pix Automático (mandato `yearly` de até R$ 180, "Escribanote Pro anual" no app do banco). Mensal e USD: só cartão. Portal da Stripe para trocar a forma de pagamento e cancelar (troca mensal↔anual fica para depois do beta) |
 | Créditos | Mensal: concedidos no `invoice.paid` de cada ciclo. Anual: a fatura concede o 1º lote e um laço de hora em hora (`grantMonthly`) concede os meses 2 a 12, uma vez por mês (chave `year:<assinatura>:<início>:<mês>`). Saldo = mín(saldo + 15, 30). Reserva atômica antes da chamada; devolução se falhar |
 | Teto de gasto | Gasto de IA do dia somado no banco; acima do teto (padrão US$ 20/dia) a IA inclusa pausa e avisa |
 | Backups | `pg_dump` diário, criptografado, guardado 14 dias na VPS; cópia para fora da VPS segue em aberto |
@@ -381,7 +381,7 @@ limite global de gasto de IA por dia, com alerta, protege contra surpresas.
 | Área logada | ✅ Pronta, teste em Chrome real (26 verificações, inclui o site e a assinatura) | `site/app/` |
 | Site com o Pro (home redesenhada, `/pro/`, menu "Pro" e "Entrar") | ✅ Publicado; spec em `docs/SPEC-site-e-assinatura.md` | `site/` |
 | Extensão 2.5.0 (conectar, sincronizar, IA da conta) | ✅ Pronta, 33 testes unitários + 16 verificações ponta a ponta | `extension/` |
-| Produção na VPS (banco, API, backups, app) | ✅ No ar em `reunilo.meneseslabs.com.br/app` | `site/docker-compose.yml` |
+| Produção na VPS (banco, API, backups, app) | ✅ No ar em `escribanote.meneseslabs.com.br/app` | `site/docker-compose.yml` |
 | Extensão 2.5.0 no site | ✅ Publicada (zip + `latest.json`) | `site/download/` |
 | Backup | ✅ Diário, criptografado; restauração testada | `server/README.md` |
 | Política de privacidade com o Pro | ✅ Publicada (inclui a transferência internacional: VPS em Boston) | `site/privacidade.html` |
@@ -464,7 +464,7 @@ segurança e LGPD concluídas.
 - **Índice de busca**: guarda termos normalizados das falas para a busca funcionar. É um risco aceito
   (sem ele, não há busca no servidor), documentado na política de privacidade.
 - **Dados pessoais coletados**: e-mail, nome, país, conteúdo das reuniões (falas, nomes de participantes,
-  notas), dados de cobrança (ficam na Stripe; o Reunilo guarda só os identificadores).
+  notas), dados de cobrança (ficam na Stripe; o Escribanote guarda só os identificadores).
 - **Base legal (LGPD)**: execução de contrato (assinatura) e consentimento explícito no primeiro envio
   das reuniões locais.
 - **Retenção**: lixeira de 30 dias; conta cancelada fica com os dados por 90 dias (só leitura e
@@ -632,7 +632,7 @@ A extensão é local-first: nenhum rollback do servidor apaga dados do computado
 | 4 | Teste grátis do Pro? | Não: o Free já é ilimitado no tempo | Thiago | ✅ Decidido em 2026-10-20 |
 | 5 | Onde guardar os backups fora da VPS? | Opções: armazenamento de objetos barato ou o backup da própria Hostinger | Thiago | 🔴 Aberta |
 | 6 | Conta grátis com app web só leitura? | Pode atrair usuários, mas aumenta o custo de servidor | Thiago | 🔴 Aberta |
-| 7 | Nome comercial | **Reunilo** (o nome Escriba é muito usado); registrar reunilo.com e reunilo.com.br | Thiago | ✅ Decidido em 2026-10-20 |
+| 7 | Nome comercial | **Escribanote** (Escriba é muito usado; Reunilo foi trocado em 2026-10-20); escribanote.com e .com.br estavam livres. Falta checar o INPI | Thiago | ✅ Decidido em 2026-10-20 |
 
 ---
 
@@ -640,7 +640,7 @@ A extensão é local-first: nenhum rollback do servidor apaga dados do computado
 
 | Fase | Entregas | Duração | Status |
 | ---- | -------- | ------- | ------ |
-| 0 - Decisões | Registrar reunilo.com e .com.br, conta na Stripe, Google OAuth | 3 dias | ⏳ |
+| 0 - Decisões | Registrar escribanote.com e .com.br, conta na Stripe, Google OAuth | 3 dias | ⏳ |
 | 1 - Base | Infra, contas | 1 semana | ⏳ |
 | 2 - Sincronização | API de reuniões, extensão 3.0 | 1,5 semana | ⏳ |
 | 3 - Cobrança e IA | Stripe, proxy de IA, cotas | 1,5 semana | ⏳ |

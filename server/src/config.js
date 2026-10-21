@@ -1,4 +1,4 @@
-// Configuração vinda do ambiente. Em produção, os segredos ficam em /opt/reunilo/pro.env (fora do repositório).
+// Configuração vinda do ambiente. Em produção, os segredos ficam em /opt/escribanote/pro.env (fora do repositório).
 
 const env = process.env;
 const num = (v, d) => (v === undefined || v === "" ? d : Number(v));
@@ -6,7 +6,7 @@ const num = (v, d) => (v === undefined || v === "" ? d : Number(v));
 export function loadConfig(overrides = {}) {
   const config = {
     port: num(env.PORT, 8080),
-    publicUrl: (env.PUBLIC_URL || "https://reunilo.meneseslabs.com.br").replace(/\/$/, ""),
+    publicUrl: (env.PUBLIC_URL || "https://escribanote.meneseslabs.com.br").replace(/\/$/, ""),
     databaseUrl: env.DATABASE_URL || "",
     dataKey: env.DATA_KEY || "", // base64 de 32 bytes (AES-256)
     extensionId: env.EXTENSION_ID || "ohbnmfogdcbgegnpcaphidkjinplednd",

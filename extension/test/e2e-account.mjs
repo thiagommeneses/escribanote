@@ -1,4 +1,4 @@
-// Conta Reunilo Pro de ponta a ponta: extensão real + app web + API (servidor de desenvolvimento,
+// Conta Escribanote Pro de ponta a ponta: extensão real + app web + API (servidor de desenvolvimento,
 // Postgres local, IA e Stripe simuladas).
 //   CHROME=... TEST_DATABASE_URL=... node test/e2e-account.mjs [pasta-de-screenshots]
 import { spawn } from "node:child_process";
@@ -18,7 +18,7 @@ const check = (ok, label) => {
 };
 
 // Cópia da extensão que também aceita mensagens do servidor local (a original só aceita o endereço de produção).
-const EXT = mkdtempSync(join(tmpdir(), "reunilo-ext-"));
+const EXT = mkdtempSync(join(tmpdir(), "escribanote-ext-"));
 cpSync(resolve(import.meta.dirname, ".."), EXT, { recursive: true, filter: (p) => !p.includes("/test") });
 const manifest = JSON.parse(readFileSync(join(EXT, "manifest.json"), "utf8"));
 manifest.externally_connectable.matches.push("http://127.0.0.1/*");
@@ -26,7 +26,7 @@ writeFileSync(join(EXT, "manifest.json"), JSON.stringify(manifest, null, 2));
 
 const srv = await startDevServer({ port: 8840 + Math.floor(Math.random() * 40) });
 const DBG = 9400 + Math.floor(Math.random() * 100);
-const chrome = spawn(CHROME, ["--headless=new", "--no-sandbox", "--no-first-run", `--user-data-dir=${mkdtempSync(join(tmpdir(), "reunilo-acc-"))}`,
+const chrome = spawn(CHROME, ["--headless=new", "--no-sandbox", "--no-first-run", `--user-data-dir=${mkdtempSync(join(tmpdir(), "escribanote-acc-"))}`,
   `--remote-debugging-port=${DBG}`, `--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, "--window-size=1280,900", "about:blank"], { stdio: "ignore" });
 
 let ws;
@@ -132,7 +132,7 @@ try {
 
   // 3) Permissão: enviar todas
   await evalIn(ext, `document.querySelector('[data-sync-consent="all"]').click(); true`);
-  const api = (path, opts = {}) => evalIn(web, `fetch("/api/v1${path}", { method: ${JSON.stringify(opts.method || "GET")}, headers: { ${opts.body ? '"content-type": "application/json", ' : ""}"x-reunilo": "1" }, ${opts.body ? `body: ${JSON.stringify(JSON.stringify(opts.body))}` : ""} }).then((r) => r.json())`);
+  const api = (path, opts = {}) => evalIn(web, `fetch("/api/v1${path}", { method: ${JSON.stringify(opts.method || "GET")}, headers: { ${opts.body ? '"content-type": "application/json", ' : ""}"x-escribanote": "1" }, ${opts.body ? `body: ${JSON.stringify(JSON.stringify(opts.body))}` : ""} }).then((r) => r.json())`);
   const listed = await waitFor(async () => {
     const r = await api("/meetings");
     return r.items?.length === 2 ? r : null;

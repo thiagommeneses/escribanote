@@ -1,10 +1,10 @@
 // Content script (isolated world): recebe eventos dos coletores do main world,
 // aplica consentimento/pausa, agrupa em lotes e envia ao service worker.
 // No Meet também liga as legendas, pode ocultá-las e tem um plano B por DOM.
-// Expõe window.__reuniloBus para o widget (mesmo isolated world).
+// Expõe window.__escribanoteBus para o widget (mesmo isolated world).
 (() => {
   "use strict";
-  if (window.__reuniloBus) return;
+  if (window.__escribanoteBus) return;
 
   const host = location.host;
   const platform = host === "meet.google.com" ? "meet" : /zoom\.us$/.test(host) ? "zoom" : "teams";
@@ -13,7 +13,7 @@
   if (!isTop && platform !== "zoom") return;
 
   const bus = new EventTarget();
-  window.__reuniloBus = bus;
+  window.__escribanoteBus = bus;
   const state = {
     platform,
     consent: null, // null = ainda não decidido, true/false
@@ -122,7 +122,7 @@
 
   let lastCaptionAt = 0;
   let lastProtocolCaption = 0;
-  document.addEventListener("reunilo:evt", (e) => {
+  document.addEventListener("escribanote:evt", (e) => {
     let ev;
     try {
       ev = JSON.parse(e.detail);
@@ -162,7 +162,7 @@
     const want = state.settings.hideCaptions && state.settings.widget && state.consent !== false;
     if (want && !hideStyle) {
       hideStyle = document.createElement("style");
-      hideStyle.id = "reunilo-hide-captions";
+      hideStyle.id = "escribanote-hide-captions";
       hideStyle.textContent = `${CAPTION_REGION} { opacity: 0 !important; pointer-events: none !important;
         position: fixed !important; left: -10000px !important; top: 0 !important; }`;
       (document.head || document.documentElement).append(hideStyle);
@@ -230,7 +230,7 @@
   }
 
   setInterval(() => {
-    document.dispatchEvent(new CustomEvent("reunilo:ping"));
+    document.dispatchEvent(new CustomEvent("escribanote:ping"));
     tryEnableCaptions();
     // Só usa o DOM se o protocolo nunca entregou legendas nesta página (evita duplicatas).
     if (state.consent !== false && state.settings.domFallback && lastProtocolCaption === 0) scrapeDom();

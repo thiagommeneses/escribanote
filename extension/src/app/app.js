@@ -297,7 +297,7 @@ async function renderRecent() {
   const index = await send({ type: "list" });
   $("recent").innerHTML = index.length
     ? `<div class="day">Reuniões recentes</div>` + index.slice(0, 4).map(cardHtml).join("")
-    : `<p class="restore-hint">Reinstalou o Reunilo ou trocou de computador?
+    : `<p class="restore-hint">Reinstalou o Escribanote ou trocou de computador?
         <button type="button" class="linkish" data-bk-restore>Restaurar de uma pasta de backup</button></p>`;
 }
 
@@ -609,8 +609,8 @@ async function renderAI() {
   $("ai-hint").textContent = apiKey
     ? `Modelo: ${model ? model.label : state.settings.aiModel}. A transcrição só é enviada quando você pede.`
     : pro
-      ? `IA da conta Reunilo Pro: ${account.balance ?? 0} créditos. Ata, revisão e pergunta custam 1 crédito cada.`
-      : "Para usar a IA, cadastre sua chave da API do Claude em Ajustes ou conecte a sua conta Reunilo Pro.";
+      ? `IA da conta Escribanote Pro: ${account.balance ?? 0} créditos. Ata, revisão e pergunta custam 1 crédito cada.`
+      : "Para usar a IA, cadastre sua chave da API do Claude em Ajustes ou conecte a sua conta Escribanote Pro.";
 
   // Revisão
   if (state.busy !== "review") {
@@ -930,9 +930,9 @@ $("list-search").addEventListener("input", (e) => {
 
 $("backup").addEventListener("click", async () => {
   const all = await send({ type: "export-all" });
-  const url = URL.createObjectURL(new Blob([JSON.stringify({ app: "reunilo", version: 2, exportedAt: Date.now(), sessions: all }, null, 2)], { type: "application/json" }));
+  const url = URL.createObjectURL(new Blob([JSON.stringify({ app: "escribanote", version: 2, exportedAt: Date.now(), sessions: all }, null, 2)], { type: "application/json" }));
   const d = new Date();
-  const a = Object.assign(document.createElement("a"), { href: url, download: `reunilo-backup-${d.toISOString().slice(0, 10)}.json` });
+  const a = Object.assign(document.createElement("a"), { href: url, download: `escribanote-backup-${d.toISOString().slice(0, 10)}.json` });
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
   toast(`${all.length} reuniões exportadas`);
@@ -969,7 +969,7 @@ $("mic-perm").addEventListener("click", async () => {
   try {
     const st = await navigator.mediaDevices.getUserMedia({ audio: true });
     st.getTracks().forEach((t) => t.stop());
-    toast("Microfone liberado para o Reunilo");
+    toast("Microfone liberado para o Escribanote");
   } catch {
     // O painel lateral não mostra o pedido de permissão: abre numa aba.
     chrome.tabs.create({ url: chrome.runtime.getURL("src/app/app.html?perm=mic") });
@@ -987,7 +987,7 @@ $("hq-test").addEventListener("click", async () => {
     $("hq-test-out").textContent = r.ok
       ? `Funcionando: ${where}, ${r.ms} ms para 3,6 s de fala. Ouviu: "${r.text}"`
       : `Não transcreveu direito (${where}). Ouviu: "${r.text || "nada"}"`;
-    if (r.fallback) $("hq-test-out").textContent += ` · A placa de vídeo falhou e o Reunilo passou para o processador.`;
+    if (r.fallback) $("hq-test-out").textContent += ` · A placa de vídeo falhou e o Escribanote passou para o processador.`;
   } catch (err) {
     $("hq-test-out").textContent = "Falhou: " + err.message;
   } finally {
@@ -1014,7 +1014,7 @@ async function renderSettings() {
   $("grant-shots").hidden = shots;
   $("shots-status").textContent = shots ? "Capturas pelo widget autorizadas." : "";
   const cmds = await chrome.commands.getAll();
-  const NAMES = { "highlight-last": "Destacar o último bloco", screenshot: "Capturar a tela", "toggle-pause": "Pausar/retomar", _execute_action: "Abrir o Reunilo" };
+  const NAMES = { "highlight-last": "Destacar o último bloco", screenshot: "Capturar a tela", "toggle-pause": "Pausar/retomar", _execute_action: "Abrir o Escribanote" };
   $("kbd-list").innerHTML = cmds
     .map((c) => `<li>${esc(NAMES[c.name] || c.description || c.name)}: ${c.shortcut ? c.shortcut.split("+").map((k) => `<kbd>${esc(k)}</kbd>`).join("+") : '<span class="muted">sem atalho</span>'}</li>`)
     .join("");
@@ -1080,7 +1080,7 @@ $("tag-editor").addEventListener("click", (e) => {
 $("tag-add").addEventListener("click", () => saveTags([...tags(), { id: "t" + Date.now().toString(36), label: "Nova tag", emoji: "🏷", color: "#64748b" }]));
 $("tag-reset").addEventListener("click", () => saveTags(DEFAULT_TAGS));
 
-// ---------------- Conta Reunilo Pro ----------------
+// ---------------- Conta Escribanote Pro ----------------
 async function renderAccount() {
   const r = await send({ type: "account-state" }).catch(() => null);
   const a = r?.account;
@@ -1117,7 +1117,7 @@ async function renderAccount() {
 
 async function openAccountWeb(path) {
   const r = await send({ type: "account-state" }).catch(() => null);
-  const base = r?.account?.web || "https://reunilo.meneseslabs.com.br/app/";
+  const base = r?.account?.web || "https://escribanote.meneseslabs.com.br/app/";
   chrome.tabs.create({ url: base + path });
 }
 
@@ -1193,10 +1193,10 @@ async function restoreFrom(dir) {
 async function pickBackupFolder() {
   let picked;
   try {
-    picked = await window.showDirectoryPicker({ id: "reunilo-backup", mode: "readwrite", startIn: "documents" });
+    picked = await window.showDirectoryPicker({ id: "escribanote-backup", mode: "readwrite", startIn: "documents" });
   } catch (err) {
     if (err.name === "AbortError") return;
-    // O painel lateral pode não abrir o seletor de pastas: abre o Reunilo numa aba.
+    // O painel lateral pode não abrir o seletor de pastas: abre o Escribanote numa aba.
     if (!IS_TAB) return chrome.tabs.create({ url: chrome.runtime.getURL("src/app/app.html?view=settings") });
     return toast("Não foi possível abrir a pasta: " + err.message);
   }
@@ -1302,7 +1302,7 @@ if (params.get("perm") === "mic") {
     .getUserMedia({ audio: true })
     .then((st) => {
       st.getTracks().forEach((t) => t.stop());
-      document.body.innerHTML = '<div class="empty"><h2>Microfone liberado ✓</h2><p>Pode fechar esta aba. O Reunilo vai incluir a sua voz no modo de alta precisão.</p></div>';
+      document.body.innerHTML = '<div class="empty"><h2>Microfone liberado ✓</h2><p>Pode fechar esta aba. O Escribanote vai incluir a sua voz no modo de alta precisão.</p></div>';
     })
     .catch(() => {
       document.body.innerHTML = '<div class="empty"><h2>Permissão negada</h2><p>Libere o microfone para esta extensão nas configurações do site (ícone ao lado do endereço) e recarregue.</p></div>';

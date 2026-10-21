@@ -20,7 +20,7 @@ const check = (ok, label) => {
 
 const srv = await startDevServer({ port: PORT });
 const DBG = 9300 + Math.floor(Math.random() * 100);
-const chrome = spawn(CHROME, ["--headless=new", "--no-sandbox", "--no-first-run", `--user-data-dir=${mkdtempSync(join(tmpdir(), "reunilo-web-"))}`,
+const chrome = spawn(CHROME, ["--headless=new", "--no-sandbox", "--no-first-run", `--user-data-dir=${mkdtempSync(join(tmpdir(), "escribanote-web-"))}`,
   `--remote-debugging-port=${DBG}`, "--window-size=1440,900", "about:blank"], { stdio: "ignore" });
 
 let ws;
@@ -89,7 +89,7 @@ try {
   const mail = await (await fetch(`${srv.url}/__test/mail`)).json();
   const link = mail.text.match(/https?:\/\/\S+#\/entrar\/[\w-]+/)[0];
   check(link.startsWith(srv.url + "/app/#/entrar/"), "e-mail com o link de acesso");
-  check(/<title>Seu link de acesso ao Reunilo<\/title>/.test(mail.html), "e-mail em HTML completo (com título)");
+  check(/<title>Seu link de acesso ao Escribanote<\/title>/.test(mail.html), "e-mail em HTML completo (com título)");
   // O link abre noutra aba (sessionStorage vazio): o plano escolhido tem que sobreviver.
   await evalIn(p, `sessionStorage.clear(); location.href = ${JSON.stringify(link)}; true`);
 
@@ -117,7 +117,7 @@ try {
   // 3) Vira Pro e ganha reuniões (como se a extensão tivesse sincronizado)
   await fetch(`${srv.url}/__test/pro`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "ana@exemplo.com" }) });
   const put = (doc) =>
-    evalIn(p, `fetch("/api/v1/meetings/${doc.id}", { method: "PUT", headers: { "content-type": "application/json", "x-reunilo": "1" }, body: JSON.stringify({ doc: ${JSON.stringify(doc)} }) }).then((r) => r.status)`);
+    evalIn(p, `fetch("/api/v1/meetings/${doc.id}", { method: "PUT", headers: { "content-type": "application/json", "x-escribanote": "1" }, body: JSON.stringify({ doc: ${JSON.stringify(doc)} }) }).then((r) => r.status)`);
   check((await put(sampleMeeting("mt-1"))) === 200, "reunião enviada à conta");
   await put(sampleMeeting("mt-2", { title: "Daily do time de produto", platform: "slack", startedAt: Date.UTC(2026, 9, 19, 13), speakers: { a: "Carla", b: "Diego" } }));
   await evalIn(p, `location.reload(); true`);
@@ -205,7 +205,7 @@ try {
   check(await evalIn(p, `document.querySelector(".nav-pro").getAttribute("href") === "pro/" && !!document.querySelector('.nav-login[href="app/"]')`), "home: menu com Pro e Entrar");
   check(await evalIn(p, `!document.body.textContent.includes("porque eles não existem")`), "home: sem a frase antiga sobre servidores");
   // Sai da conta: quem chega do site ainda não está logado.
-  await evalIn(p, `fetch("/api/v1/auth/logout", { method: "POST", headers: { "x-reunilo": "1" } }).then((r) => r.status)`);
+  await evalIn(p, `fetch("/api/v1/auth/logout", { method: "POST", headers: { "x-escribanote": "1" } }).then((r) => r.status)`);
   await send("Page.navigate", { url: `${srv.url}/pro/` }, p);
   await waitFor(p, `document.readyState === "complete" && !!document.querySelector(".seg .thumb[style]")`, "página do Pro");
   const priceTxt = () => evalIn(p, `[document.getElementById("p-now").textContent, document.getElementById("p-pay").textContent, document.getElementById("p-cta").getAttribute("href")].join(" | ")`);
@@ -222,7 +222,7 @@ try {
   check(t.includes("US$ 30") && t.includes("plano=anual&moeda=usd"), "Pro: setas do teclado trocam para o anual");
   await evalIn(p, `document.getElementById("p-cta").click(); true`);
   await waitFor(p, `location.pathname === "/app/" && !!document.getElementById("login-form")`, "do botão Assinar para o login do app");
-  check((await evalIn(p, `localStorage.getItem("reunilo:plano")`)) === JSON.stringify({ interval: "year", currency: "usd" }), "app guarda o plano escolhido no site para depois do login");
+  check((await evalIn(p, `localStorage.getItem("escribanote:plano")`)) === JSON.stringify({ interval: "year", currency: "usd" }), "app guarda o plano escolhido no site para depois do login");
 
   check(consoleErrors.length === 0, `sem erros no console${consoleErrors.length ? ": " + consoleErrors.join(" | ") : ""}`);
 } catch (err) {

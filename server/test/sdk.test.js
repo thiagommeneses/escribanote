@@ -99,7 +99,7 @@ test("SDK da Stripe: Checkout anual com Pix Automático codificado como a API es
   assert.equal(form.get("payment_method_options[pix][mandate_options][amount]"), "18000");
   assert.equal(form.get("payment_method_options[pix][mandate_options][amount_type]"), "maximum");
   assert.equal(form.get("payment_method_options[pix][mandate_options][payment_schedule]"), "yearly");
-  assert.equal(form.get("payment_method_options[pix][mandate_options][reference]"), "Reunilo Pro anual");
+  assert.equal(form.get("payment_method_options[pix][mandate_options][reference]"), "Escribanote Pro anual");
   assert.equal(form.get("line_items[0][price]"), "price_brl_year");
   assert.match(call.headers["stripe-version"] || "", /^\d{4}-\d{2}-\d{2}/);
 });

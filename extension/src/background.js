@@ -125,7 +125,7 @@ async function saveDirty() {
 // ---------------- Backup na pasta do computador ----------------
 // Grava em lotes (a reunião ao vivo muda a cada segundo). Sem permissão para a pasta (o Chrome
 // pede de novo depois de reiniciar, a menos que o usuário escolha "permitir sempre"), os ids ficam
-// pendentes em chrome.storage.local "backup" e a página do Reunilo oferece retomar.
+// pendentes em chrome.storage.local "backup" e a página do Escribanote oferece retomar.
 function queueBackup(ids, { now = false } = {}) {
   for (const id of ids) backupQueue.add(id);
   clearTimeout(backupTimer);
@@ -273,7 +273,7 @@ async function aiReady() {
   return apiKey;
 }
 
-// A IA usa a chave própria quando há uma; senão, os créditos da conta Reunilo Pro.
+// A IA usa a chave própria quando há uma; senão, os créditos da conta Escribanote Pro.
 async function aiProvider() {
   const apiKey = await aiReady();
   if (apiKey) return { kind: "key", apiKey };
@@ -281,7 +281,7 @@ async function aiProvider() {
   if (acct && acct.plan === "pro" && !acct.invalid) return { kind: "account" };
   return null;
 }
-const NO_AI = "Para usar a IA, cadastre sua chave de API em Ajustes ou conecte a sua conta Reunilo Pro.";
+const NO_AI = "Para usar a IA, cadastre sua chave de API em Ajustes ou conecte a sua conta Escribanote Pro.";
 
 // Documento enviado à IA da conta (sem capturas de tela).
 const forAccount = (s) => ({ ...s, shots: [] });
@@ -404,7 +404,7 @@ async function startHq(tabId) {
   try {
     streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
   } catch (err) {
-    throw new Error("O Chrome só libera o áudio depois que você clica no ícone do Reunilo na aba da reunião. Clique no ícone e tente de novo.");
+    throw new Error("O Chrome só libera o áudio depois que você clica no ícone do Escribanote na aba da reunião. Clique no ícone e tente de novo.");
   }
   await ensureOffscreen();
   broadcastHq(tabId, { state: "starting" });
@@ -594,7 +594,7 @@ async function handle(msg, sender) {
       return true;
     case "hq-start": {
       const tabId = msg.tabId ?? (s && sessionTab.get(s.id)) ?? senderTab;
-      if (tabId == null) throw new Error("Abra o Reunilo na aba da reunião.");
+      if (tabId == null) throw new Error("Abra o Escribanote na aba da reunião.");
       return startHq(tabId);
     }
     case "hq-stop":
@@ -733,7 +733,7 @@ async function handle(msg, sender) {
   }
 }
 
-// ---------------- Conta Reunilo Pro: sincronização ----------------
+// ---------------- Conta Escribanote Pro: sincronização ----------------
 // A extensão continua sendo a fonte durante a reunião; a conta recebe cópias com controle de versão.
 const SYNC_LIVE_MS = 120_000;
 const SYNC_IDLE_MS = 5_000;
@@ -922,8 +922,8 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
 async function handleExternal(msg, sender) {
   const allowed = new URL(await accountBase()).origin;
   if (!sender.origin || sender.origin !== allowed) return { ok: false, reason: "origem não autorizada" };
-  if (msg?.type === "reunilo-ping") return { ok: true, version: chrome.runtime.getManifest().version };
-  if (msg?.type !== "reunilo-connect") return { ok: false, reason: "mensagem desconhecida" };
+  if (msg?.type === "escribanote-ping") return { ok: true, version: chrome.runtime.getManifest().version };
+  if (msg?.type !== "escribanote-connect") return { ok: false, reason: "mensagem desconhecida" };
   if (typeof msg.token !== "string" || msg.token.length < 20) return { ok: false, reason: "token inválido" };
   await setAccount({ token: msg.token, email: String(msg.email || ""), deviceId: String(msg.deviceId || ""), connectedAt: Date.now(), invalid: false });
   const meta = await getSyncMeta();

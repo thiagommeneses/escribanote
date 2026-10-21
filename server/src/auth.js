@@ -69,7 +69,7 @@ export function registerAuth(app, { db, config, mailer, limiter, stripe }) {
     // Escrita pelo cookie exige o cabeçalho próprio do app e a origem certa (proteção contra CSRF).
     if (!bearer && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
       const origin = req.headers.origin;
-      if (req.headers["x-reunilo"] !== "1" || (origin && origin !== config.origin)) fail(403, "csrf", "Requisição recusada.");
+      if (req.headers["x-escribanote"] !== "1" || (origin && origin !== config.origin)) fail(403, "csrf", "Requisição recusada.");
     }
     if (bearer && s.kind !== "device") fail(401, "unauthenticated", "Token inválido.");
     if (Date.now() - new Date(s.last_used_at).getTime() > 5 * 60_000) {
@@ -80,7 +80,7 @@ export function registerAuth(app, { db, config, mailer, limiter, stripe }) {
   });
   const auth = { preHandler: app.authenticate };
   const webOnly = (req) => {
-    if (req.session.kind !== "web") fail(403, "web_only", "Faça isso pelo app do Reunilo no navegador.");
+    if (req.session.kind !== "web") fail(403, "web_only", "Faça isso pelo app do Escribanote no navegador.");
   };
 
   app.post("/api/v1/auth/email", async (req, reply) => {
@@ -131,7 +131,7 @@ export function registerAuth(app, { db, config, mailer, limiter, stripe }) {
   // Extensão: o app (logado) cria um token e o entrega à extensão pelo externally_connectable.
   app.post("/api/v1/devices", auth, async (req) => {
     webOnly(req);
-    const name = String(req.body?.name || "Extensão Reunilo").slice(0, 120);
+    const name = String(req.body?.name || "Extensão Escribanote").slice(0, 120);
     const s = await createSession(db, req.user.id, "device", name, null);
     await audit(db, req.user.id, "device_add", { name }, clientIp(req));
     return { id: s.id, token: s.token, name };

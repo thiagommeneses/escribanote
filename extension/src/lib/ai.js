@@ -49,7 +49,7 @@ export function chatRequest(session, history, { tags, previous, glossary } = {})
     ? `\n\n<reuniao_anterior titulo="${previous.title.replace(/"/g, "'")}" data="${dateLabel(previous.startedAt)}">\n${previous.summary?.text || toText(previous, { tags })}\n</reuniao_anterior>`
     : "";
   return {
-    system: `Você é o assistente de reuniões do Reunilo e responde em português do Brasil, de forma direta e curta (use listas quando ajudar).
+    system: `Você é o assistente de reuniões do Escribanote e responde em português do Brasil, de forma direta e curta (use listas quando ajudar).
 A reunião pode estar em andamento: responda com base no que foi dito até agora e diga quando algo ainda não foi discutido.
 ${GUARD}${glossary && glossary.trim() ? `\nGrafia correta de nomes e termos desta equipe: ${glossary.split(/[\n,;]+/).map((t) => t.trim()).filter(Boolean).join(", ")}.` : ""}
 

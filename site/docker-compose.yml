@@ -1,40 +1,40 @@
-# Reunilo em reunilo.meneseslabs.com.br, publicado pelo Caddy (stack /opt/caddy).
+# Escribanote em escribanote.meneseslabs.com.br, publicado pelo Caddy (stack /opt/caddy).
 # O endereço antigo, escriba.meneseslabs.com.br, redireciona para o novo (301).
 #   ./public   site estático e o app web (/app, com as bibliotecas da extensão em /app/lib)
 #   ./src      código da API (server/) e bibliotecas da extensão, para o build
 #   ./db       dados do Postgres          ./backups  dumps diários criptografados
 # Segredos só na VPS (fora do repositório): contato.env, pro.env, db.env, backup.env.
 services:
-  reunilo-site:
+  escribanote-site:
     image: caddy:2-alpine
-    container_name: reunilo-site
+    container_name: escribanote-site
     restart: unless-stopped
     command: caddy file-server --root /srv
     labels:
-      caddy_0: reunilo.meneseslabs.com.br
+      caddy_0: escribanote.meneseslabs.com.br
       caddy_0.reverse_proxy: "{{upstreams 80}}"
       caddy_0.encode: zstd gzip
       caddy_0.header.Strict-Transport-Security: "max-age=31536000"
       caddy_0.header.X-Content-Type-Options: nosniff
       caddy_0.header.Referrer-Policy: strict-origin-when-cross-origin
       caddy_1: escriba.meneseslabs.com.br
-      caddy_1.redir: "https://reunilo.meneseslabs.com.br{uri} permanent"
+      caddy_1.redir: "https://escribanote.meneseslabs.com.br{uri} permanent"
     networks:
       - caddy
     volumes:
       - ./public:/srv:ro
 
   # Formulário de contato (/api/contato). O destino e a senha do SMTP ficam em contato.env.
-  reunilo-contato:
+  escribanote-contato:
     image: python:3.12-alpine
-    container_name: reunilo-contato
+    container_name: escribanote-contato
     restart: unless-stopped
     command: python -u /app/server.py
     env_file:
       - path: ./contato.env
         required: false
     labels:
-      caddy: reunilo.meneseslabs.com.br
+      caddy: escribanote.meneseslabs.com.br
       caddy.reverse_proxy: "/api/contato* {{upstreams 8080}}"
     networks:
       - caddy
@@ -42,21 +42,21 @@ services:
       - ./contato:/app:ro
       - ./dados:/data
 
-  # API do Reunilo Pro (/api/v1 e os links públicos /s/).
-  reunilo-api:
+  # API do Escribanote Pro (/api/v1 e os links públicos /s/).
+  escribanote-api:
     build:
       context: ./src
       dockerfile: server/Dockerfile
-    image: reunilo-api:local
-    container_name: reunilo-api
+    image: escribanote-api:local
+    container_name: escribanote-api
     restart: unless-stopped
     env_file: ./pro.env
     depends_on:
-      reunilo-db:
+      escribanote-db:
         condition: service_healthy
     mem_limit: 384m
     labels:
-      caddy: reunilo.meneseslabs.com.br
+      caddy: escribanote.meneseslabs.com.br
       caddy.reverse_proxy_0: "/api/v1/* {{upstreams 8080}}"
       caddy.reverse_proxy_1: "/s/* {{upstreams 8080}}"
     networks:
@@ -64,17 +64,17 @@ services:
       - interna
 
   # Banco: só na rede interna, sem porta exposta.
-  reunilo-db:
+  escribanote-db:
     image: postgres:17-alpine
-    container_name: reunilo-db
+    container_name: escribanote-db
     restart: unless-stopped
     env_file: ./db.env
     environment:
-      POSTGRES_USER: reunilo
-      POSTGRES_DB: reunilo
+      POSTGRES_USER: escribanote
+      POSTGRES_DB: escribanote
     mem_limit: 512m
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U reunilo -d reunilo"]
+      test: ["CMD-SHELL", "pg_isready -U escribanote -d escribanote"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -84,13 +84,13 @@ services:
       - interna
 
   # Backup diário: pg_dump comprimido e criptografado (AES-256), guardado 14 dias em ./backups.
-  reunilo-backup:
+  escribanote-backup:
     image: postgres:17-alpine
-    container_name: reunilo-backup
+    container_name: escribanote-backup
     restart: unless-stopped
     env_file: ./backup.env
     depends_on:
-      reunilo-db:
+      escribanote-db:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command:
@@ -98,13 +98,13 @@ services:
         apk add --no-cache openssl >/dev/null
         sleep 600  # dá tempo para a API aplicar as migrações antes do primeiro dump
         while true; do
-          f=/backups/reunilo-$$(date +%Y%m%d-%H%M).sql.gz.enc
-          if pg_dump -h reunilo-db -U reunilo -d reunilo --no-owner | gzip | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_PASSPHRASE -out "$$f.tmp"; then
+          f=/backups/escribanote-$$(date +%Y%m%d-%H%M).sql.gz.enc
+          if pg_dump -h escribanote-db -U escribanote -d escribanote --no-owner | gzip | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_PASSPHRASE -out "$$f.tmp"; then
             mv "$$f.tmp" "$$f" && echo "backup ok: $$f"
           else
             rm -f "$$f.tmp"; echo "backup FALHOU"
           fi
-          find /backups -name 'reunilo-*.enc' -mtime +14 -delete
+          find /backups -name 'escribanote-*.enc' -mtime +14 -delete
           sleep 86400
         done
     mem_limit: 128m

@@ -1,4 +1,4 @@
-// Cliente da API do Reunilo (mesmo endereço do app: o cookie da sessão vai sozinho).
+// Cliente da API do Escribanote (mesmo endereço do app: o cookie da sessão vai sozinho).
 
 export class ApiError extends Error {
   constructor(status, body) {
@@ -15,11 +15,11 @@ async function call(method, path, body) {
     res = await fetch(`/api/v1${path}`, {
       method,
       credentials: "same-origin",
-      headers: { "x-reunilo": "1", ...(body !== undefined ? { "content-type": "application/json" } : {}) },
+      headers: { "x-escribanote": "1", ...(body !== undefined ? { "content-type": "application/json" } : {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError(0, { error: "offline", message: "Sem conexão com o Reunilo. Confira a internet e tente de novo." });
+    throw new ApiError(0, { error: "offline", message: "Sem conexão com o Escribanote. Confira a internet e tente de novo." });
   }
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, data);
@@ -38,7 +38,7 @@ export async function stream(path, body, { onStart, onDelta, signal } = {}) {
   const res = await fetch(`/api/v1${path}`, {
     method: "POST",
     credentials: "same-origin",
-    headers: { "x-reunilo": "1", "content-type": "application/json" },
+    headers: { "x-escribanote": "1", "content-type": "application/json" },
     body: JSON.stringify(body),
     signal,
   });

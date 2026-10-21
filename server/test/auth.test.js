@@ -17,7 +17,7 @@ test("login por link mágico: e-mail, uso único e conta grátis", async () => {
   assert.equal(r.statusCode, 202);
   const mail = ctx.mailer.sent.at(-1);
   assert.equal(mail.to, "ana@exemplo.com");
-  assert.match(mail.text, /https:\/\/reunilo\.test\/app\/#\/entrar\/[\w-]{40,}/);
+  assert.match(mail.text, /https:\/\/escribanote\.test\/app\/#\/entrar\/[\w-]{40,}/);
   const token = mail.text.match(/#\/entrar\/([\w-]+)/)[1];
 
   const v = await ctx.app.inject({ method: "POST", url: "/api/v1/auth/verify", payload: { token } });

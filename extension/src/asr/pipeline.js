@@ -25,7 +25,7 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
   async function addStream(stream, source) {
     const ctx = new AudioContext({ sampleRate: SR });
     await ctx.audioWorklet.addModule(chrome.runtime.getURL("src/offscreen/capture-worklet.js"));
-    const node = new AudioWorkletNode(ctx, "reunilo-capture");
+    const node = new AudioWorkletNode(ctx, "escribanote-capture");
     const mute = ctx.createGain();
     mute.gain.value = 0;
     ctx.createMediaStreamSource(stream).connect(node).connect(mute).connect(ctx.destination);
@@ -105,7 +105,7 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
       preset: HQ_MODELS[modelKey],
       language: WHISPER_LANG[(lang || "pt").slice(0, 2)] || "portuguese",
       onFallback: () =>
-        report({ device: "wasm", warning: "A placa de vídeo deste computador não transcreveu corretamente; o Reunilo passou a usar o processador (mais lento, mas funciona)." }),
+        report({ device: "wasm", warning: "A placa de vídeo deste computador não transcreveu corretamente; o Escribanote passou a usar o processador (mais lento, mas funciona)." }),
       onProgress: (p) => {
         files[p.file] = p;
         const list = Object.values(files);
