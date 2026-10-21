@@ -1,5 +1,5 @@
 # Escribanote em escribanote.meneseslabs.com.br, publicado pelo Caddy (stack /opt/caddy).
-# O endereço antigo, escriba.meneseslabs.com.br, redireciona para o novo (301).
+# Os endereços antigos (escriba. e reunilo.meneseslabs.com.br) redirecionam para o novo (301).
 #   ./public   site estático e o app web (/app, com as bibliotecas da extensão em /app/lib)
 #   ./src      código da API (server/) e bibliotecas da extensão, para o build
 #   ./db       dados do Postgres          ./backups  dumps diários criptografados
@@ -17,7 +17,7 @@ services:
       caddy_0.header.Strict-Transport-Security: "max-age=31536000"
       caddy_0.header.X-Content-Type-Options: nosniff
       caddy_0.header.Referrer-Policy: strict-origin-when-cross-origin
-      caddy_1: escriba.meneseslabs.com.br
+      caddy_1: escriba.meneseslabs.com.br reunilo.meneseslabs.com.br
       caddy_1.redir: "https://escribanote.meneseslabs.com.br{uri} permanent"
     networks:
       - caddy
