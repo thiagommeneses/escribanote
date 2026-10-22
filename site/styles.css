@@ -431,6 +431,7 @@ thead th.us { color: var(--rec-deep); }
   background: radial-gradient(circle, oklch(58% 0.19 32 / 0.35), transparent 65%); pointer-events: none; animation: glow 9s ease-in-out infinite alternate; }
 @keyframes glow { to { transform: translate(-3rem, 4rem) scale(1.15); } }
 .way-fine { font-size: var(--step--1); color: var(--night-muted); }
+.way-price .badge-deal { display: inline-block; white-space: nowrap; margin-bottom: 0.6rem; margin-left: 0; font-size: 0.62rem; letter-spacing: 0.08em; }
 .btn-light { background: var(--paper); color: var(--ink); }
 .btn-light:hover { background: var(--marker); }
 
