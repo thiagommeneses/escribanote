@@ -37,6 +37,7 @@ export function normalize(s) {
   s.part ??= 1; // 1ª, 2ª… parte de uma reunião com o mesmo link no mesmo dia
   s.merged ||= {}; // falante mesclado em outro: idAntigo -> idDestino (as falas novas do antigo vão para o destino)
   s.turns ||= []; // quem estava falando (indicador da plataforma, ex.: Slack): {id, speakerId, start, end}
+  s.summaryHistory ||= []; // versões da ata, em ordem: {id, n, text, createdAt, source, label, model, templateId, parentId}
   s.ataTemplateId ??= null; // modelo de ata escolhido para esta reunião (null = padrão dos Ajustes)
   s.paused ??= false;
   s.endedAt ??= null;

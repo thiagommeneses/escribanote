@@ -313,3 +313,30 @@ select.sm { font-size: 12.5px; padding: 5px 8px; max-width: 190px; }
 .card.ata .card-head { flex-wrap: wrap; gap: 8px; }
 .card.ata .card-head > .row { margin-left: auto; }
 @media (max-width: 520px) { .card.ata .card-head b { flex: 1 1 100%; } .card.ata .card-head > .row { margin-left: 0; } }
+
+/* Versões da ata e comparador */
+.ata-editor textarea { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+.ata-editor .row { margin-top: 8px; } .ata-editor .row input { flex: 1; min-width: 160px; }
+.versions { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 10px; }
+.versions-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.versions-head label { display: inline-flex; align-items: center; gap: 4px; }
+.versions-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.ver { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); font-size: 12.5px; flex-wrap: wrap; }
+.ver.current { border-color: var(--accent); background: var(--bg-soft); }
+.ver .vn { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 28px; }
+.ver .vl { flex: 1; min-width: 120px; }
+.ver .vl small { color: var(--muted); display: block; }
+.ver .vs { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ver .vs b.plus { color: #15803d; } .ver .vs b.minus { color: #b91c1c; }
+.ver button { padding: 3px 8px; }
+.diff { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 13px; line-height: 1.5; }
+.drow { padding: 2px 10px; white-space: pre-wrap; word-break: break-word; }
+.drow.same { color: var(--text-2); }
+.drow.added { background: rgba(34,197,94,.10); } .drow.removed { background: rgba(239,68,68,.10); } .drow.changed { background: rgba(250,204,21,.08); }
+.drow ins { background: rgba(34,197,94,.28); text-decoration: none; border-radius: 3px; padding: 0 1px; }
+.drow del { background: rgba(239,68,68,.25); text-decoration: line-through; border-radius: 3px; padding: 0 1px; }
+.drow.side-grid, .diff .drow:has(.dcell) { display: grid; grid-template-columns: 1fr 1fr; gap: 0; padding: 0; }
+.dcell { padding: 2px 10px; border-right: 1px solid var(--border); white-space: pre-wrap; word-break: break-word; }
+.dcell:last-child { border-right: 0; }
+.dgap { text-align: center; color: var(--muted); background: var(--bg-soft); font-size: 12px; letter-spacing: .2em; }
+@media (prefers-color-scheme: dark) { .ver .vs b.plus { color: #4ade80; } .ver .vs b.minus { color: #f87171; } }

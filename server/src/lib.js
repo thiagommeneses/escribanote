@@ -3,3 +3,4 @@ export { normalize, effectiveEntries, participantNames, speakerName, toBlocks } 
 export { toText, mdToHtml, dateLabel, clock, PLATFORM } from "../../extension/src/lib/format.js";
 export { ataRequest, chatRequest, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, REVIEW_SCHEMA, QUICK_PROMPTS } from "../../extension/src/lib/ai.js";
 export { DEFAULT_TAGS } from "../../extension/src/lib/settings.js";
+export { commitSummary, diffDocument, diffStats } from "../../extension/src/lib/diff.js";

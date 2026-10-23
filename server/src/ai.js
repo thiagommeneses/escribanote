@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { refund, reserve } from "./credits.js";
 import { fail } from "./http.js";
-import { ataRequest, chatRequest, DEFAULT_TAGS, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
+import { ataRequest, chatRequest, commitSummary, DEFAULT_TAGS, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
 import { cleanDoc, loadDoc, requirePro, saveMeeting } from "./meetings.js";
 
 // US$ por milhão de tokens (entrada, saída, leitura de cache, escrita de cache de 5 min).
@@ -157,7 +157,8 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
       onDone: async (text) => {
         if (req.body?.meeting) return {};
         const cur = await loadDoc(db, sealer, req.user.id, doc.id);
-        cur.doc.summary = { text, model: config.models.strong, createdAt: Date.now() };
+        cur.doc.summary = { text, model: config.models.strong, createdAt: Date.now(), templateId: template ? "web" : null };
+        commitSummary(cur.doc, cur.doc.summary, { source: "ai", label: template ? "Gerada pela IA · com modelo" : "Gerada pela IA" });
         cur.doc.updatedAt = Date.now();
         const saved = await saveMeeting(db, sealer, req.user.id, cur.doc, cur.version);
         return { version: saved.version };

@@ -1,5 +1,6 @@
 // Service worker: mantém as sessões de reunião e as salva localmente
 // (chrome.storage.local). Só fala com a rede quando o usuário usa a IA.
+import { commitSummary } from "./lib/diff.js";
 import { mergeSpeakers,
   createSession, applyEvent, normalize, setBlockTags, toggleLastBlockTag, participantNames,
   addAsrSegment, effectiveEntries, toBlocks, speakerName,
@@ -303,6 +304,7 @@ async function maybeAutoAta(s) {
   if (!ai) return;
   try {
     s.summary = await runAta(ai, s, settings);
+    await commitAta(s, settings);
     await changed(s, { now: true });
     postAtaToSlack(s).catch(() => {});
   } catch {
@@ -388,6 +390,15 @@ async function importTemplate(ai, { pdfBase64, text }) {
   }
   const r = await accountCall(() => accountFetch("/ai/template", { method: "POST", body: pdfBase64 ? { pdfBase64 } : { text } }));
   return (r.text || "").trim();
+}
+
+// Cada ata gerada vira uma versão no histórico, com o nome do modelo usado no rótulo.
+async function commitAta(s, settings) {
+  if (!s.summary?.text) return;
+  const id = s.ataTemplateId !== undefined && s.ataTemplateId !== null ? s.ataTemplateId : settings.ataTemplate;
+  const tpl = id && id !== "none" ? (await loadTemplates()).find((x) => x.id === id) : null;
+  s.summary.templateId = tpl ? tpl.id : null;
+  commitSummary(s, s.summary, { source: "ai", label: tpl ? `Gerada pela IA · modelo ${tpl.name}` : "Gerada pela IA" });
 }
 
 async function runAta(ai, s, settings, { onDelta, signal } = {}) {
@@ -717,6 +728,25 @@ async function handle(msg, sender) {
     }
     case "is-pro":
       return isPro();
+    case "ata-save": {
+      // Edição manual da ata: vira a versão atual e entra no histórico.
+      if (!s) return null;
+      const text = String(msg.text || "").trim().slice(0, 200000);
+      if (!text) throw new Error("A ata está vazia.");
+      s.summary = { ...(s.summary || {}), text, createdAt: Date.now(), model: "manual", templateId: s.summary?.templateId ?? null };
+      commitSummary(s, s.summary, { source: "edit", label: msg.label ? `Editada à mão · ${String(msg.label).slice(0, 80)}` : "Editada à mão" });
+      await changed(s, { now: true });
+      return s;
+    }
+    case "ata-restore": {
+      if (!s) return null;
+      const v = (s.summaryHistory || []).find((x) => x.id === msg.versionId);
+      if (!v) throw new Error("Versão não encontrada.");
+      s.summary = { text: v.text, createdAt: Date.now(), model: v.model, templateId: v.templateId ?? null };
+      commitSummary(s, s.summary, { source: "restore", label: `Restaurada da v${v.n}`, parentId: v.id });
+      await changed(s, { now: true });
+      return s;
+    }
     case "ata-templates":
       return loadTemplates();
     case "ata-template-save":
@@ -1146,6 +1176,7 @@ chrome.runtime.onConnect.addListener((port) => {
 
       if (req.action === "ata") {
         s.summary = await runAta(ai, s, settings, { onDelta, signal: abort.signal });
+        await commitAta(s, settings);
         await changed(s, { now: true });
         post({ type: "done", text: s.summary.text });
         return;

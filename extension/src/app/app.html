@@ -117,8 +117,25 @@
                       <button data-ata="md"><span>⬇</span>Markdown (.md)</button>
                       <button data-ata="pdf"><span>🖨️</span>PDF<small>só a ata</small></button>
                     </div></div>
-                  <button class="btn sm ghost" id="ata-copy" hidden>Copiar</button><button class="btn sm primary" id="ata-gen">Gerar ata</button></div></div>
+                  <button class="btn sm ghost" id="ata-copy" hidden>Copiar</button><button class="btn sm ghost" id="ata-edit" hidden>Editar</button><button class="btn sm ghost" id="ata-versions-btn" hidden>Versões</button><button class="btn sm primary" id="ata-gen">Gerar ata</button></div></div>
               <div class="md" id="ata-body"></div>
+              <div id="ata-editor" class="ata-editor" hidden>
+                <textarea id="ata-editor-text" rows="18" spellcheck="true"></textarea>
+                <div class="row"><input id="ata-editor-label" maxlength="80" placeholder="O que mudou? (opcional, vira o rótulo da versão)"><button class="btn sm primary" id="ata-editor-save">Salvar como nova versão</button><button class="btn sm ghost" id="ata-editor-cancel">Cancelar</button></div>
+              </div>
+              <div id="ata-versions" class="versions" hidden>
+                <div class="versions-head">
+                  <b>Histórico da ata</b>
+                  <div class="row">
+                    <label class="tiny muted">Comparar <select class="sm" id="cmp-a"></select> com <select class="sm" id="cmp-b"></select></label>
+                    <label class="tiny muted"><input type="checkbox" id="cmp-side"> lado a lado</label>
+                    <label class="tiny muted"><input type="checkbox" id="cmp-only" checked> só mudanças</label>
+                  </div>
+                </div>
+                <div class="versions-list" id="versions-list"></div>
+                <div class="diff-stats muted tiny" id="diff-stats"></div>
+                <div class="diff" id="diff-view"></div>
+              </div>
             </div>
             <div class="card chat">
               <div class="card-head"><b>Pergunte à IA</b>
