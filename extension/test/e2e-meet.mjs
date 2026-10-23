@@ -110,6 +110,19 @@ async function widgetCall(sid, selector, fn = "function(){ return this.innerText
   return r.result.value;
 }
 const click = (sid, sel) => widgetCall(sid, sel, "function(){ this.click(); return true }");
+// Entrada "de verdade" pelo CDP (mousedown/mouseup/click e teclas), para pegar bugs de ordem de eventos.
+async function mouseClick(sid, x, y) {
+  for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 }, sid);
+}
+async function typeText(sid, text) {
+  await send("Input.insertText", { text }, sid);
+}
+async function pressKey(sid, key) {
+  const vk = { Enter: 13, Escape: 27 }[key];
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key, code: key, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }, sid);
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key, code: key, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }, sid);
+}
+const rectOf = (sid, sel) => widgetCall(sid, sel, "function(){ const r = this.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } }");
 
 const MEET_HTML = (title) => `<!doctype html><html><head><title>Meet - ${title}</title></head><body style="background:#202124;margin:0;height:100vh">
 <div style="color:#fff;font:20px sans-serif;padding:40px">Reunião simulada</div>
@@ -217,8 +230,12 @@ try {
   void body;
 
   // Renomear falante no widget, ao vivo: clique no nome → campo inline → Enter
-  await widgetCall(meet, `.blk .who b[data-speaker="${BRUNO}"]`, "function(){ this.click(); return true }");
-  await widgetCall(meet, ".rn input", "function(v){ this.value = v; this.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true }", "Bruno Teste");
+  const nameAt = await rectOf(meet, `.blk .who b[data-speaker="${BRUNO}"]`);
+  await mouseClick(meet, nameAt.x, nameAt.y);
+  await waitFor(() => widgetCall(meet, ".rn input", "function(){ return true }"), "campo inline no widget");
+  await widgetCall(meet, ".rn input", "function(){ this.select(); return true }");
+  await typeText(meet, "Bruno Teste");
+  await pressKey(meet, "Enter");
   await waitFor(async () => (await sw({ type: "get", id })).speakers[BRUNO] === "Bruno Teste", "nome alterado pelo widget");
   await waitFor(async () => /Bruno Teste/.test(await widgetCall(meet, "#body")), "widget redesenhado com o novo nome");
   step("nome do falante alterado ao vivo pelo widget");
@@ -249,8 +266,13 @@ try {
   await send("Page.navigate", { url: `chrome-extension://${extId}/src/app/app.html?id=${id}` }, app);
   await sleep(1200);
   // Renomear no app (editor flutuante, sem prompt): volta "Bruno Teste" para "Bruno Lima"
-  await evaluate(app, `document.querySelector('#timeline .who b[data-speaker="${BRUNO}"]').click()`);
-  await evaluate(app, `(() => { const i = document.querySelector('.pop input'); i.value = "Bruno Lima"; document.querySelector('.pop [data-ok]').click(); return true })()`);
+  const whoAt = await evaluate(app, `(() => { const r = document.querySelector('#timeline .who b[data-speaker="${BRUNO}"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()`);
+  await mouseClick(app, whoAt.x, whoAt.y);
+  await waitFor(() => evaluate(app, "!!document.querySelector('.ask input')"), "editor flutuante no app");
+  assert.equal(await evaluate(app, "document.activeElement === document.querySelector('.ask input')"), true, "campo do editor com foco");
+  await typeText(app, "Bruno Lima");
+  const okAt = await evaluate(app, `(() => { const r = document.querySelector('.ask [data-ok]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()`);
+  await mouseClick(app, okAt.x, okAt.y);
   await waitFor(async () => (await sw({ type: "get", id })).speakers[BRUNO] === "Bruno Lima", "nome alterado pelo app");
   await sleep(300);
   step("nome do falante alterado pelo editor do app");

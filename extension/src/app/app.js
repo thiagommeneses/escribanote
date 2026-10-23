@@ -392,11 +392,11 @@ function askInline(anchor, { label, value = "", placeholder = "", suggestions = 
   closeInline();
   return new Promise((resolve) => {
     const pop = document.createElement("div");
-    pop.className = "pop";
+    pop.className = "ask";
     pop.innerHTML = `<label class="field-label">${esc(label)}</label>
       <input maxlength="120" list="pop-list" placeholder="${esc(placeholder)}">
       <datalist id="pop-list">${suggestions.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
-      <div class="pop-acts"><button class="btn sm" data-cancel>Cancelar</button><button class="btn sm primary" data-ok>Salvar</button></div>`;
+      <div class="ask-acts"><button class="btn sm" data-cancel>Cancelar</button><button class="btn sm primary" data-ok>Salvar</button></div>`;
     document.body.appendChild(pop);
     const input = pop.querySelector("input");
     input.value = value;
@@ -457,10 +457,27 @@ $("speakers").addEventListener("click", (e) => {
   const chip = e.target.closest(".spk");
   if (!chip) return;
   const id = chip.dataset.id;
-  if (e.target.closest("[data-rename]")) return renameSpeaker(id, chip);
+  if (e.target.closest("[data-rename]")) return; // tratado no pointerdown
   state.hidden.has(id) ? state.hidden.delete(id) : state.hidden.add(id);
   renderTranscript();
 });
+// Renomear no pointerdown: com a reunião ao vivo, a transcrição é redesenhada a cada fala e um clique
+// completo (mousedown → mouseup no mesmo elemento) pode se perder no redesenho.
+for (const el of [$("timeline"), $("speakers")]) {
+  el.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    const who = e.target.closest("[data-speaker]");
+    if (who) {
+      e.preventDefault();
+      return renameSpeaker(who.dataset.speaker, who);
+    }
+    const pencil = e.target.closest("[data-rename]");
+    if (pencil) {
+      e.preventDefault();
+      return renameSpeaker(pencil.closest(".spk").dataset.id, pencil.closest(".spk"));
+    }
+  });
+}
 $("speakers").addEventListener("dblclick", (e) => {
   const chip = e.target.closest(".spk");
   if (chip) renameSpeaker(chip.dataset.id, chip);
@@ -557,8 +574,7 @@ $("timeline").addEventListener("click", async (e) => {
   }
   const blk = e.target.closest(".blk");
   if (!blk) return;
-  const who = e.target.closest("[data-speaker]");
-  if (who) return renameSpeaker(who.dataset.speaker, who);
+  if (e.target.closest("[data-speaker]")) return; // tratado no pointerdown
   const ids = JSON.parse(blk.dataset.ids);
   const tagBtn = e.target.closest("[data-tag]");
   if (tagBtn) {

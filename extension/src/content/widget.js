@@ -381,27 +381,12 @@
   });
 
   // ---------- Ações ----------
-  $("body").addEventListener("click", async (e) => {
-    if (e.target.closest("[data-hq]")) {
-      const r = await send({ type: "hq-start" }).catch((err) => ({ error: err.message }));
-      state.hqHint = r && r.error ? r.error.replace(/^O Chrome só libera o áudio depois que você clica no ícone do Escribanote na aba da reunião\. Clique no ícone e tente de novo\.$/, "Toque no ícone do Escribanote na barra do Chrome (ou Alt+Shift+E) para liberar o áudio desta aba, e toque de novo em Transcrever.") : "";
-      refresh();
-      render();
-      return;
-    }
-    if (e.target.closest("[data-resume]")) {
-      bus.resumeSession();
-      refresh();
-      return;
-    }
-    const c = e.target.closest("[data-consent]");
-    if (c) {
-      const v = c.dataset.consent;
-      await bus.decide(v !== "no", v === "always");
-      return;
-    }
+  // Renomear falante: no pointerdown, porque a transcrição ao vivo redesenha o corpo a cada fala e
+  // um clique completo (mousedown → mouseup no mesmo elemento) muitas vezes se perde no redesenho.
+  $("body").addEventListener("pointerdown", (e) => {
     const who = e.target.closest("[data-speaker]");
     if (who && session && !renaming) {
+      e.preventDefault();
       // Edição inline do nome do falante, direto no bloco (vale ao vivo).
       const speakerId = who.dataset.speaker;
       const current = who.textContent;
@@ -432,6 +417,26 @@
       input.addEventListener("blur", () => setTimeout(() => finish(true), 150));
       input.focus();
       input.select();
+    }
+  });
+
+  $("body").addEventListener("click", async (e) => {
+    if (e.target.closest("[data-hq]")) {
+      const r = await send({ type: "hq-start" }).catch((err) => ({ error: err.message }));
+      state.hqHint = r && r.error ? r.error.replace(/^O Chrome só libera o áudio depois que você clica no ícone do Escribanote na aba da reunião\. Clique no ícone e tente de novo\.$/, "Toque no ícone do Escribanote na barra do Chrome (ou Alt+Shift+E) para liberar o áudio desta aba, e toque de novo em Transcrever.") : "";
+      refresh();
+      render();
+      return;
+    }
+    if (e.target.closest("[data-resume]")) {
+      bus.resumeSession();
+      refresh();
+      return;
+    }
+    const c = e.target.closest("[data-consent]");
+    if (c) {
+      const v = c.dataset.consent;
+      await bus.decide(v !== "no", v === "always");
       return;
     }
     const tagBtn = e.target.closest("[data-tag]");

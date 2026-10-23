@@ -151,6 +151,21 @@ try {
   }, "título da web chega à extensão");
   check(!!pulled, "mudança feita na web aparece na extensão");
 
+  // 4b) Renomear falante no app web: clique real no nome do bloco → editor flutuante → Enter
+  await evalIn(web, `location.hash = "#/r/loc-1"; true`);
+  await waitFor(() => evalIn(web, `!!document.querySelector('.blk .who b[data-act="rename"][data-spk="b"]')`), "reunião aberta no app web");
+  const at = await evalIn(web, `(() => { const r = document.querySelector('.blk .who b[data-act="rename"][data-spk="b"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()`);
+  for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: at.x, y: at.y, button: "left", clickCount: 1 }, web);
+  await waitFor(() => evalIn(web, `document.activeElement === document.querySelector('.ask input')`), "editor flutuante com foco no app web");
+  await send("Input.insertText", { text: "Bruno Lima" }, web);
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 }, web);
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 }, web);
+  const renamed = await waitFor(async () => {
+    const r = await api("/meetings/loc-1");
+    return r.doc?.speakers?.b === "Bruno Lima" ? r : null;
+  }, "nome salvo na conta");
+  check(!!renamed && (await evalIn(web, `document.querySelector('#pane, main, body').innerText.includes("Bruno Lima")`)), "falante renomeado pelo editor do app web");
+
   // 5) Conflito: título muda na web e nota muda na extensão ao mesmo tempo -> as duas ficam
   const r2 = await api("/meetings/loc-2");
   r2.doc.title = "Retrospectiva (web)";
