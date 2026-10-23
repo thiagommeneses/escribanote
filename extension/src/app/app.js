@@ -198,7 +198,7 @@ async function openSession(id, pinned) {
 // Com "Alta precisão" ligada nos ajustes, liga sozinho quando o painel abre na aba da reunião.
 async function maybeAutoHq() {
   const s = state.session;
-  if (IS_TAB || !s || !isLive(s) || state.settings.hq === "off" || state.hq.state !== "idle") return;
+  if (IS_TAB || !s || !isLive(s) || (state.settings.hq === "off" && s.platform !== "slack") || state.hq.state !== "idle") return;
   if (state.tabId == null || state.hqAutoTried.has(state.tabId)) return;
   state.hqAutoTried.add(state.tabId);
   try {

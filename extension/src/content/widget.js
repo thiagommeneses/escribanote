@@ -283,6 +283,7 @@
     if (!state.settings.widget) return false;
     if (session) return true;
     if (state.platform === "meet") return !!(bus.inCall && bus.inCall()) || state.captionsSeen;
+    if (state.platform === "slack") return state.stage === "meeting" || !!(bus.inCall && bus.inCall());
     return state.captionsSeen;
   }
 
@@ -331,6 +332,13 @@
     } else if (state.consent === false) {
       body.innerHTML = `<div class="center"><h4>Transcrição desligada</h4><div>Nada desta reunião está sendo salvo.</div>
         <div class="row"><button class="btn primary" data-consent="once">Transcrever esta reunião</button></div></div>`;
+    } else if (state.platform === "slack" && (!session || !session.count)) {
+      const hq = (session && session.hq) || { state: "idle" };
+      const running = ["running", "loading", "starting"].includes(hq.state);
+      body.innerHTML = (session ? bannerHtml() : "") + `<div class="center"><h4>Huddle do Slack</h4>
+        <div>${running ? (hq.state === "running" ? "Ouvindo o huddle. A transcrição aparece aqui assim que alguém falar." : `Preparando o reconhecimento… ${hq.progress || 0}%`) : "O áudio deste huddle é transcrito aqui, no seu computador, e não sai dele."}</div>
+        ${running ? "" : '<div class="row"><button class="btn primary" data-hq="start">Transcrever este huddle</button></div>'}
+        <div class="muted" id="hq-hint" style="margin-top:8px;font-size:12px">${state.hqHint ? esc(state.hqHint) : ""}</div></div>`;
     } else if (!session || !session.count) {
       const hint = state.platform === "meet"
         ? "As legendas são ligadas automaticamente. Comece a falar para ver a transcrição aqui."
@@ -366,6 +374,13 @@
 
   // ---------- Ações ----------
   $("body").addEventListener("click", async (e) => {
+    if (e.target.closest("[data-hq]")) {
+      const r = await send({ type: "hq-start" }).catch((err) => ({ error: err.message }));
+      state.hqHint = r && r.error ? r.error.replace(/^O Chrome só libera o áudio depois que você clica no ícone do Escribanote na aba da reunião\. Clique no ícone e tente de novo\.$/, "Toque no ícone do Escribanote na barra do Chrome (ou Alt+Shift+E) para liberar o áudio desta aba, e toque de novo em Transcrever.") : "";
+      refresh();
+      render();
+      return;
+    }
     if (e.target.closest("[data-resume]")) {
       bus.resumeSession();
       refresh();

@@ -35,6 +35,7 @@ export function normalize(s) {
   s.uiLang ??= null; // idioma da interface do Meet (as legendas costumam seguir esse)
   s.voices ||= {}; // voz identificada pelo Whisper ("voz:1") -> { speakerId: votos } aprendidos pelas legendas
   s.part ??= 1; // 1ª, 2ª… parte de uma reunião com o mesmo link no mesmo dia
+  s.turns ||= []; // quem estava falando (indicador da plataforma, ex.: Slack): {id, speakerId, start, end}
   s.paused ??= false;
   s.endedAt ??= null;
   s.summary ??= null;
@@ -47,6 +48,21 @@ function norm(text) {
 
 // Aplica um evento vindo do coletor. Retorna true se a sessão mudou.
 export function applyEvent(session, ev, now = Date.now()) {
+  if (ev.kind === "meeting-start") return false; // só cria a sessão (tratado pelo service worker)
+  if (ev.kind === "turn") {
+    if (!ev.id || !ev.speakerId || !(ev.end > ev.start)) return false;
+    if (ev.speakerName && !session.speakers[ev.speakerId]) session.speakers[ev.speakerId] = ev.speakerName;
+    const t = session.turns.find((x) => x.id === ev.id);
+    if (t) {
+      if (t.end === ev.end) return false;
+      t.end = ev.end;
+    } else {
+      session.turns.push({ id: ev.id, speakerId: ev.speakerId, start: ev.start, end: ev.end });
+      if (session.turns.length > 3000) session.turns.splice(0, session.turns.length - 3000);
+    }
+    session.updatedAt = now;
+    return true;
+  }
   if (ev.kind === "ui-lang") {
     if (!ev.lang || session.uiLang === ev.lang) return false;
     session.uiLang = ev.lang;
@@ -157,6 +173,11 @@ export function resolveSpeaker(session, start, end) {
     const [w0, w1] = captionWindow(e);
     const o = overlap(start, end, w0, w1);
     if (o > 0) score.set(e.speakerId, (score.get(e.speakerId) || 0) + o);
+  }
+  // Indicador "falando" da plataforma (Slack): quem estava com o microfone ativo no intervalo.
+  for (const t of session.turns || []) {
+    const o = overlap(start, end, t.start, t.end);
+    if (o > 0) score.set(t.speakerId, (score.get(t.speakerId) || 0) + o);
   }
   let best = null;
   for (const [id, v] of score) if (!best || v > best[1]) best = [id, v];

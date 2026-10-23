@@ -440,6 +440,22 @@ test("vozes: aprende o nome pela legenda e usa a voz quando a legenda falta (ou 
   assert.deepEqual(toBlocks(r).map((b) => b.speaker), ["Falante 1", "Falante 2"]);
 });
 
+test("Slack: o indicador 'falando' da plataforma dá o falante ao segmento do Whisper", () => {
+  const s = session();
+  assert.equal(applyEvent(s, { kind: "meeting-start", key: "slack:C1", title: "Huddle em #geral" }), false);
+  applyEvent(s, { kind: "speaker", speakerId: "slack:Ana", name: "Ana" });
+  assert.equal(applyEvent(s, { kind: "turn", id: "t1", speakerId: "slack:Ana", start: 1000, end: 3000 }), true);
+  assert.equal(applyEvent(s, { kind: "turn", id: "t1", speakerId: "slack:Ana", start: 1000, end: 5000 }), true); // fala longa: fim atualizado
+  assert.equal(applyEvent(s, { kind: "turn", id: "t1", speakerId: "slack:Ana", start: 1000, end: 5000 }), false);
+  applyEvent(s, { kind: "turn", id: "t2", speakerId: "slack:Bruno", start: 5200, end: 8000 });
+  assert.equal(s.turns.length, 2);
+  assert.equal(resolveSpeaker(s, 1500, 4000), "slack:Ana");
+  assert.equal(resolveSpeaker(s, 5500, 7000), "slack:Bruno");
+  addAsrSegment(s, { start: 1200, end: 4500, text: "vamos começar pelo orçamento", source: "tab" });
+  assert.equal(s.asr[0].speakerId, "slack:Ana");
+  assert.equal(speakerName(s, "slack:Ana"), "Ana");
+});
+
 test("Gravador do computador: eco da caixa de som no microfone é descartado", () => {
   const s = createSession({ id: "e", platform: "slack", title: "Huddle", startedAt: 3_000_000 });
   // o microfone capta a fala do outro participante ~300 ms depois
