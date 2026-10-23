@@ -78,3 +78,29 @@ No dueto as mesmas ideias são divididas entre as duas vozes (ver `audio/roteiro
 audio/gerar.sh masc        # ou fem, dueto — usa a CLI da ElevenLabs já autenticada; pula clipes existentes
 CHROME=... node mix.mjs masc --render   # renderiza o vídeo com as durações desta narração e mixa
 ```
+
+## Versão 15 s "Para tudo" — caderno Moleskine em 3D (`out/escribanote-15s-caderno.mp4`)
+
+Peça curta para Story, Reels e Shorts, com gancho nos primeiros segundos. Fonte: `caderno15.html`,
+render com `node render.mjs caderno out/_caderno15-mudo.mp4 --file=caderno15.html` e mix com `node mix15.mjs`.
+
+| Tempo | Imagem | Narração |
+|---|---|---|
+| 0,0–1,0 | Caderno preto de capa dura cai de cima e bate na mesa (tremor de câmera, baque); "PARA TUDO." estampado | **Para tudo.** |
+| 1,0–3,0 | A capa abre; página pautada em branco; um "?" é desenhado à mão | Alguém anotou isso? |
+| 3,0–4,2 | "não…" escrito em vermelho, sublinhado | Não? |
+| 4,2–9,3 | A folha vira; a transcrição vai sendo escrita à mão, linha por linha; marca-texto nos nomes | Relaxa. O Escribanote anota a reunião inteira, com quem disse o quê. |
+| 9,5–12,3 | A folha vira para a ata; "Decisões e pendências" com checks desenhados; carimbo "PRONTA" | Acabou a chamada? A ata já está pronta. |
+| 12,4–13,1 | A capa fecha; o logo e o nome se acendem em relevo | Escribanote. |
+| 13,1–15,6 | Etiqueta de papel kraft desce balançando com a URL; adesivos Grátis, Chrome, Edge | Grátis no Chrome e no Edge. |
+
+- **Voz:** "Locutora Escribanote", desenhada no Voice Design da ElevenLabs (grave, potente, de rádio), salva na sua
+  biblioteca com id `ECk9rxDeKPnryXzPgbeQ`. Narração em `eleven_v3` com marcações de emoção (`[surprised]`,
+  `[curious]`, `[playful]`, `[warm]`, `[excited]`, `[confident]`). As três opções de timbre que o Voice Design gerou
+  estão em `audio/v15/preview0-2.mp3` (a escolhida foi a 2, a mais grave).
+- **Sincronia:** os tempos das cenas vêm do alinhamento forçado palavra a palavra (`audio/v15/align.json`).
+- **Trilha:** "Bossa Antigua", Kevin MacLeod (incompetech.com), gravação real, licença Creative Commons BY 4.0.
+  Ao publicar, inclua na descrição: `Música: "Bossa Antigua" Kevin MacLeod (incompetech.com) — CC BY 4.0`.
+  Para trocar por uma composição da ElevenLabs (precisa de ~220 créditos), gere `audio/v15/musica15.mp3`
+  com `elevenlabs music compose` e aponte `mix15.mjs` para ele.
+- **Efeitos** (ElevenLabs SFX): baque do caderno, folha virando, caneta, carimbo.

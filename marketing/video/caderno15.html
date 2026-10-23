@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Escribanote — 15 s, caderno (9:16)</title>
+<link rel="stylesheet" href="../../site/fonts.css">
+<style>
+  @font-face { font-family: "Mao"; src: url("file:///mnt/c/Windows/Fonts/segoepr.ttf") format("truetype"); }
+  @font-face { font-family: "Mao"; font-weight: 700; src: url("file:///mnt/c/Windows/Fonts/segoeprb.ttf") format("truetype"); }
+  @font-face { font-family: "Carimbo"; src: url("file:///mnt/c/Windows/Fonts/bahnschrift.ttf") format("truetype"); }
+  :root {
+    --desk: #2a1d16; --desk-2: #3a2a20;
+    --cover: #141414; --cover-2: #222; --band: oklch(56% 0.19 32);
+    --paper: #f3ead8; --paper-2: #e9dfca; --rule: rgba(90,70,50,.22); --ink: #1d2733; --ink-2: #4a5566;
+    --red: #c8352b; --marker: rgba(255, 214, 10, .55);
+    --serif: "Fraunces", Georgia, serif; --sans: "Hanken Grotesk", "Segoe UI", sans-serif; --mao: "Mao", "Segoe Print", cursive;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: var(--desk); font-family: var(--sans); color: var(--ink); }
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; perspective: 2600px; perspective-origin: 50% 42%; }
+  .desk { position: absolute; inset: -200px; background:
+    radial-gradient(70% 45% at 50% 36%, rgba(255, 214, 160, .20) 0%, rgba(0,0,0,0) 70%),
+    repeating-linear-gradient(92deg, rgba(255,255,255,.028) 0 3px, rgba(0,0,0,0) 3px 11px, rgba(0,0,0,.05) 11px 13px, rgba(0,0,0,0) 13px 29px),
+    linear-gradient(180deg, var(--desk-2) 0%, var(--desk) 55%, #1c120d 100%); }
+  .vignette { position: absolute; inset: 0; background: radial-gradient(90% 70% at 50% 45%, transparent 55%, rgba(0,0,0,.55) 100%); pointer-events: none; }
+  .grain { position: absolute; inset: 0; opacity: .12; mix-blend-mode: overlay; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='300' height='300' filter='url(%23n)' opacity='.9'/></svg>"); }
+
+  /* ---------- caderno ---------- */
+  .world { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; }
+  .book { position: absolute; left: -380px; top: -540px; width: 760px; height: 1080px; transform-style: preserve-3d; }
+  .shadow { position: absolute; left: 0; top: 0; width: 760px; height: 1080px; border-radius: 22px; background: rgba(0,0,0,.7); filter: blur(40px); transform: translateZ(-30px) translate(26px, 44px); }
+  .back { position: absolute; inset: 0; border-radius: 10px 22px 22px 10px; background: linear-gradient(135deg, var(--cover-2), var(--cover)); box-shadow: inset 0 0 0 2px rgba(255,255,255,.04); transform: translateZ(-14px); }
+  .pages { position: absolute; left: 10px; top: 12px; width: 736px; height: 1056px; transform-style: preserve-3d; }
+  .page { position: absolute; inset: 0; background: var(--paper); border-radius: 6px 14px 14px 6px; overflow: hidden; backface-visibility: hidden;
+    box-shadow: inset 18px 0 30px -22px rgba(0,0,0,.45), 0 1px 0 rgba(0,0,0,.2); }
+  .page.ruled { background-image: repeating-linear-gradient(180deg, transparent 0 58px, var(--rule) 58px 60px); background-position: 0 150px; }
+  .page::after { content: ""; position: absolute; inset: 0; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2'/></filter><rect width='300' height='300' filter='url(%23n)' opacity='.08'/></svg>"); pointer-events: none; }
+  .edge { position: absolute; left: 0; top: 0; width: 736px; height: 1056px; transform-style: preserve-3d; }
+  .edge i { position: absolute; left: 2px; top: 2px; width: 732px; height: 1052px; background: #e6dcc6; border-radius: 6px 14px 14px 6px; }
+  .leaf { position: absolute; inset: 0; transform-style: preserve-3d; transform-origin: left center; }
+  .leaf .page { backface-visibility: hidden; }
+  .leaf .page.verso { transform: rotateY(180deg); background: var(--paper-2); }
+  .cover { position: absolute; left: 0; top: 0; width: 760px; height: 1080px; transform-style: preserve-3d; transform-origin: left center; }
+  .cover .face { position: absolute; inset: 0; border-radius: 10px 22px 22px 10px; backface-visibility: hidden; }
+  .cover .front { background:
+    radial-gradient(120% 90% at 20% 0%, rgba(255,255,255,.10) 0%, transparent 50%),
+    linear-gradient(160deg, #2a2a2a 0%, #151515 50%, #0f0f0f 100%);
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,.05), inset -6px 0 14px -8px rgba(255,255,255,.08); }
+  .cover .front::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='.12'/></svg>"); mix-blend-mode: overlay; }
+  .cover .inside { background: var(--paper-2); transform: rotateY(180deg); box-shadow: inset 0 0 60px rgba(0,0,0,.08); }
+  .band { position: absolute; right: 86px; top: -6px; width: 26px; height: 1092px; background: linear-gradient(90deg, oklch(48% 0.17 32), var(--band) 50%, oklch(50% 0.17 32)); box-shadow: 0 6px 14px rgba(0,0,0,.5); border-radius: 3px; }
+  .ribbon { position: absolute; left: 400px; bottom: -120px; width: 22px; height: 170px; background: linear-gradient(90deg, #7a2b22, #a63a2e, #7a2b22); clip-path: polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%); }
+  .emboss { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; color: rgba(255,255,255,.07); text-shadow: 0 1px 0 rgba(255,255,255,.08), 0 -1px 0 rgba(0,0,0,.6); }
+  .emboss img { width: 200px; height: 200px; border-radius: 50px; opacity: .14; filter: grayscale(1) contrast(1.4); }
+  .emboss .nm { font-family: var(--serif); font-style: italic; font-size: 72px; margin-top: 18px; letter-spacing: -0.02em; }
+  .emboss.lit img { opacity: .95; filter: none; }
+  .emboss.lit .nm { color: #e9dcc3; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+
+  /* ---------- conteúdo das páginas ---------- */
+  .pad { position: absolute; left: 70px; right: 60px; top: 150px; }
+  .mao { font-family: var(--mao); color: var(--ink); font-size: 38px; line-height: 60px; }
+  .line { position: relative; white-space: nowrap; }
+  .line .who { font-weight: 700; color: var(--ink); position: relative; display: inline-block; }
+  .line .who::before { content: ""; position: absolute; left: -6px; right: -6px; top: 10px; bottom: 6px; background: var(--marker); transform: scaleX(0); transform-origin: left; border-radius: 6px; z-index: -1; }
+  .line .who.hl::before { transform: scaleX(var(--hl, 1)); }
+  .line .t { color: var(--ink-2); }
+  .reveal { clip-path: inset(0 100% 0 0); }
+  .hd { position: absolute; left: 70px; right: 60px; top: 70px; display: flex; align-items: center; gap: 16px; font-family: var(--sans); font-size: 28px; color: var(--ink-2); }
+  .hd img { width: 44px; height: 44px; border-radius: 12px; }
+  .hd b { color: var(--ink); font-weight: 700; }
+  .qmark { position: absolute; left: 150px; top: 230px; width: 440px; height: 560px; }
+  .qmark path { fill: none; stroke: var(--ink); stroke-width: 22; stroke-linecap: round; stroke-linejoin: round; }
+  .nao { position: absolute; left: 120px; top: 790px; width: 520px; height: 200px; }
+  .nao-txt { position: absolute; left: 150px; top: 700px; font-family: var(--mao); font-weight: 700; font-size: 150px; line-height: 1; color: var(--red); transform: rotate(-4deg); }
+  .nao path { fill: none; stroke: var(--red); stroke-width: 14; stroke-linecap: round; stroke-linejoin: round; }
+  .ata-t { font-family: var(--mao); font-weight: 700; font-size: 58px; color: var(--ink); line-height: 60px; }
+  .ata-s { font-family: var(--sans); font-size: 26px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); margin: 30px 0 4px; font-weight: 700; }
+  .chk { display: flex; align-items: center; gap: 22px; height: 60px; font-family: var(--mao); font-size: 40px; color: var(--ink); white-space: nowrap; }
+  .chk svg { width: 54px; height: 54px; flex: none; }
+  .chk .box { fill: none; stroke: var(--ink-2); stroke-width: 4; }
+  .chk .tick { fill: none; stroke: var(--red); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+  .stamp { position: absolute; right: 60px; top: 660px; font-family: "Carimbo", var(--sans); font-weight: 700; font-size: 120px; letter-spacing: .06em; color: var(--red); border: 10px solid var(--red); border-radius: 18px; padding: 6px 30px; transform: rotate(-12deg); opacity: 0; mix-blend-mode: multiply; }
+  .stamp::after { content: ""; position: absolute; inset: -10px; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='.9'/></svg>"); mix-blend-mode: screen; opacity: .9; }
+
+  /* ---------- texto solto / etiquetas ---------- */
+  .hook { position: absolute; left: 0; right: 0; top: 560px; text-align: center; font-family: var(--serif); font-weight: 600; font-size: 170px; line-height: .95; letter-spacing: -0.03em; color: #f6efe0; text-shadow: 0 12px 40px rgba(0,0,0,.6); opacity: 0; }
+  .tag { position: absolute; left: 50%; top: 1310px; transform-origin: 50% -40px; width: 820px; margin-left: -410px; }
+  .tag .string { position: absolute; left: 50%; top: -1310px; width: 4px; height: 1310px; margin-left: -2px; background: linear-gradient(180deg, transparent 0, rgba(0,0,0,.0) 70%, rgba(80,60,40,.9) 100%); }
+  .tag .card { background: linear-gradient(160deg, #d9c39b, #c9b084); border-radius: 18px; padding: 34px 40px 30px; box-shadow: 0 30px 60px rgba(0,0,0,.5); text-align: center; position: relative; }
+  .tag .card::before { content: ""; position: absolute; left: 50%; top: 18px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: var(--desk); box-shadow: inset 0 2px 4px rgba(0,0,0,.6); }
+  .tag .url { font-family: var(--sans); font-weight: 800; font-size: 50px; color: #2b1d12; margin-top: 26px; letter-spacing: -0.01em; }
+  .tag .small { font-family: var(--mao); font-size: 34px; color: #4a3521; margin-top: 6px; }
+  .sticker { position: absolute; top: 1560px; padding: 16px 34px; border-radius: 999px; background: #f6efe0; color: #1d2733; font-family: var(--sans); font-weight: 800; font-size: 40px; box-shadow: 0 12px 30px rgba(0,0,0,.45); opacity: 0; }
+  .sticker.red { background: var(--red); color: #fff; }
+  .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="desk"></div>
+  <div class="world" id="world">
+    <div class="book" id="book">
+      <div class="shadow" id="shadow"></div>
+      <div class="back"></div>
+      <div class="pages">
+        <!-- bloco de folhas (espessura) -->
+        <div class="edge"><i style="transform:translateZ(-2px)"></i><i style="transform:translateZ(-5px)"></i><i style="transform:translateZ(-8px)"></i><i style="transform:translateZ(-11px)"></i></div>
+        <!-- página 3: ata (fica por baixo) -->
+        <div class="page ruled" id="p3">
+          <div class="hd"><img src="../../site/img/icon.png" alt=""><b>Ata</b> · Planejamento do Q4</div>
+          <div class="pad">
+            <div class="ata-t reveal" id="ata-t">Decisões e pendências</div>
+            <div class="ata-s">Decidido</div>
+            <div class="chk" id="k1"><svg viewBox="0 0 54 54"><rect class="box" x="6" y="6" width="42" height="42" rx="8"/><path class="tick" d="M14 28 L24 38 L42 16"/></svg><span>Mídia aprovada: R$ 180 mil</span></div>
+            <div class="chk" id="k2"><svg viewBox="0 0 54 54"><rect class="box" x="6" y="6" width="42" height="42" rx="8"/><path class="tick" d="M14 28 L24 38 L42 16"/></svg><span>Ana assume a mídia</span></div>
+            <div class="ata-s">Pendente</div>
+            <div class="chk" id="k3"><svg viewBox="0 0 54 54"><rect class="box" x="6" y="6" width="42" height="42" rx="8"/><path class="tick" d="M14 28 L24 38 L42 16"/></svg><span>Paula: cronograma até sexta</span></div>
+          </div>
+          <div class="stamp" id="stamp">PRONTA</div>
+        </div>
+        <!-- folha 2: transcrição (vira para revelar a ata) -->
+        <div class="leaf" id="leaf2">
+          <div class="page ruled" id="p2">
+            <div class="hd"><img src="../../site/img/icon.png" alt=""><b>Escribanote</b> · Planejamento do Q4 · 14:02</div>
+            <div class="pad mao">
+              <div class="line reveal" id="l1"><span class="who" id="w1">Ana</span> <span class="t">— Revisamos o orçamento.</span></div>
+              <div class="line reveal" id="l2"><span class="who" id="w2">Bruno</span> <span class="t">— Aprovo os 180 mil.</span></div>
+              <div class="line reveal" id="l3"><span class="who" id="w3">Paula</span> <span class="t">— Cronograma até sexta.</span></div>
+              <div class="line reveal" id="l4"><span class="who" id="w4">Você</span> <span class="t">— Fechamos hoje.</span></div>
+            </div>
+          </div>
+          <div class="page verso"></div>
+        </div>
+        <!-- folha 1: página em branco com "?" e "não" (vira para revelar a transcrição) -->
+        <div class="leaf" id="leaf1">
+          <div class="page ruled" id="p1">
+            <svg class="qmark" viewBox="0 0 440 560"><path id="qpath" d="M90 160 C 90 60, 350 50, 350 170 C 350 260, 220 250, 220 360 L 220 400 M 222 500 L 222 506"/></svg>
+            <div class="nao-txt reveal" id="naotxt">não…</div>
+            <svg class="nao" viewBox="0 0 520 200"><path id="naopath" d="M20 120 C 150 100, 350 135, 500 110"/></svg>
+          </div>
+          <div class="page verso"></div>
+        </div>
+      </div>
+      <div class="cover" id="cover">
+        <div class="face front"><div class="emboss" id="emboss"><img src="../../site/img/icon.png" alt=""><div class="nm">Escribanote</div></div><div class="band"></div></div>
+        <div class="face inside"></div>
+      </div>
+      <div class="ribbon" id="ribbon"></div>
+    </div>
+  </div>
+  <div class="hook" id="hook">PARA<br>TUDO.</div>
+  <div class="tag" id="tag"><div class="string"></div><div class="card"><div class="url">escribanote.meneseslabs.com.br</div><div class="small">cada palavra da reunião, anotada</div></div></div>
+  <div class="sticker red" id="st1" style="left:150px">Grátis</div>
+  <div class="sticker" id="st2" style="left:400px">Chrome</div>
+  <div class="sticker" id="st3" style="left:680px">Edge</div>
+  <div class="vignette"></div>
+  <div class="grain"></div>
+  <div class="flash" id="flash"></div>
+</div>
+
+<script>
+const clamp = (x) => Math.max(0, Math.min(1, x));
+const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+const easeIn = (x) => x * x * x;
+const outBack = (x) => 1 + 2.2 * Math.pow(x - 1, 3) + 1.2 * Math.pow(x - 1, 2);
+const P = (t, s, d) => clamp((t - s) / d);
+const $ = (id) => document.getElementById(id);
+const shake = (t, s, d, amp) => { const p = P(t, s, d); if (p <= 0 || p >= 1) return [0, 0]; const k = amp * (1 - p); return [Math.sin(t * 90) * k, Math.cos(t * 70) * k]; };
+function dash(pathEl, p) { const L = pathEl.getTotalLength(); pathEl.style.strokeDasharray = L; pathEl.style.strokeDashoffset = L * (1 - p); pathEl.style.opacity = p > 0 ? 1 : 0; }
+const reveal = (el, p) => { el.style.clipPath = `inset(0 ${(1 - easeOut(p)) * 100}% 0 0)`; };
+window.DURATION = 15.6;
+
+// Momentos (segundos) — vêm do alinhamento da narração:
+// "Para tudo" 0.04 · "Alguém anotou isso?" 1.08–2.2 · "Não?" 3.13 · "Relaxa" 4.23 · "O Escribanote anota…" 5.27–7.5
+// "com quem disse o quê" 8.06–9.3 · "Acabou a chamada?" 9.5 · "A ata já está pronta" 10.8–12.0 · "Escribanote." 12.44 · "Grátis no Chrome e no Edge" 13.17–15.2
+window.seek = function (t) {
+  // câmera: deriva lenta + tremores nos impactos
+  const [sx1, sy1] = shake(t, 0.42, 0.45, 26);
+  const [sx2, sy2] = shake(t, 11.68, 0.3, 10);
+  const [sx3, sy3] = shake(t, 12.95, 0.3, 12);
+  const rx = 6 + Math.sin(t * 0.5) * 1.2;
+  const ry = Math.sin(t * 0.37) * 2.2;
+  // queda do caderno: de longe (perto da câmera) até a mesa
+  const fall = P(t, 0.0, 0.45);
+  const z = (1 - easeIn(fall)) * 1400;
+  const rot = (1 - fall) * -14;
+  // depois de "Escribanote." o caderno se inclina para a câmera e sobe um pouco
+  const up = P(t, 12.4, 0.9);
+  const lift = ease(up);
+  $("world").style.transform = `translate(${sx1 + sx2 + sx3}px, ${sy1 + sy2 + sy3 - 40 - lift * 120}px) rotateX(${rx - lift * 5}deg) rotateY(${ry}deg)`;
+  $("book").style.transform = `translateZ(${z}px) rotateZ(${rot}deg) scale(${1.12 - lift * 0.06})`;
+  $("shadow").style.opacity = 0.35 + 0.45 * fall;
+  $("shadow").style.transform = `translateZ(-30px) translate(${26 + z * 0.1}px, ${44 + z * 0.12}px) scale(${1 + z / 1400})`;
+  $("flash").style.opacity = (1 - P(t, 0.44, 0.14)) * (t > 0.44 ? 0.3 : 0);
+
+  // gancho "PARA TUDO."
+  const hk = P(t, 0.5, 0.28);
+  const hkOut = P(t, 1.05, 0.3);
+  const h = $("hook");
+  h.style.opacity = hk * (1 - hkOut);
+  h.style.transform = `scale(${0.6 + 0.4 * outBack(hk)}) translateY(${-hkOut * 80}px)`;
+
+  // capa: abre em 1.05–1.85; fecha em 12.4–13.1
+  const open = ease(P(t, 1.05, 0.8));
+  const close = ease(P(t, 12.4, 0.7));
+  const coverAngle = -168 * open * (1 - close);
+  $("cover").style.transform = `rotateY(${coverAngle}deg)`;
+  $("ribbon").style.opacity = open > 0.3 && close < 0.5 ? 0 : 1;
+  $("emboss").classList.toggle("lit", t > 13.0);
+
+  // página 1: "?" desenha em 1.8–2.7; "não" riscado em 3.05–3.9
+  dash($("qpath"), easeOut(P(t, 1.8, 0.9)));
+
+  // folha 1 ("?") vira em 4.2–4.95 e revela a transcrição; folha 2 vira em 9.5–10.25 e revela a ata.
+  // Depois de virar, a folha fica do lado esquerdo (como num caderno) e some aos poucos.
+  for (const [id, s0] of [["leaf1", 4.2], ["leaf2", 9.5]]) {
+    const f = ease(P(t, s0, 0.75));
+    const el = $(id);
+    el.style.transform = `rotateY(${-176 * f}deg)`;
+    el.style.opacity = f >= 1 ? 1 - P(t, s0 + 0.75, 0.6) : 1;
+  }
+  dash($("naopath"), easeOut(P(t, 3.5, 0.5)));
+  reveal($("naotxt"), P(t, 3.0, 0.6));
+
+  // transcrição manuscrita: cada linha "escrita" no tempo da fala
+  reveal($("l1"), P(t, 5.3, 1.1));
+  reveal($("l2"), P(t, 6.4, 0.95));
+  reveal($("l3"), P(t, 7.35, 0.9));
+  reveal($("l4"), P(t, 8.25, 0.7));
+  // "com quem disse o quê": marca-texto nos nomes
+  for (const [i, s] of [8.1, 8.45, 8.8, 9.1].entries()) { const w = $("w" + (i + 1)); const p = easeOut(P(t, s, 0.3)); w.classList.toggle("hl", p > 0); w.style.setProperty("--hl", p); }
+
+  // ata: título + checks em 10.7–11.6; carimbo em 11.65
+  reveal($("ata-t"), P(t, 10.5, 0.6));
+  for (const [i, s] of [10.85, 11.1, 11.35].entries()) { const k = $("k" + (i + 1)); const p = P(t, s, 0.3); k.style.opacity = t > s - 0.25 ? 1 : 0; dash(k.querySelector(".tick"), easeOut(p)); }
+  const st = P(t, 11.62, 0.22);
+  const stamp = $("stamp");
+  stamp.style.opacity = st > 0 ? Math.min(1, st * 1.4) * 0.92 : 0;
+  stamp.style.transform = `rotate(-12deg) scale(${2.4 - 1.4 * easeOut(st)})`;
+
+  // etiqueta com a URL balança do alto; adesivos
+  const tg = P(t, 13.1, 0.9);
+  const swing = Math.sin(Math.max(0, t - 13.1) * 3.2) * 9 * Math.exp(-(Math.max(0, t - 13.1)) * 0.9);
+  $("tag").style.opacity = tg > 0 ? 1 : 0;
+  $("tag").style.transform = `translateY(${(1 - outBack(tg)) * -1500}px) rotate(${swing}deg)`;
+  for (const [i, s] of [13.15, 13.75, 14.75].entries()) { const el = $("st" + (i + 1)); const p = P(t, s, 0.35); el.style.opacity = p; el.style.transform = `scale(${0.6 + 0.4 * outBack(p)}) rotate(${(i - 1) * 4}deg)`; }
+  return true;
+};
+if (!navigator.webdriver && !location.search.includes("still")) {
+  const t0 = performance.now();
+  (function loop() { seek(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); })();
+} else seek(Number(new URLSearchParams(location.search).get("t") || 0));
+</script>
+</body>
+</html>

@@ -25,7 +25,8 @@ let seq = 0; const pending = new Map();
 ws.onmessage = (m) => { const msg = JSON.parse(m.data); if (msg.id && pending.has(msg.id)) { const p = pending.get(msg.id); pending.delete(msg.id); msg.error ? p.fail(new Error(JSON.stringify(msg.error))) : p.ok(msg.result); } };
 const send = (method, params = {}, sessionId) => new Promise((ok, fail) => { const id = ++seq; pending.set(id, { ok, fail }); ws.send(JSON.stringify({ id, method, params, sessionId })); });
 const durs = (process.argv.find((a) => a.startsWith("--d=")) || "").slice(4);
-const url = "file://" + resolve(import.meta.dirname, "lancamento.html") + `?v=${variant}&still=1` + (durs ? `&d=${durs}` : "");
+const page = (process.argv.find((a) => a.startsWith("--file=")) || "--file=lancamento.html").slice(7);
+const url = "file://" + resolve(import.meta.dirname, page) + `?v=${variant}&still=1` + (durs ? `&d=${durs}` : "");
 const { targetId } = await send("Target.createTarget", { url });
 const { sessionId: sid } = await send("Target.attachToTarget", { targetId, flatten: true });
 await send("Page.enable", {}, sid);
@@ -45,7 +46,8 @@ const shot = async (t) => {
 };
 
 if (stills) {
-  const ts = Array.from({ length: Math.ceil(duration / 1.0) }, (_, i) => i * 1.0);
+  const step = Number((process.argv.find((a) => a.startsWith("--step=")) || "--step=1").slice(7));
+  const ts = Array.from({ length: Math.ceil(duration / step) }, (_, i) => i * step);
   for (const t of ts) writeFileSync(resolve(import.meta.dirname, "out", `${variant}-${String(Math.round(t * 10)).padStart(3, "0")}.png`), await shot(t));
   console.log("stills em out/");
   chrome.kill(); process.exit(0);
