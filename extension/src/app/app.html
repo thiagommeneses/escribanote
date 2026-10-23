@@ -303,8 +303,25 @@
 
           <div class="card" id="backup-card">
             <h3>Backup e sincronização</h3>
-            <p class="muted">O Escribanote salva cada reunião sozinho numa pasta do computador. Se a extensão for removida ou você trocar de computador,
-              escolha a mesma pasta e tudo volta. Uma pasta do OneDrive ou do Google Drive leva as reuniões para os seus outros computadores.</p>
+            <div class="bk-block">
+              <div class="bk-title"><b>1 · Backup automático</b><span class="muted tiny">sem escolher pasta, a cada mudança</span></div>
+              <label class="field"><span>Onde guardar</span>
+                <select name="backupAuto" id="bk-auto">
+                  <option value="downloads">Pasta Downloads\Escribanote\backup deste usuário (arquivos reais, recomendado)</option>
+                  <option value="opfs">Área interna do Chrome (invisível; some se a extensão for removida)</option>
+                  <option value="off">Desligado</option>
+                </select></label>
+              <p id="bk-auto-status" class="bk-status"></p>
+              <div class="row">
+                <button type="button" class="btn sm" id="bk-auto-now">Fazer backup agora</button>
+                <button type="button" class="btn sm" id="bk-auto-open" hidden>Abrir a pasta Downloads</button>
+                <button type="button" class="btn sm" id="bk-auto-restore" hidden>Restaurar da área interna</button>
+              </div>
+              <p class="muted tiny" id="bk-auto-hint"></p>
+            </div>
+            <div class="bk-block">
+              <div class="bk-title"><b>2 · Segunda cópia numa pasta sua</b><span class="muted tiny">OneDrive, Google Drive, rede…</span></div>
+              <p class="muted tiny">Se a extensão for removida ou você trocar de computador, escolha a mesma pasta e tudo volta. Uma pasta do OneDrive ou do Google Drive leva as reuniões para os seus outros computadores.</p>
             <p id="bk-status" class="bk-status"></p>
             <div class="row">
               <button type="button" class="btn sm primary" id="bk-pick">Escolher pasta…</button>
@@ -313,7 +330,9 @@
               <button type="button" class="btn sm" id="bk-restore" hidden>Restaurar desta pasta</button>
               <button type="button" class="btn sm ghost" id="bk-off" hidden>Desligar</button>
             </div>
+            </div>
             <label class="switch"><input type="checkbox" name="syncSettings"><span></span>Sincronizar os ajustes com a sua conta do Chrome</label>
+            <p class="muted tiny"><button type="button" class="linkish" id="welcome-again">Rever a configuração inicial</button></p>
             <p class="muted tiny">Os ajustes voltam ao reinstalar ou em outro computador com a mesma conta do Chrome. A chave de API fica só neste computador.</p>
           </div>
 
@@ -330,5 +349,41 @@
   <div class="lightbox" id="lightbox" hidden><img alt="Captura de tela"></div>
   <div class="toast" id="toast" role="status"></div>
   <script type="module" src="app.js"></script>
+  <dialog id="welcome" class="welcome">
+    <form method="dialog" id="welcome-form">
+      <div class="w-head"><span class="brand-mark"></span><div><b>Bem-vindo ao Escribanote</b><span class="muted tiny">Três escolhas rápidas. Dá para mudar tudo depois em Ajustes.</span></div></div>
+      <ol class="w-steps" id="w-steps"><li class="on">Backup</li><li>Gravação</li><li>IA</li></ol>
+
+      <section class="w-step" data-step="1">
+        <h4>Onde guardar o backup automático?</h4>
+        <p class="muted tiny">Cada reunião é salva sozinha, a cada mudança. Isso protege o que foi transcrito se o Chrome fechar ou a extensão for removida.</p>
+        <label class="w-opt"><input type="radio" name="w-backup" value="downloads" checked><div><b>Pasta Downloads\Escribanote\backup</b><span>Arquivos reais no seu usuário do Windows, sem perguntas. O Chrome mostra o balão de download ao gravar.</span></div></label>
+        <label class="w-opt"><input type="radio" name="w-backup" value="opfs"><div><b>Área interna do Chrome</b><span>Invisível e silenciosa. Some se a extensão for removida, então serve só como proteção extra.</span></div></label>
+        <label class="w-opt"><input type="radio" name="w-backup" value="off"><div><b>Sem backup automático</b><span>Só a sincronização da conta Pro ou uma pasta sua.</span></div></label>
+        <p class="tiny muted">Quer uma segunda cópia no OneDrive, Google Drive ou outra pasta? <button type="button" class="linkish" id="w-pick">Escolher pasta…</button> <span id="w-pick-status"></span></p>
+      </section>
+
+      <section class="w-step" data-step="2" hidden>
+        <h4>Como gravar as reuniões?</h4>
+        <label class="w-opt"><input type="radio" name="w-mode" value="always" checked><div><b>Transcrever sempre</b><span>Ao entrar numa reunião do Meet, Teams ou Zoom, começa sozinho.</span></div></label>
+        <label class="w-opt"><input type="radio" name="w-mode" value="ask"><div><b>Perguntar antes</b><span>O widget pergunta em cada reunião. Nada é gravado até você aceitar.</span></div></label>
+        <h4>Ao sair da reunião</h4>
+        <label class="w-opt"><input type="radio" name="w-after" value="off" checked><div><b>Não fazer nada</b><span>A reunião fica na lista; você abre quando quiser.</span></div></label>
+        <label class="w-opt"><input type="radio" name="w-after" value="app"><div><b>Abrir a reunião no Escribanote</b><span>Ata, destaques e exportação logo depois da chamada.</span></div></label>
+      </section>
+
+      <section class="w-step" data-step="3" hidden>
+        <h4>Inteligência artificial (ata, revisão, perguntas)</h4>
+        <label class="w-opt"><input type="radio" name="w-ai" value="later" checked><div><b>Decidir depois</b><span>A transcrição funciona sem IA. Dá para configurar em Ajustes.</span></div></label>
+        <label class="w-opt"><input type="radio" name="w-ai" value="pro"><div><b>Conectar a conta Escribanote Pro</b><span>15 créditos por mês, reuniões na nuvem e app web. Abre o site para entrar ou assinar.</span></div></label>
+        <label class="w-opt"><input type="radio" name="w-ai" value="key"><div><b>Usar minha chave da API do Claude</b><span>Fica só neste computador.</span></div><input class="w-key" id="w-key" type="password" placeholder="sk-ant-…" autocomplete="off"></label>
+      </section>
+
+      <div class="w-foot">
+        <button type="button" class="btn ghost sm" id="w-skip">Pular</button>
+        <span class="row"><button type="button" class="btn sm" id="w-back" hidden>Voltar</button><button type="button" class="btn sm primary" id="w-next">Continuar</button></span>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

@@ -86,7 +86,10 @@ async function transcribeSamples({ samples, modelKey, lang }) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.target !== "offscreen") return;
-  const run = { start, stop, "transcribe-samples": transcribeSamples, "analyze-speakers": analyzeSpeakers, status: async () => state.status }[msg.type];
+  // object-url: o service worker não tem URL.createObjectURL; o backup automático grande passa por aqui.
+  const objectUrl = async ({ text, mime }) => ({ url: URL.createObjectURL(new Blob([text], { type: mime || "application/json" })) });
+  const revokeUrl = async ({ url }) => URL.revokeObjectURL(url);
+  const run = { start, stop, "transcribe-samples": transcribeSamples, "analyze-speakers": analyzeSpeakers, status: async () => state.status, "object-url": objectUrl, "revoke-url": revokeUrl }[msg.type];
   if (!run) return;
   run(msg)
     .then((r) => sendResponse(r ?? { ok: true }))
