@@ -97,7 +97,7 @@
         <ol class="path-steps">
           <li data-step="0"><span class="k">01</span><div><h3>A reunião acontece no navegador</h3><p>O Escribanote lê as legendas da plataforma e, se você quiser, o áudio da aba. Não entra como "bot" e não aparece na lista de participantes.</p></div></li>
           <li data-step="1"><span class="k">02</span><div><h3>A transcrição é feita aí mesmo</h3><p>O modo de alta precisão roda o Whisper <b>dentro do navegador</b>, na sua placa de vídeo. O áudio não sai da máquina.</p></div></li>
-          <li data-step="2"><span class="k">03</span><div><h3>E fica guardada com você</h3><p>Transcrição, notas, destaques e capturas vão para o armazenamento do seu navegador e, se quiser, para uma pasta de backup que você escolhe.</p></div></li>
+          <li data-step="2"><span class="k">03</span><div><h3>E fica guardada com você</h3><p>Transcrição, notas, destaques e capturas vão para o armazenamento do seu navegador e, sozinhas, para um backup em <code>Downloads\Escribanote</code>. Quer uma segunda cópia no OneDrive ou no Drive? Escolha a pasta uma vez.</p></div></li>
           <li data-step="3"><span class="k">04</span><div><h3>Nuvem? Só se você escolher</h3><p>Sem conta conectada, a extensão não fala com nenhum servidor do Escribanote. Não há rastreador nem telemetria. A conta Pro é opcional.</p></div></li>
         </ol>
         <div class="path-visual" aria-hidden="true">
@@ -146,8 +146,8 @@
         <article class="feat" data-reveal>
           <span class="num">02</span>
           <h3>Pergunte à IA no meio da conversa</h3>
-          <p>Entrou atrasado? "O que eu perdi?" Precisa intervir? "Sugira 3 perguntas." Na hora da ata, um clique gera
-            resumo, decisões, itens de ação com responsáveis e pendências.</p>
+          <p>Entrou atrasado? "O que eu perdi?" Precisa intervir? "Sugira 3 perguntas." A IA também revisa a transcrição
+            com o seu glossário e escreve a ata: resumo, decisões, itens de ação com responsáveis e pendências.</p>
           <div class="shot"><img src="img/5-app-ia.png" alt="Aba de IA com ata e sugestões de perguntas" loading="lazy" width="1400" height="757"></div>
         </article>
         <article class="feat" data-reveal>
@@ -159,10 +159,26 @@
         </article>
       </div>
 
+      <article class="feat feat-wide" data-reveal>
+        <div class="feat-copy">
+          <span class="num">04</span>
+          <h3>A ata no formato da sua equipe, com histórico</h3>
+          <p>Importe uma ata já feita, em PDF ou texto, e o Escribanote extrai o modelo: títulos, campos, lista de
+            participantes, assinatura. As próximas atas saem nesse formato, prontas para colar no sistema da sua
+            instituição. Instruções extras por reunião ("conclusão em um parágrafo só") valem acima de tudo.</p>
+          <ul class="ticks">
+            <li>Cada geração, edição ou restauração vira uma versão; comparador por palavras, em linha ou lado a lado</li>
+            <li>Atas longas com sumário por seção, títulos recolhíveis e tamanho de texto</li>
+            <li>Copiar para Docs e e-mail, para editores TinyMCE (como o Atena) ou como código HTML; baixar em .txt, .md, .html e PDF</li>
+          </ul>
+        </div>
+        <div class="shot shot-browser"><img src="img/6-app-ata.png" alt="Aba Ata com modelo escolhido, instruções extras, sumário por seção e histórico de versões" loading="lazy" width="1400" height="800"></div>
+      </article>
+
       <ul class="feat-list" data-reveal-group>
-        <li data-reveal><span class="num">04</span><b>Memória entre reuniões.</b> Encontre qualquer frase em todas as transcrições e veja as reuniões anteriores com as mesmas pessoas, com um botão para recapitular o que ficou pendente.</li>
-        <li data-reveal><span class="num">05</span><b>Exporte do seu jeito.</b> Cópia formatada para colar no Google Docs, Notion ou e-mail, PDF com capturas, Markdown, texto, legendas SRT/WebVTT e JSON.</li>
-        <li data-reveal><span class="num">06</span><b>Você no controle.</b> Pergunte antes de transcrever, pause quando quiser e avise os participantes com uma mensagem pronta.</li>
+        <li data-reveal><span class="num">05</span><b>Memória entre reuniões.</b> Encontre qualquer frase em todas as transcrições e veja as reuniões anteriores com as mesmas pessoas, com um botão para recapitular o que ficou pendente.</li>
+        <li data-reveal><span class="num">06</span><b>Exporte do seu jeito.</b> Cópia formatada para colar no Google Docs, Notion ou e-mail, PDF com capturas, Markdown, texto, legendas SRT/WebVTT e JSON.</li>
+        <li data-reveal><span class="num">07</span><b>Você no controle.</b> Pergunte antes de transcrever, pause quando quiser e avise os participantes com uma mensagem pronta.</li>
       </ul>
     </section>
 
@@ -226,8 +242,8 @@
             <li>Transcrição ao vivo no Meet, Teams, Zoom e Slack</li>
             <li>Alta precisão com o Whisper local</li>
             <li>Destaques, notas, capturas, análise de fala e exportações</li>
-            <li>IA com a sua própria chave da API, se quiser</li>
-            <li>Backup numa pasta do seu computador</li>
+            <li>IA com a sua própria chave da API, se quiser: ata por modelo, versões e revisão</li>
+            <li>Backup automático em Downloads e, se quiser, numa pasta sua</li>
           </ul>
           <a class="btn btn-rec" href="#instalar">Baixar grátis</a>
         </article>
@@ -239,7 +255,7 @@
           <p class="way-lede">Para quem usa mais de um computador e quer a ata pronta sem configurar nada.</p>
           <ul class="ticks">
             <li>Reuniões sincronizadas entre computadores, numa conta sua</li>
-            <li>Área web com busca em todas as falas</li>
+            <li>Área web com busca em todas as falas, ata, modelos e versões</li>
             <li>IA inclusa, sem chave: 15 créditos por mês</li>
             <li>Links de leitura para quem não usa o Escribanote</li>
             <li>Cifrado (AES-256) e conforme a LGPD</li>
@@ -267,6 +283,7 @@
             <tr><th scope="row">Reconhecimento próprio</th><td>Depende da legenda da plataforma</td><td class="us">Legenda + Whisper local + glossário</td></tr>
             <tr><th scope="row">Plano pago com IA inclusa</th><td>Em geral US$ 8 ou mais por mês</td><td class="us">R$ 12,50 por mês no anual</td></tr>
             <tr><th scope="row">Análise de fala por pessoa</th><td>Básica</td><td class="us">Parcela, ritmo, perguntas e linha do tempo</td></tr>
+            <tr><th scope="row">Ata no formato da sua instituição</th><td>Raro: resumo genérico</td><td class="us">Modelo extraído de um PDF seu, versões e comparador</td></tr>
           </tbody>
         </table>
       </div>
@@ -322,9 +339,18 @@
           <p>No plano grátis, a IA é opcional e usa a sua própria chave da API do Claude: você paga direto à Anthropic, pelo uso,
             e escolhe entre os modelos Opus, Sonnet e Haiku. No Pro, a IA vem inclusa, com 15 créditos por mês que acumulam até 30.</p></details>
         <details><summary>E se eu trocar de computador?</summary>
-          <p>No plano grátis, escolha uma pasta de backup nos ajustes (as reuniões são copiadas para lá sozinhas) ou use
-            "Exportar backup" e "Importar". Os ajustes viajam com o seu perfil do Chrome. Com o Pro, as reuniões aparecem
-            sozinhas em todos os computadores conectados à sua conta.</p></details>
+          <p>Cada reunião é salva sozinha em <code>Downloads\Escribanote\backup</code>, sem configurar nada. No computador novo,
+            use "Restaurar de uma pasta de backup" apontando para essa pasta. Se preferir, escolha uma segunda pasta (OneDrive,
+            Google Drive) nos ajustes, e a cópia vai junto. Os ajustes viajam com o seu perfil do Chrome. Com o Pro, as reuniões
+            aparecem sozinhas em todos os computadores conectados à sua conta.</p></details>
+        <details><summary>Minha equipe tem um modelo de ata próprio. Dá para usar?</summary>
+          <p>Sim. Em Ajustes, importe uma ata já feita (PDF ou texto). O Escribanote extrai a estrutura, ignorando logotipos,
+            QR codes e assinaturas eletrônicas, e passa a gerar as atas nesse formato. Dá para ter vários modelos, escolher um
+            por reunião e marcar o padrão com uma estrela. A ata sai em texto, Markdown, PDF ou HTML, inclusive no formato que
+            editores como o TinyMCE esperam, para colar direto no sistema.</p></details>
+        <details><summary>Posso corrigir a ata depois de gerada?</summary>
+          <p>Sim: "Editar" abre o texto, e cada edição vira uma nova versão, como um histórico. "Versões" mostra tudo o que
+            mudou, compara duas versões palavra por palavra e restaura qualquer uma sem apagar as outras.</p></details>
         <details><summary>Quem faz o Escribanote?</summary>
           <p>O Escribanote é um produto da <a href="https://meneseslabs.com.br">meneseslabs</a>, criado por
             <b>Thiago M. Meneses</b>, feito no Brasil e pensado para reuniões em português. Dúvidas, sugestões ou
