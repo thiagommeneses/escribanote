@@ -363,7 +363,10 @@ select.sm { font-size: 12.5px; padding: 5px 8px; max-width: 190px; }
 .ata-empty .ico { font-size: 28px; margin-bottom: 6px; }
 .ata-empty b { display: block; font-size: 14px; color: var(--text); margin-bottom: 4px; }
 .ata-empty p { margin: 0 auto; max-width: 320px; font-size: 13px; color: var(--muted); }
-.ata-actions { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
+.ata-actions { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 4px; position: sticky; bottom: 0; z-index: 2; background: var(--bg); padding: 8px 0; border-top: 1px solid var(--border); }
+.ata-actions .menu { top: auto; bottom: calc(100% + 4px); min-width: 280px; max-width: calc(100vw - 32px); }
+.ata-actions .menu button { white-space: nowrap; }
+.ata-actions .menu small { font-size: 11px; }
 .ata-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
 .ata-actions .btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .ata-actions .btn[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
