@@ -386,13 +386,69 @@ $("export-menu").addEventListener("click", async (e) => {
   }
 });
 
+// ----- Editor flutuante (o painel lateral bloqueia prompt()) -----
+// Abre um cartão ancorado no elemento clicado com um campo de texto; resolve com o texto ou null.
+function askInline(anchor, { label, value = "", placeholder = "", suggestions = [] } = {}) {
+  closeInline();
+  return new Promise((resolve) => {
+    const pop = document.createElement("div");
+    pop.className = "pop";
+    pop.innerHTML = `<label class="field-label">${esc(label)}</label>
+      <input maxlength="120" list="pop-list" placeholder="${esc(placeholder)}">
+      <datalist id="pop-list">${suggestions.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+      <div class="pop-acts"><button class="btn sm" data-cancel>Cancelar</button><button class="btn sm primary" data-ok>Salvar</button></div>`;
+    document.body.appendChild(pop);
+    const input = pop.querySelector("input");
+    input.value = value;
+    const r = anchor.getBoundingClientRect();
+    const w = Math.min(280, document.documentElement.clientWidth - 24);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(12, Math.min(r.left, document.documentElement.clientWidth - w - 12)) + "px";
+    const below = r.bottom + 8;
+    pop.style.top = (below + 130 > innerHeight ? Math.max(12, r.top - 130) : below) + "px";
+    const done = (v) => {
+      pop.remove();
+      document.removeEventListener("mousedown", outside, true);
+      closeInline.current = null;
+      resolve(v);
+    };
+    const outside = (ev) => !pop.contains(ev.target) && done(null);
+    pop.querySelector("[data-ok]").onclick = () => done(input.value.trim() || null);
+    pop.querySelector("[data-cancel]").onclick = () => done(null);
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") done(input.value.trim() || null);
+      if (ev.key === "Escape") done(null);
+    });
+    setTimeout(() => document.addEventListener("mousedown", outside, true), 0);
+    closeInline.current = () => done(null);
+    input.focus();
+    input.select();
+  });
+}
+function closeInline() {
+  if (closeInline.current) closeInline.current();
+}
+
+// Renomeia um falante (vale para a reunião ao vivo e para as já encerradas).
+async function renameSpeaker(id, anchor) {
+  const s = state.session;
+  if (!s || !id) return;
+  const current = speakerName(s, id);
+  const others = [...new Set(Object.values(s.speakers))].filter((n) => n && n !== current);
+  const name = await askInline(anchor, { label: "Nome do participante", value: current, placeholder: "Como aparece na ata", suggestions: others });
+  if (!name || name === current) return;
+  state.session = normalize(await send({ type: "update", id: s.id, speakers: { [id]: name.slice(0, 120) } }));
+  renderMeeting();
+  toast(`${current} agora é ${name}`);
+}
+
 // ----- Transcrição -----
 function renderSpeakers(s) {
   const ids = [...new Set(s.entries.map((e) => e.speakerId))];
   $("speakers").innerHTML = ids
     .map((id) => {
       const name = speakerName(s, id);
-      return `<span class="spk${state.hidden.has(id) ? " off" : ""}" data-id="${esc(id)}" title="Clique para filtrar · duplo clique para renomear">${avatar(id, name)}${esc(name)}</span>`;
+      return `<span class="spk${state.hidden.has(id) ? " off" : ""}" data-id="${esc(id)}" title="Clique para mostrar ou ocultar as falas">${avatar(id, name)}${esc(name)}<button class="spk-edit" data-rename title="Renomear"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></span>`;
     })
     .join("");
 }
@@ -401,18 +457,13 @@ $("speakers").addEventListener("click", (e) => {
   const chip = e.target.closest(".spk");
   if (!chip) return;
   const id = chip.dataset.id;
+  if (e.target.closest("[data-rename]")) return renameSpeaker(id, chip);
   state.hidden.has(id) ? state.hidden.delete(id) : state.hidden.add(id);
   renderTranscript();
 });
-$("speakers").addEventListener("dblclick", async (e) => {
+$("speakers").addEventListener("dblclick", (e) => {
   const chip = e.target.closest(".spk");
-  if (!chip || !state.session) return;
-  const id = chip.dataset.id;
-  const name = prompt("Nome do participante:", speakerName(state.session, id));
-  if (name && name.trim()) {
-    state.session = normalize(await send({ type: "update", id: state.session.id, speakers: { [id]: name.trim() } }));
-    renderMeeting();
-  }
+  if (chip) renameSpeaker(chip.dataset.id, chip);
 });
 
 function blockHtml(s, b, q) {
@@ -430,7 +481,7 @@ function blockHtml(s, b, q) {
   const orig = b.fixed && state.showOrig.has(b.key) ? `<p class="orig">${esc(b.original)}</p>` : "";
   return `<li class="blk${b.kind === "chat" ? " chat" : ""}" data-key="${esc(b.key)}" data-ids="${esc(JSON.stringify(b.ids))}" data-tags="${esc(JSON.stringify(b.tags))}" data-at="${b.endAt}">
     ${avatar(b.speakerId, b.speaker, 32)}
-    <div><div class="who"><b style="color:${colorFor(b.speaker)}">${highlight(b.speaker, q)}</b><time>${clock(b.startAt - s.startedAt)}</time>${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
+    <div><div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${highlight(b.speaker, q)}</b><time>${clock(b.startAt - s.startedAt)}</time>${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
     <p>${body}</p>${orig}</div>
     <div class="acts">${acts}<button data-act="copy" title="Copiar"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button data-act="note" title="Nota neste ponto"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></div>
   </li>`;
@@ -506,6 +557,8 @@ $("timeline").addEventListener("click", async (e) => {
   }
   const blk = e.target.closest(".blk");
   if (!blk) return;
+  const who = e.target.closest("[data-speaker]");
+  if (who) return renameSpeaker(who.dataset.speaker, who);
   const ids = JSON.parse(blk.dataset.ids);
   const tagBtn = e.target.closest("[data-tag]");
   if (tagBtn) {
@@ -524,7 +577,7 @@ $("timeline").addEventListener("click", async (e) => {
     await navigator.clipboard.writeText(blk.querySelector("p:not(.orig)").innerText);
     toast("Trecho copiado");
   } else if (act && act.dataset.act === "note") {
-    const text = prompt("Nota neste ponto da reunião:");
+    const text = await askInline(act, { label: "Nota neste ponto da reunião", placeholder: "O que anotar aqui?" });
     if (text && text.trim()) {
       state.session = normalize(await send({ type: "add-note", id: s.id, text, at: Number(blk.dataset.at) + 1 }));
       renderMeeting();

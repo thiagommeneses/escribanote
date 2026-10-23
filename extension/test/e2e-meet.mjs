@@ -216,6 +216,13 @@ try {
   step("widget mostra a transcrição ao vivo e oculta as legendas nativas");
   void body;
 
+  // Renomear falante no widget, ao vivo: clique no nome → campo inline → Enter
+  await widgetCall(meet, `.blk .who b[data-speaker="${BRUNO}"]`, "function(){ this.click(); return true }");
+  await widgetCall(meet, ".rn input", "function(v){ this.value = v; this.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true }", "Bruno Teste");
+  await waitFor(async () => (await sw({ type: "get", id })).speakers[BRUNO] === "Bruno Teste", "nome alterado pelo widget");
+  await waitFor(async () => /Bruno Teste/.test(await widgetCall(meet, "#body")), "widget redesenhado com o novo nome");
+  step("nome do falante alterado ao vivo pelo widget");
+
   await click(meet, "#hl");
   await waitFor(async () => Object.values((await sw({ type: "get", id })).highlights).flat().includes("importante"), "destaque salvo");
   step("botão ⭐ do widget destaca o último bloco");
@@ -241,8 +248,15 @@ try {
   // 4) App em aba cheia
   await send("Page.navigate", { url: `chrome-extension://${extId}/src/app/app.html?id=${id}` }, app);
   await sleep(1200);
+  // Renomear no app (editor flutuante, sem prompt): volta "Bruno Teste" para "Bruno Lima"
+  await evaluate(app, `document.querySelector('#timeline .who b[data-speaker="${BRUNO}"]').click()`);
+  await evaluate(app, `(() => { const i = document.querySelector('.pop input'); i.value = "Bruno Lima"; document.querySelector('.pop [data-ok]').click(); return true })()`);
+  await waitFor(async () => (await sw({ type: "get", id })).speakers[BRUNO] === "Bruno Lima", "nome alterado pelo app");
+  await sleep(300);
+  step("nome do falante alterado pelo editor do app");
   const tl = await evaluate(app, "document.getElementById('timeline').innerText");
   assert.match(tl, /Ana Teste/);
+  assert.match(tl, /Bruno Lima/);
   assert.match(tl, /Confirmar verba com o financeiro/);
   assert.match(tl, /Importante/);
   await screenshot(app, "2-app-transcricao.png");
