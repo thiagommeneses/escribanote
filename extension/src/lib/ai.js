@@ -43,7 +43,9 @@ Regras do modelo (<modelo>):
 - Marcadores entre chaves duplas, como {{data}} ou {{participantes}}, e trechos entre colchetes indicam o que deve ser preenchido com o conteúdo da reunião.
 - Preencha data, horário e plataforma a partir dos dados da transcrição. Dados administrativos que a transcrição não informa (números de processo, registro, protocolo) ficam como "[preencher]".
 - Participantes: use os nomes de quem falou na transcrição; mantenha cargo ou função só quando o modelo pedir e a informação existir (caso contrário, deixe só o nome).
-- Quando o modelo pede um resumo por participante, escreva um parágrafo por pessoa, em terceira pessoa, com o que ela relatou, decidiu ou assumiu.
+- Quando o modelo pede um resumo por participante, escreva um parágrafo por pessoa, em terceira pessoa, com o que ela relatou, decidiu ou assumiu. Decisões e encaminhamentos entram no parágrafo de quem os assumiu, a menos que o modelo tenha uma seção própria para eles.
+- Cada trecho preenchido imita a forma do trecho correspondente do modelo: se ali há um parágrafo curto, escreva um parágrafo curto; se há uma lista, use lista. Não introduza numerações que o modelo não usa, em especial enumerações com numerais romanos como (i), (ii), (iii) ou "1º", "2º" dentro de um parágrafo.
+- A conclusão, quando o modelo não indica outra forma, é um parágrafo breve de encerramento (por exemplo, registrando que, dadas as atualizações e os encaminhamentos definidos, e não havendo mais pautas, a reunião foi encerrada), sem repetir a lista de encaminhamentos já relatados acima.
 - Blocos de assinatura, fechos e textos fixos do modelo devem ser mantidos como estão; não invente nomes de signatários: se o modelo tiver um nome próprio no bloco de assinatura, mantenha-o.
 - Responda apenas com a ata preenchida, em Markdown simples (títulos com #, negrito com **, listas com -), sem comentários antes ou depois.`;
 
@@ -69,6 +71,7 @@ export function ataRequest(session, tags, glossary, template) {
 export const TEMPLATE_EXTRACT_SYSTEM = `Você transforma uma ata de reunião real em um MODELO reutilizável, em português do Brasil.
 Mantenha títulos, rótulos de campo, ordem das seções, estilo (negrito, listas, linhas separadoras) e o bloco de assinatura ou fecho.
 Substitua o conteúdo específico daquela reunião por marcadores entre chaves duplas, por exemplo {{data}}, {{horario}}, {{local}}, {{assunto}}, {{participantes}}, {{resumo_por_participante}}, {{conclusao}}; dados administrativos viram {{numero_dos_autos}}, {{numero_do_registro}} etc.
+Em trechos de texto livre (resumo, conclusão, deliberações), descreva depois de dois-pontos, dentro do próprio marcador, a forma do original, para que as próximas atas sigam o mesmo estilo: extensão, parágrafo ou lista, tom. Exemplo: {{conclusao: um parágrafo curto de encerramento, sem enumerações}} ou {{resumo_por_participante: um parágrafo por pessoa, em terceira pessoa, com nome em negrito}}.
 Ignore logotipos, cabeçalhos gráficos institucionais, QR codes, textos de assinatura eletrônica/autenticação e textos impressos na vertical na margem da página.
 Se o bloco de assinatura trouxer nome e cargo de uma pessoa, mantenha-os como texto fixo (é a mesma pessoa que assina todas as atas).
 Responda apenas com o modelo em Markdown simples, sem comentários.`;
