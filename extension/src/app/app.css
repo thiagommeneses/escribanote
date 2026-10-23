@@ -166,9 +166,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .spk:hover .spk-edit, .spk-edit:focus-visible { opacity: 1; }
 .blk .who b[data-speaker] { cursor: pointer; border-bottom: 1px dotted transparent; }
 .blk .who b[data-speaker]:hover { border-bottom-color: currentColor; }
-.pop { position: fixed; z-index: 40; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
-.pop input { width: 100%; }
-.pop-acts { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
+.ask { position: fixed; z-index: 40; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.ask input { width: 100%; }
+.ask-acts { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
 
 .timeline { list-style: none; margin: 0; padding: 0; }
 .blk { position: relative; display: grid; grid-template-columns: 32px 1fr; gap: 10px; padding: 10px 8px; border-radius: 10px; }

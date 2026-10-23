@@ -426,7 +426,7 @@ function renderTranscript() {
       if (b.kind === "chat") return `<p class="chatline" data-ids="${esc(b.ids.join(" "))}">💬 ${esc(b.speaker)}: ${esc(b.text)}</p>`;
       return `<div class="blk ${b.tags.length ? "hl" : ""}" data-ids="${esc(b.ids.join(" "))}">
         <span class="av" style="background:${colorFor(b.speakerId)}">${esc(initials(b.speaker))}</span>
-        <div><div class="who">${esc(b.speaker)} <time>${clock(b.startAt - doc.startedAt)}</time>${b.tags.map((t) => `<span class="tag">${esc(tagLabel(t))}</span>`).join("")}${b.fixed ? '<span class="fixed" title="Corrigido pela revisão da IA">revisado</span>' : ""}</div>
+        <div><div class="who"><b data-act="rename" data-spk="${esc(b.speakerId)}" title="${isPro() ? "Clique para renomear" : "Renomear participantes é do Pro"}">${esc(b.speaker)}</b> <time>${clock(b.startAt - doc.startedAt)}</time>${b.tags.map((t) => `<span class="tag">${esc(tagLabel(t))}</span>`).join("")}${b.fixed ? '<span class="fixed" title="Corrigido pela revisão da IA">revisado</span>' : ""}</div>
         <p class="txt">${esc(b.text)}</p></div></div>`;
     })
     .join("");
@@ -563,26 +563,53 @@ async function saveTitle(title) {
   if (await saveDoc((d) => (d.title = title))) toast("Título salvo");
 }
 
-async function renameSpeaker(id) {
-  if (!isPro()) return;
-  const btn = [...document.querySelectorAll(".spk")].find((b) => b.dataset.spk === id);
-  const current = speakersOf(state.meeting.doc).find(([s]) => s === id)?.[1] || "";
-  const input = Object.assign(document.createElement("input"), { className: "input", value: current, ariaLabel: "Novo nome" });
-  input.style.cssText = "width:180px;padding:3px 8px";
-  btn.replaceWith(input);
-  input.focus();
-  input.select();
-  const done = async (save) => {
-    input.onblur = null;
-    const name = input.value.trim();
-    if (save && name && name !== current && (await saveDoc((d) => (d.speakers[id] = name)))) toast("Nome atualizado");
-    renderTranscript();
-  };
-  input.onblur = () => done(true);
-  input.onkeydown = (e) => {
-    if (e.key === "Enter") input.blur();
-    if (e.key === "Escape") done(false);
-  };
+// Editor flutuante ancorado no nome clicado (chip ou bloco da transcrição). Enter salva, Esc cancela.
+function askInline(anchor, { label, value = "", placeholder = "", suggestions = [] } = {}) {
+  if (askInline.close) askInline.close();
+  return new Promise((resolve) => {
+    const pop = document.createElement("div");
+    pop.className = "ask";
+    pop.innerHTML = `<label class="small muted">${esc(label)}</label>
+      <input class="input" maxlength="120" list="ask-list" placeholder="${esc(placeholder)}">
+      <datalist id="ask-list">${suggestions.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+      <div class="ask-acts"><button class="btn sm" data-cancel>Cancelar</button><button class="btn sm primary" data-ok>Salvar</button></div>`;
+    document.body.appendChild(pop);
+    const input = pop.querySelector("input");
+    input.value = value;
+    const r = anchor.getBoundingClientRect();
+    const w = Math.min(300, document.documentElement.clientWidth - 24);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(12, Math.min(r.left, document.documentElement.clientWidth - w - 12)) + "px";
+    pop.style.top = (r.bottom + 8 + 140 > innerHeight ? Math.max(12, r.top - 140) : r.bottom + 8) + "px";
+    const done = (v) => {
+      pop.remove();
+      document.removeEventListener("pointerdown", outside, true);
+      askInline.close = null;
+      resolve(v);
+    };
+    const outside = (ev) => !pop.contains(ev.target) && done(null);
+    pop.querySelector("[data-ok]").onclick = () => done(input.value.trim() || null);
+    pop.querySelector("[data-cancel]").onclick = () => done(null);
+    input.onkeydown = (ev) => {
+      if (ev.key === "Enter") done(input.value.trim() || null);
+      if (ev.key === "Escape") done(null);
+    };
+    setTimeout(() => document.addEventListener("pointerdown", outside, true), 0);
+    askInline.close = () => done(null);
+    input.focus();
+    input.select();
+  });
+}
+
+async function renameSpeaker(id, anchor) {
+  if (!isPro()) return toast("Renomear participantes faz parte do Escribanote Pro.");
+  const doc = state.meeting.doc;
+  const current = speakersOf(doc).find(([s]) => s === id)?.[1] || "";
+  const others = [...new Set(speakersOf(doc).map(([, n]) => n))].filter((n) => n && n !== current);
+  const name = await askInline(anchor || document.body, { label: "Nome do participante", value: current, placeholder: "Como aparece na ata", suggestions: others });
+  if (!name || name === current) return;
+  if (await saveDoc((d) => (d.speakers[id] = name.slice(0, 120)))) toast(`${current} agora é ${name}`);
+  renderTranscript();
 }
 
 async function generateAta() {
@@ -1159,7 +1186,7 @@ view.addEventListener("click", async (e) => {
         state.drawer = state.drawer === el.dataset.d ? null : el.dataset.d || null;
         return renderDrawer();
       case "rename":
-        return renameSpeaker(el.dataset.spk);
+        return renameSpeaker(el.dataset.spk, el);
       case "jump":
         return jumpTo(el.dataset.e);
       case "ata":

@@ -135,6 +135,11 @@ p { margin: 0; }
 .blk.flash { animation: flash 1.8s var(--ease); }
 @keyframes flash { 0%, 40% { background: var(--marker-soft); } 100% { background: transparent; } }
 .blk .who { font-size: 13.5px; font-weight: 700; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.blk .who b[data-act="rename"] { cursor: pointer; border-bottom: 1px dotted transparent; }
+.blk .who b[data-act="rename"]:hover { border-bottom-color: currentColor; }
+.ask { position: fixed; z-index: 60; background: var(--card); border: 1px solid var(--rule); border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.ask input { width: 100%; }
+.ask-acts { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
 .blk time { font: 400 12px var(--mono); color: var(--ink-3); }
 .blk .txt { margin-top: 1px; overflow-wrap: anywhere; }
 .blk.hl .txt { background: linear-gradient(transparent 55%, var(--marker-soft) 55%); }
