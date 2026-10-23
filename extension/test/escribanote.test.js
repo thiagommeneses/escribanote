@@ -537,3 +537,37 @@ test("mesclar falantes: falas, votos e eventos novos vão para o destino; nome d
   assert.equal(canonicalSpeaker(s, "dev/428"), "dev/500");
   assert.equal(speakerName(s, "dev/428"), "Thiago Meneses");
 });
+
+import { diffWords, diffDocument, diffStats, diffHtml, commitSummary, describeVersion } from "../src/lib/diff.js";
+
+test("diff por palavras e por linhas: trocas, inserções, remoções e estatísticas", () => {
+  assert.deepEqual(diffWords("o gato preto", "o gato branco e feliz"), [
+    { op: "eq", text: "o gato " }, { op: "del", text: "preto" }, { op: "add", text: "branco e feliz" },
+  ]);
+  const a = "## Decisões\n- Mídia aprovada: R$ 180 mil (Bruno)\n- Ana assume a mídia\n\n## Pendências\n- Paula envia até sexta";
+  const b = "## Decisões\n- Mídia aprovada: R$ 200 mil (Bruno, 00:31)\n- Ana assume a mídia\n- Orçamento fechado hoje\n\n## Pendências\n- Paula envia até quinta";
+  const blocks = diffDocument(a, b);
+  assert.deepEqual(blocks.map((x) => x.kind), ["same", "changed", "same", "added", "same", "same", "changed"]);
+  assert.deepEqual(diffStats(blocks), { added: 7, removed: 2, changedLines: 3 });
+  const html = diffHtml(blocks, { onlyChanges: true });
+  assert.match(html, /<del>180<\/del><ins>200<\/ins>/);
+  assert.match(html, /<ins>- Orçamento fechado hoje<\/ins>/);
+  assert.match(diffHtml(blocks, { mode: "side" }), /<div class="dcell">/);
+  // textos iguais e acentuação preservada
+  assert.equal(diffStats(diffDocument("Ação", "Ação")).changedLines, 0);
+  assert.equal(diffWords("", "").length, 0);
+});
+
+test("histórico da ata: versões encadeadas, sem duplicar texto igual, com rótulo e tamanho da mudança", () => {
+  const s = normalize({ id: "h1", startedAt: 0 });
+  const v1 = commitSummary(s, { text: "## Resumo\nReunião curta." }, { source: "ai" });
+  assert.equal(v1.n, 1);
+  assert.equal(commitSummary(s, { text: "## Resumo\nReunião curta." }, { source: "ai" }), null, "texto igual não vira versão");
+  const v2 = commitSummary(s, { text: "## Resumo\nReunião curta e produtiva." }, { source: "edit", label: "Editada à mão" });
+  assert.equal(v2.n, 2);
+  assert.equal(v2.parentId, v1.id);
+  assert.match(describeVersion(s, v2), /\+2 −0 palavras/);
+  const v3 = commitSummary(s, { text: v1.text }, { source: "restore", label: "Restaurada da v1", parentId: v1.id });
+  assert.equal(v3.n, 3);
+  assert.equal(s.summaryHistory.length, 3);
+});

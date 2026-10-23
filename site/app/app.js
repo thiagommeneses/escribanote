@@ -6,6 +6,7 @@ import { clock, FORMATS, fileName, mdToHtml, PLATFORM, toHtml, ataPlainText, ata
 import { DEFAULT_TAGS } from "./lib/settings.js";
 import { computeStats, fmtDuration } from "./lib/stats.js";
 import { normalize, toBlocks, mergeSpeakers, speakerName } from "./lib/transcript.js";
+import { commitSummary, diffDocument, diffStats, diffHtml } from "./lib/diff.js";
 
 const EXTENSION_ID = "ohbnmfogdcbgegnpcaphidkjinplednd";
 const PALETTE = ["#c2410c", "#0f766e", "#7c3aed", "#b45309", "#be185d", "#1d4ed8", "#4d7c0f", "#9f1239"];
@@ -325,6 +326,7 @@ async function renderLibrary(id, params) {
     try {
       const r = await api.get(`/meetings/${encodeURIComponent(id)}`);
       state.meeting = { id, doc: normalize(r.doc), version: r.version };
+      state.ataView = null; state.ataEdit = null; state.showVersions = false;
       state.drawer = null;
       state.inMeetingQuery = "";
       if (!state.qa.has(id)) state.qa.set(id, (r.doc.chats || []).flatMap(chatPairs));
@@ -506,14 +508,55 @@ function ataPane() {
       ${picker}${gen}</div>
       <div class="ata" id="ata-live" hidden></div>`;
   }
-  return `<div class="ata" id="ata-live">${mdToHtml(s.text)}</div>
+  const hist = doc.summaryHistory || [];
+  const editing = state.ataEdit;
+  const body = editing
+    ? `<textarea class="input" id="ata-edit-text" rows="18" spellcheck="true">${esc(editing.text)}</textarea>
+       <div class="row" style="margin-top:8px"><input class="input" id="ata-edit-label" style="flex:1;min-width:160px" maxlength="80" placeholder="O que mudou? (opcional, vira o rótulo da versão)"><button class="btn sm primary" data-act="ata-edit-save">Salvar como nova versão</button><button class="btn sm ghost" data-act="ata-edit-cancel">Cancelar</button></div>`
+    : `<div class="ata" id="ata-live">${state.ataView ? `<p class="small muted">Mostrando a v${state.ataView.n} (${esc(state.ataView.label)}). A ata atual não mudou.</p>` + mdToHtml(state.ataView.text) : mdToHtml(s.text)}</div>`;
+  return `${body}
     <div class="row" style="margin-top:10px">
       <button class="btn sm" data-act="copy-ata">Copiar</button>
       <button class="btn sm" data-act="dl-ata" data-f="txt">Baixar .txt</button>
       <button class="btn sm" data-act="dl-ata" data-f="md">Baixar .md</button>
       <button class="btn sm" data-act="dl-ata" data-f="pdf">PDF</button>
+      ${isPro() ? `<button class="btn sm" data-act="ata-edit">Editar</button>` : ""}
+      ${hist.length ? `<button class="btn sm" data-act="ata-versions">${state.showVersions ? "Ocultar versões" : `Versões (${hist.length})`}</button>` : ""}
       ${isPro() ? gen : ""}</div>
-    ${picker ? `<div class="row" style="margin-top:8px">${picker}</div>` : ""}`;
+    ${picker ? `<div class="row" style="margin-top:8px">${picker}</div>` : ""}
+    ${state.showVersions && hist.length ? versionsPane(doc) : ""}`;
+}
+
+// Histórico da ata e comparador (diff por palavras, da biblioteca compartilhada)
+state.cmp = state.cmp || { a: null, b: null };
+const fmtWhen = (t) => new Date(t).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+function versionsPane(doc) {
+  const hist = doc.summaryHistory;
+  const cur = hist[hist.length - 1];
+  const ids = hist.map((v) => v.id);
+  if (!ids.includes(state.cmp.b)) state.cmp.b = cur.id;
+  if (!ids.includes(state.cmp.a)) state.cmp.a = hist.length > 1 ? hist[hist.length - 2].id : cur.id;
+  const opt = (sel) => hist.map((v) => `<option value="${esc(v.id)}" ${sel === v.id ? "selected" : ""}>v${v.n} · ${fmtWhen(v.createdAt)}</option>`).join("");
+  const A = hist.find((v) => v.id === state.cmp.a);
+  const B = hist.find((v) => v.id === state.cmp.b);
+  const blocks = diffDocument(A.text, B.text);
+  const st = diffStats(blocks);
+  const list = hist.slice().reverse().map((v) => {
+    const prev = hist.find((x) => x.id === v.parentId);
+    const d = prev ? diffStats(diffDocument(prev.text, v.text)) : null;
+    const isCur = doc.summary && doc.summary.text.trim() === v.text.trim();
+    return `<div class="ver ${isCur ? "current" : ""}"><span class="vn">v${v.n}</span><span class="vl">${esc(v.label)}${isCur ? " · <b>atual</b>" : ""}<small>${fmtWhen(v.createdAt)}</small></span>
+      <span class="vs">${d ? `<b class="plus">+${d.added}</b> <b class="minus">−${d.removed}</b>` : "primeira"}</span>
+      <button class="btn sm ghost" data-act="ver-view" data-v="${esc(v.id)}">Ver</button><button class="btn sm ghost" data-act="ver-cmp" data-v="${esc(v.id)}">Comparar</button>
+      ${isCur || !isPro() ? "" : `<button class="btn sm ghost" data-act="ver-restore" data-v="${esc(v.id)}">Restaurar</button>`}</div>`;
+  }).join("");
+  return `<div class="versions"><div class="versions-head"><b class="small">Histórico da ata</b>
+      <div class="row"><label class="small muted">Comparar <select class="input" style="width:auto;padding:3px 6px" data-cmp="a">${opt(state.cmp.a)}</select> com <select class="input" style="width:auto;padding:3px 6px" data-cmp="b">${opt(state.cmp.b)}</select></label>
+      <label class="small muted"><input type="checkbox" data-cmp="side" ${state.cmpSide ? "checked" : ""}> lado a lado</label>
+      <label class="small muted"><input type="checkbox" data-cmp="only" ${state.cmpOnly === false ? "" : "checked"}> só mudanças</label></div></div>
+    <div class="versions-list">${list}</div>
+    <p class="small muted">${A.id === B.id ? "Escolha duas versões diferentes." : `v${A.n} → v${B.n}: <b style="color:#15803d">+${st.added}</b> adicionadas, <b style="color:#b91c1c">−${st.removed}</b> removidas, ${st.changedLines} linha${st.changedLines === 1 ? "" : "s"} alterada${st.changedLines === 1 ? "" : "s"}.`}</p>
+    <div class="diff">${diffHtml(blocks, { mode: state.cmpSide ? "side" : "inline", onlyChanges: state.cmpOnly !== false })}</div></div>`;
 }
 
 function downloadAta(doc, kind) {
@@ -723,6 +766,14 @@ async function renameSpeaker(id, anchor) {
   renderTranscript();
 }
 
+document.addEventListener("change", (e) => {
+  const c = e.target.closest("[data-cmp]");
+  if (!c) return;
+  if (c.dataset.cmp === "a" || c.dataset.cmp === "b") state.cmp[c.dataset.cmp] = c.value;
+  else if (c.dataset.cmp === "side") state.cmpSide = c.checked;
+  else if (c.dataset.cmp === "only") state.cmpOnly = c.checked;
+  renderPane();
+});
 document.addEventListener("change", async (e) => {
   const sel = e.target.closest('[data-act="tpl-pick"]');
   if (!sel || !state.meeting) return;
@@ -1326,6 +1377,43 @@ view.addEventListener("click", async (e) => {
         return copy(m.doc.summary.text, mdToHtml(m.doc.summary.text));
       case "dl-ata":
         return downloadAta(m.doc, el.dataset.f);
+      case "ata-versions":
+        state.showVersions = !state.showVersions;
+        return renderPane();
+      case "ata-edit":
+        state.ataEdit = { text: m.doc.summary?.text || "" };
+        state.ataView = null;
+        return renderPane();
+      case "ata-edit-cancel":
+        state.ataEdit = null;
+        return renderPane();
+      case "ata-edit-save": {
+        const text = document.getElementById("ata-edit-text").value.trim();
+        const label = document.getElementById("ata-edit-label").value.trim();
+        if (!text) return toast("A ata está vazia.");
+        state.ataEdit = null;
+        if (text === (m.doc.summary?.text || "").trim()) { renderPane(); return toast("Nada mudou."); }
+        if (await saveDoc((d) => { d.summary = { ...(d.summary || {}), text, createdAt: Date.now(), model: "manual" }; commitSummary(d, d.summary, { source: "edit", label: label ? `Editada à mão · ${label}` : "Editada à mão" }); })) toast("Nova versão salva");
+        return renderPane();
+      }
+      case "ver-view":
+        state.ataView = m.doc.summaryHistory.find((v) => v.id === el.dataset.v) || null;
+        return renderPane();
+      case "ver-cmp": {
+        const hist = m.doc.summaryHistory;
+        const cur = hist[hist.length - 1];
+        state.cmp = { a: el.dataset.v, b: cur.id === el.dataset.v && hist.length > 1 ? hist[hist.length - 2].id : cur.id };
+        state.showVersions = true;
+        return renderPane();
+      }
+      case "ver-restore": {
+        const v = m.doc.summaryHistory.find((x) => x.id === el.dataset.v);
+        const ok = await askChoice(el, { title: `Restaurar a v${v.n}?`, text: "Ela volta a ser a ata atual, como uma nova versão. Nada é apagado do histórico.", choices: [{ key: "ok", label: "Restaurar", primary: true }, { key: "cancel", label: "Cancelar" }] });
+        if (ok !== "ok") return;
+        state.ataView = null;
+        if (await saveDoc((d) => { d.summary = { text: v.text, createdAt: Date.now(), model: v.model, templateId: v.templateId ?? null }; commitSummary(d, d.summary, { source: "restore", label: `Restaurada da v${v.n}`, parentId: v.id }); })) toast(`v${v.n} restaurada`);
+        return renderPane();
+      }
       case "tpl-pick":
         return;
       case "tpl-import":

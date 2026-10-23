@@ -4,6 +4,7 @@ import { computeStats, findMe, fmtDuration } from "../lib/stats.js";
 import { QUICK_PROMPTS, API_ORIGIN } from "../lib/ai.js";
 import { getSettings, setSettings, DEFAULT_TAGS, MODELS, DEFAULTS, HQ_MODELS } from "../lib/settings.js";
 import { LANG_NAMES } from "../lib/lang.js";
+import { diffDocument, diffStats, diffHtml as versionDiffHtml } from "../lib/diff.js";
 import { getBackupDir, setBackupDir, backupPermission, resolveBackupFolder, readBackupFolder } from "../lib/backup.js";
 
 const $ = (id) => document.getElementById(id);
@@ -772,6 +773,11 @@ async function renderAI() {
   }
   $("ata-copy").hidden = !s.summary;
   $("ata-dl").hidden = !s.summary;
+  $("ata-edit").hidden = !s.summary;
+  const nv = (s.summaryHistory || []).length;
+  $("ata-versions-btn").hidden = !nv;
+  $("ata-versions-btn").textContent = nv > 1 ? `Versões (${nv})` : "Versões";
+  if (!$("ata-versions").hidden) renderVersions();
   $("ata-gen").disabled = !s.entries.length || (state.busy && state.busy !== "ata");
   renderAtaTemplateSelect(s);
 
@@ -888,6 +894,94 @@ $("ata-copy").addEventListener("click", async () => {
     new ClipboardItem({ "text/html": new Blob([mdToHtml(s.summary.text)], { type: "text/html" }), "text/plain": new Blob([s.summary.text], { type: "text/plain" }) }),
   ]);
   toast("Ata copiada");
+});
+
+// ----- Versões da ata (histórico + comparador) -----
+const fmtWhen = (t) => new Date(t).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+state.cmp = state.cmp || { a: null, b: null };
+function renderVersions() {
+  const s = state.session;
+  const hist = s?.summaryHistory || [];
+  const box = $("ata-versions");
+  if (!hist.length) { box.hidden = true; return; }
+  const cur = hist[hist.length - 1];
+  // seletores de comparação: padrão = anterior × atual
+  const ids = hist.map((v) => v.id);
+  if (!ids.includes(state.cmp.b)) state.cmp.b = cur.id;
+  if (!ids.includes(state.cmp.a)) state.cmp.a = hist.length > 1 ? hist[hist.length - 2].id : cur.id;
+  const opt = (sel) => hist.map((v) => `<option value="${esc(v.id)}" ${sel === v.id ? "selected" : ""}>v${v.n} · ${fmtWhen(v.createdAt)}</option>`).join("");
+  $("cmp-a").innerHTML = opt(state.cmp.a);
+  $("cmp-b").innerHTML = opt(state.cmp.b);
+  $("versions-list").innerHTML = hist.slice().reverse().map((v) => {
+    const prev = hist.find((x) => x.id === v.parentId);
+    const st = prev ? diffStats(diffDocument(prev.text, v.text)) : null;
+    const isCur = s.summary && s.summary.text.trim() === v.text.trim();
+    return `<div class="ver ${isCur ? "current" : ""}" data-v="${esc(v.id)}"><span class="vn">v${v.n}</span>
+      <span class="vl">${esc(v.label)}${isCur ? " · <b>atual</b>" : ""}<small>${fmtWhen(v.createdAt)}${v.model && v.model !== "manual" ? ` · ${esc(v.model)}` : ""}</small></span>
+      <span class="vs">${st ? `<b class="plus">+${st.added}</b> <b class="minus">−${st.removed}</b>` : "primeira"}</span>
+      <button class="btn sm ghost" data-vact="view" title="Ver esta versão na ata">Ver</button>
+      <button class="btn sm ghost" data-vact="cmp" title="Comparar com a atual">Comparar</button>
+      ${isCur ? "" : '<button class="btn sm ghost" data-vact="restore" title="Volta a ser a ata atual (vira uma nova versão)">Restaurar</button>'}</div>`;
+  }).join("");
+  renderDiff();
+}
+function renderDiff() {
+  const hist = state.session?.summaryHistory || [];
+  const A = hist.find((v) => v.id === state.cmp.a);
+  const B = hist.find((v) => v.id === state.cmp.b);
+  if (!A || !B) return;
+  const blocks = diffDocument(A.text, B.text);
+  const st = diffStats(blocks);
+  $("diff-stats").innerHTML = A.id === B.id ? "Escolha duas versões diferentes para comparar." : `v${A.n} → v${B.n}: <b style="color:#15803d">+${st.added}</b> palavras adicionadas, <b style="color:#b91c1c">−${st.removed}</b> removidas, ${st.changedLines} linha${st.changedLines === 1 ? "" : "s"} alterada${st.changedLines === 1 ? "" : "s"}.`;
+  $("diff-view").innerHTML = versionDiffHtml(blocks, { mode: $("cmp-side").checked ? "side" : "inline", onlyChanges: $("cmp-only").checked });
+}
+$("ata-versions-btn").addEventListener("click", () => {
+  const box = $("ata-versions");
+  box.hidden = !box.hidden;
+  if (!box.hidden) renderVersions();
+});
+for (const id of ["cmp-a", "cmp-b"]) $(id).addEventListener("change", (e) => { state.cmp[id === "cmp-a" ? "a" : "b"] = e.target.value; renderDiff(); });
+for (const id of ["cmp-side", "cmp-only"]) $(id).addEventListener("change", renderDiff);
+$("versions-list").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-vact]");
+  if (!b) return;
+  const vid = b.closest(".ver").dataset.v;
+  const s = state.session;
+  const v = s.summaryHistory.find((x) => x.id === vid);
+  if (b.dataset.vact === "view") {
+    $("ata-body").innerHTML = `<p class="muted tiny">Mostrando a v${v.n} (${esc(v.label)}). A ata atual não mudou.</p>` + mdToHtml(v.text);
+    $("ata-body").scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (b.dataset.vact === "cmp") {
+    const cur = s.summaryHistory[s.summaryHistory.length - 1];
+    state.cmp = { a: v.id, b: cur.id === v.id && s.summaryHistory.length > 1 ? s.summaryHistory[s.summaryHistory.length - 2].id : cur.id };
+    renderVersions();
+    $("diff-view").scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (b.dataset.vact === "restore") {
+    const ok = await askChoice(b, { title: `Restaurar a v${v.n}?`, text: "Ela volta a ser a ata atual, como uma nova versão. Nada é apagado do histórico.", choices: [{ key: "ok", label: "Restaurar", primary: true }, { key: "cancel", label: "Cancelar" }] });
+    if (ok !== "ok") return;
+    state.session = normalize(await send({ type: "ata-restore", id: s.id, versionId: v.id }));
+    renderAI();
+    toast(`v${v.n} restaurada`);
+  }
+});
+$("ata-edit").addEventListener("click", () => {
+  const s = state.session;
+  $("ata-editor-text").value = s.summary?.text || "";
+  $("ata-editor-label").value = "";
+  $("ata-editor").hidden = false;
+  $("ata-body").hidden = true;
+  $("ata-editor-text").focus();
+});
+$("ata-editor-cancel").addEventListener("click", () => { $("ata-editor").hidden = true; $("ata-body").hidden = false; });
+$("ata-editor-save").addEventListener("click", async () => {
+  const text = $("ata-editor-text").value.trim();
+  if (!text) return toast("A ata está vazia.");
+  if (text === (state.session.summary?.text || "").trim()) { $("ata-editor").hidden = true; $("ata-body").hidden = false; return toast("Nada mudou."); }
+  state.session = normalize(await send({ type: "ata-save", id: state.session.id, text, label: $("ata-editor-label").value.trim() }));
+  $("ata-editor").hidden = true;
+  $("ata-body").hidden = false;
+  renderAI();
+  toast("Nova versão salva");
 });
 
 // ----- Modelos de ata -----

@@ -460,6 +460,30 @@ try {
     assert.equal(await evaluate(app, "document.getElementById('ata-dl').hidden"), false, "botão Baixar visível com ata");
     assert.deepEqual(await evaluate(app, "[...document.querySelectorAll('#ata-dl-menu [data-ata]')].map(b => b.dataset.ata)"), ["txt", "md", "pdf"]);
     step("modelo de ata importado de PDF, escolhido na reunião e usado na geração; download em txt/md/pdf");
+
+    // Versões da ata: a geração virou v1; uma edição à mão vira v2; o comparador mostra o diff; restaurar vira v3
+    let sv = await sw({ type: "get", id });
+    assert.equal(sv.summaryHistory.length, 1, "a geração vira a primeira versão");
+    assert.match(sv.summaryHistory[0].label, /Gerada pela IA · modelo Registro/);
+    sv = await sw({ type: "ata-save", id, text: sv.summary.text.replace("Aprovado o orçamento do Q4.", "Aprovado o orçamento do Q4 e o cronograma."), label: "acrescentei o cronograma" });
+    assert.equal(sv.summaryHistory.length, 2);
+    assert.equal(sv.summaryHistory[1].source, "edit");
+    await evaluate(app, "location.reload(); true");
+    await sleep(1200);
+    await evaluate(app, `document.querySelector('[data-tab="ai"]').click()`);
+    await sleep(300);
+    assert.equal(await evaluate(app, "document.getElementById('ata-versions-btn').textContent"), "Versões (2)");
+    await evaluate(app, "document.getElementById('ata-versions-btn').click()");
+    await sleep(200);
+    assert.match(await evaluate(app, "document.getElementById('diff-stats').innerText"), /v1 → v2: \+3 palavras adicionadas, −0 removidas/);
+    assert.match(await evaluate(app, "document.getElementById('diff-view').innerHTML"), /<ins>[^<]*cronograma/);
+    assert.equal(await evaluate(app, "document.querySelectorAll('#versions-list .ver').length"), 2);
+    // restaurar v1 pelo serviço (o botão abre uma confirmação)
+    sv = await sw({ type: "ata-restore", id, versionId: sv.summaryHistory[0].id });
+    assert.equal(sv.summaryHistory.length, 3);
+    assert.equal(sv.summaryHistory[2].label, "Restaurada da v1");
+    assert.equal(sv.summary.text, sv.summaryHistory[0].text);
+    step("versões da ata: geração, edição à mão, comparador com diff e restauração");
   }
 
   // Segmento do Whisper (simulando o documento offscreen) substitui a legenda
