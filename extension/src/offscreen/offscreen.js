@@ -21,7 +21,7 @@ async function stopCapture() {
   state.play = null;
 }
 
-async function start({ tabId, streamId, modelKey, lang, mic }) {
+async function start({ tabId, streamId, modelKey, lang, mic, diarize }) {
   await stopCapture();
   pipe.reset();
   state.tabId = tabId;
@@ -45,7 +45,25 @@ async function start({ tabId, streamId, modelKey, lang, mic }) {
     }
   }
 
-  await pipe.run(modelKey, lang);
+  await pipe.run(modelKey, lang, { diarize: !!diarize });
+}
+
+// Teste/diagnóstico da identificação de falantes: devolve turnos e voz de cada amostra enviada.
+async function analyzeSpeakers({ clips }) {
+  let sp;
+  try {
+    sp = await pipe.loadSpeakers();
+  } catch (err) {
+    throw new Error("carregar modelos de voz: " + (err.message || err) + (err.stack ? " @ " + err.stack.split("\n")[1] : ""));
+  }
+  const out = [];
+  for (const clip of clips) {
+    const samples = Float32Array.from(clip);
+    const t0 = performance.now();
+    const parts = await sp.split(samples);
+    out.push({ ms: Math.round(performance.now() - t0), parts: parts.map(({ samples: _s, ...p }) => p) });
+  }
+  return { results: out, voices: sp.book.size };
 }
 
 async function stop() {
@@ -68,7 +86,7 @@ async function transcribeSamples({ samples, modelKey, lang }) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.target !== "offscreen") return;
-  const run = { start, stop, "transcribe-samples": transcribeSamples, status: async () => state.status }[msg.type];
+  const run = { start, stop, "transcribe-samples": transcribeSamples, "analyze-speakers": analyzeSpeakers, status: async () => state.status }[msg.type];
   if (!run) return;
   run(msg)
     .then((r) => sendResponse(r ?? { ok: true }))

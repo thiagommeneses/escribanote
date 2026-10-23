@@ -296,6 +296,7 @@ async function renderLibrary(id, params) {
           <form class="search" id="search-form" role="search"><input class="input" id="search" type="search" placeholder="Buscar em todas as reuniões   /" aria-label="Buscar em todas as reuniões" value="${esc(state.query)}"></form>
           <div class="chips" id="filters">${FILTERS.map(([k, l]) => `<button type="button" class="chip" data-filter="${k}" aria-pressed="${state.filter === k}">${l}</button>`).join("")}</div>
         </div>
+        <div id="local-notice"></div>
         <nav class="list" id="list" aria-label="Lista de reuniões"></nav>
         <div class="side-foot" id="side-foot"></div>
       </aside>
@@ -311,6 +312,7 @@ async function renderLibrary(id, params) {
   view.querySelector(".lib").classList.toggle("has-meeting", !!id);
   renderList(id);
   $("side-foot").textContent = `${state.list.length} ${state.list.length === 1 ? "reunião" : "reuniões"} na conta · Enter busca dentro das falas`;
+  renderLocalNotice();
   if (!id) {
     state.meeting = null;
     $("meeting").innerHTML = `<div class="empty-pane" style="margin:auto;padding:80px 24px">
@@ -882,6 +884,36 @@ function renderConnect() {
     <p class="small muted">Ainda não tem a extensão? <a href="/#baixar">Baixe grátis</a>, instale e volte aqui.</p></section>`;
 }
 
+// Reuniões gravadas pela extensão neste navegador que ainda não chegaram à conta
+// (gravadas antes de conectar, sincronização desligada ou com erro). A extensão só responde ao
+// app quando está conectada à conta.
+async function renderLocalNotice() {
+  const el = $("local-notice");
+  if (!el) return;
+  el.innerHTML = "";
+  if (!isPro()) return;
+  const r = await sendToExtension({ type: "escribanote-unsynced" });
+  if (!r.ok || !r.count) return;
+  el.innerHTML = `<div class="notice small" style="margin:0 12px 10px">${r.count === 1 ? "1 reunião gravada neste navegador ainda não está" : `${r.count} reuniões gravadas neste navegador ainda não estão`} na conta.
+    <button type="button" class="btn sm dark" data-act="send-local" style="margin-left:8px">Enviar agora</button></div>`;
+}
+
+async function sendLocal(btn) {
+  btn.disabled = true;
+  btn.textContent = "Enviando…";
+  const r = await sendToExtension({ type: "escribanote-save" });
+  if (!r.ok) {
+    toast(`A extensão não enviou (${r.reason || "erro"})`);
+    btn.disabled = false;
+    btn.textContent = "Enviar agora";
+    return;
+  }
+  toast(r.failed?.length ? `${r.synced.length} enviadas, ${r.failed.length} com erro${r.error ? `: ${r.error}` : ""}` : `${r.synced.length} ${r.synced.length === 1 ? "reunião enviada" : "reuniões enviadas"}`);
+  await loadList(true);
+  renderList(state.meeting?.id);
+  renderLocalNotice();
+}
+
 function sendToExtension(message) {
   return new Promise((resolve) => {
     const rt = globalThis.chrome?.runtime;
@@ -1023,6 +1055,8 @@ view.addEventListener("click", async (e) => {
     switch (act) {
       case "reload":
         return location.reload();
+      case "send-local":
+        return sendLocal(el);
       case "relogin":
         e.preventDefault();
         return renderLogin();

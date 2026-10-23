@@ -19,6 +19,10 @@
     consent: null, // null = ainda não decidido, true/false
     paused: false,
     captionsSeen: false,
+    stage: "unknown", // "prejoin" | "meeting" | "left" (Meet; pelos botões da tela)
+    ended: false, // transcrição encerrada (botão do widget ou saída da chamada); nada mais é enviado
+    uiLang: null, // idioma da interface do Meet, lido dos rótulos dos botões
+    captionsOn: null, // true/false quando dá para saber pelo botão de legendas
     settings: { mode: "always", widget: true, hideCaptions: true, autoCaptions: true, domFallback: true, notifyMessage: "" },
   };
   bus.state = state;
@@ -79,6 +83,20 @@
     flush();
   };
 
+  // Botão "Encerrar transcrição" do widget (vale para Meet, Teams e Zoom): fecha a sessão agora,
+  // como sair da chamada; o que vier depois é ignorado até a pessoa retomar.
+  bus.endSession = async () => {
+    flush();
+    state.ended = true;
+    pending = [];
+    emitState();
+    await chrome.runtime.sendMessage({ type: "meeting-left" }).catch(() => {});
+  };
+  bus.resumeSession = () => {
+    state.ended = false;
+    emitState();
+  };
+
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "session-updated" && typeof msg.paused === "boolean" && msg.paused !== state.paused) {
       state.paused = msg.paused;
@@ -94,7 +112,7 @@
   let flushTimer = null;
 
   function enqueue(ev) {
-    if (state.consent === false || state.paused) return;
+    if (state.consent === false || state.paused || state.ended) return;
     pending.push(ev);
     if (pending.length > 5000) pending.splice(0, pending.length - 5000);
     if (state.consent && !flushTimer) flushTimer = setTimeout(flush, 600);
@@ -134,9 +152,15 @@
       return;
     }
     if (ev.kind === "status") return;
+    if (ev.kind === "channel-closed") return onCaptionsChannelClosed();
+    if (ev.kind === "channel-open") return;
+    if (ev.kind === "speaker" && ev.speakerId && ev.name) namedIds.add(ev.speakerId);
     if (ev.kind === "caption") {
       lastCaptionAt = Date.now();
-      if (ev.source === "protocol") lastProtocolCaption = lastCaptionAt;
+      if (ev.source === "protocol") {
+        lastProtocolCaption = lastCaptionAt;
+        rememberProtocolCaption(ev);
+      }
       if (!state.captionsSeen) {
         state.captionsSeen = true;
         emitState();
@@ -144,6 +168,48 @@
     }
     enqueue(ev);
   });
+
+  // ---------- Nomes dos falantes: protocolo × tela ----------
+  // O protocolo identifica cada fala por deviceId; o nome vem do canal "collections", que às vezes
+  // não chega (ou chega só para quem entrou depois). A legenda na tela mostra nome + texto: casando
+  // o texto, descobrimos o nome do deviceId. O nome do protocolo, quando existe, tem prioridade.
+  const namedIds = new Set();
+  const recentProto = []; // {speakerId, text, at}
+  const recentDom = []; // {name, text, at}
+  const normText = (t) => (t || "").toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, " ").replace(/\s+/g, " ").trim();
+  function sameUtterance(a, b) {
+    const x = normText(a);
+    const y = normText(b);
+    if (x.length < 8 || y.length < 8) return false;
+    return x === y || x.startsWith(y) || y.startsWith(x);
+  }
+  function rememberProtocolCaption(ev) {
+    if (namedIds.has(ev.speakerId)) return;
+    const i = recentProto.findIndex((p) => p.id === ev.id);
+    const item = { id: ev.id, speakerId: ev.speakerId, text: ev.text, at: Date.now() };
+    if (i >= 0) recentProto[i] = item;
+    else recentProto.push(item);
+    if (recentProto.length > 30) recentProto.shift();
+    matchNames();
+  }
+  function rememberDomCaption(name, text) {
+    const i = recentDom.findIndex((d) => d.name === name && sameUtterance(d.text, text));
+    const item = { name, text, at: Date.now() };
+    if (i >= 0) recentDom[i] = item;
+    else recentDom.push(item);
+    if (recentDom.length > 30) recentDom.shift();
+    matchNames();
+  }
+  function matchNames() {
+    for (const p of recentProto) {
+      if (namedIds.has(p.speakerId)) continue;
+      const hit = recentDom.find((d) => Math.abs(d.at - p.at) < 15_000 && sameUtterance(d.text, p.text));
+      if (!hit) continue;
+      namedIds.add(p.speakerId);
+      enqueue({ kind: "speaker", platform, speakerId: p.speakerId, name: hit.name, source: "dom", weak: true });
+    }
+    for (let i = recentProto.length - 1; i >= 0; i--) if (namedIds.has(recentProto[i].speakerId)) recentProto.splice(i, 1);
+  }
 
   // Encerramento: o service worker fecha a sessão (e pode gerar a ata automática).
   window.addEventListener("pagehide", () => {
@@ -178,23 +244,99 @@
 
   if (platform !== "meet") return;
 
-  // ---------- Google Meet: ligar legendas + plano B por DOM ----------
-  const CAPTION_ON = /^(ativar legendas|turn on captions|activar subtítulos|mostrar legendas)/i;
-  const LEAVE = /(sair da chamada|leave call|salir de la llamada)/i;
-  let autoClicks = 0;
+  // ---------- Google Meet: rótulos da interface por idioma ----------
+  // O Meet gera as legendas no idioma da interface; e os botões (ligar/desligar legendas, sair)
+  // dizem em que idioma ela está e em que estágio a reunião está. Rótulos observados no Meet.
+  const MEET_UI = {
+    pt: { on: /^(ativar|mostrar) legendas/i, off: /^(desativar|ocultar) legendas/i, leave: /^sair da chamada/i },
+    en: { on: /^turn on captions/i, off: /^turn off captions/i, leave: /^leave call/i },
+    es: { on: /^(activar|mostrar) subtítulos/i, off: /^(desactivar|ocultar) subtítulos/i, leave: /^salir de la llamada/i },
+    fr: { on: /^activer les sous-titres/i, off: /^désactiver les sous-titres/i, leave: /^quitter l'appel/i },
+    de: { on: /^untertitel aktivieren/i, off: /^untertitel deaktivieren/i, leave: /^anruf verlassen/i },
+    it: { on: /^attiva (i )?sottotitoli/i, off: /^disattiva (i )?sottotitoli/i, leave: /^abbandona la chiamata/i },
+  };
+  const buttons = () => [...document.querySelectorAll("button[aria-label]")];
+  const findButton = (key) => {
+    for (const [lang, rx] of Object.entries(MEET_UI)) {
+      const b = buttons().find((el) => rx[key].test(el.ariaLabel));
+      if (b) return { lang, button: b };
+    }
+    return null;
+  };
 
   function inCall() {
-    return [...document.querySelectorAll("button[aria-label]")].some((b) => LEAVE.test(b.ariaLabel));
+    return !!findButton("leave");
   }
   bus.inCall = inCall;
 
-  function tryEnableCaptions() {
-    if (!state.consent || state.paused || !state.settings.autoCaptions || autoClicks >= 3) return;
-    if (Date.now() - lastCaptionAt < 30_000 || !inCall()) return;
-    const btn = [...document.querySelectorAll("button[aria-label]")].find((b) => CAPTION_ON.test(b.ariaLabel));
-    if (btn) {
+  // Lê idioma da interface e estado das legendas pelos botões presentes.
+  function readMeetUi() {
+    const leave = findButton("leave");
+    const on = findButton("on");
+    const off = findButton("off");
+    const lang = (leave || off || on)?.lang || null;
+    if (lang && lang !== state.uiLang) {
+      state.uiLang = lang;
+      enqueue({ kind: "ui-lang", platform, lang });
+      emitState();
+    }
+    const captionsOn = off ? true : on ? false : null;
+    if (captionsOn !== state.captionsOn) {
+      state.captionsOn = captionsOn;
+      emitState();
+    }
+    return { leave, on, off };
+  }
+
+  // Estágio: entrou na chamada / saiu. Sair do Meet não descarrega a página, então sem isto a
+  // sessão só terminaria 30 min depois. Se a pessoa volta na mesma aba, a reunião continua
+  // (menos de 10 min) ou vira uma nova parte.
+  let leftAt = null;
+  const LEFT_GRACE_MS = 20_000;
+  function trackStage(ui) {
+    const now = Date.now();
+    if (ui.leave) {
+      if (state.stage !== "meeting") {
+        if (state.stage === "left") state.ended = false; // voltou à chamada: transcreve de novo
+        state.stage = "meeting";
+        leftAt = null;
+        autoClicks = 0;
+        emitState();
+      }
+      return;
+    }
+    if (state.stage === "meeting") {
+      leftAt ||= now;
+      if (now - leftAt >= LEFT_GRACE_MS) {
+        state.stage = "left";
+        leftAt = null;
+        state.ended = true;
+        flush();
+        if (isTop) chrome.runtime.sendMessage({ type: "meeting-left" }).catch(() => {});
+        emitState();
+      }
+    } else if (state.stage === "unknown") {
+      state.stage = "prejoin";
+    }
+  }
+
+  // Religa as legendas quando o Meet as perde (canal fechado numa reconexão, alguém desligou).
+  // Orçamento: até 3 cliques por "perda", no máximo 12 por página.
+  let autoClicks = 0;
+  let totalClicks = 0;
+  let retryAfter = 0;
+  function onCaptionsChannelClosed() {
+    autoClicks = 0;
+    lastCaptionAt = 0;
+    retryAfter = Date.now() + 5000;
+  }
+  function tryEnableCaptions(ui) {
+    if (!state.consent || state.paused || !state.settings.autoCaptions || autoClicks >= 3 || totalClicks >= 12) return;
+    if (Date.now() < retryAfter || Date.now() - lastCaptionAt < 30_000 || !ui.leave) return;
+    if (ui.on) {
       autoClicks++;
-      btn.click();
+      totalClicks++;
+      ui.on.button.click();
     }
   }
 
@@ -202,7 +344,7 @@
   const blockVersions = new WeakMap();
   let blockSeq = 0;
 
-  function scrapeDom() {
+  function scrapeDom(namesOnly = false) {
     const region = document.querySelector(CAPTION_REGION);
     if (!region) return;
     // Uma fala é o menor <div> cujo innerText tem "Nome\ntexto…".
@@ -213,6 +355,10 @@
       if ([...block.children].some((c) => linesOf(c).length >= 2)) continue;
       const name = lines[0];
       const text = lines.slice(1).join(" ");
+      if (namesOnly) {
+        rememberDomCaption(name, text);
+        continue;
+      }
       if (!blockIds.has(block)) blockIds.set(block, `dom/${Date.now()}/${++blockSeq}`);
       if (blockVersions.get(block) === text) continue;
       blockVersions.set(block, text);
@@ -231,8 +377,12 @@
 
   setInterval(() => {
     document.dispatchEvent(new CustomEvent("escribanote:ping"));
-    tryEnableCaptions();
+    const ui = readMeetUi();
+    trackStage(ui);
+    tryEnableCaptions(ui);
     // Só usa o DOM se o protocolo nunca entregou legendas nesta página (evita duplicatas).
     if (state.consent !== false && state.settings.domFallback && lastProtocolCaption === 0) scrapeDom();
+    // Com o protocolo ativo, a tela serve só para descobrir nomes que o protocolo não trouxe.
+    else if (state.consent && recentProto.length) scrapeDom(true);
   }, 1500);
 })();

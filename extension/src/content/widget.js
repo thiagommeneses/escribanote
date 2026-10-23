@@ -33,6 +33,7 @@
     megaphone: '<path d="M3 10v4h4l7 4V6L7 10z"/><path d="M18 9a4 4 0 0 1 0 6"/>',
     open: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v6H4V6h6"/>',
     pause: '<path d="M8 5v14M16 5v14"/>',
+    stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
     play: '<path d="m7 4 13 8-13 8z"/>',
     min: '<path d="M5 12h14"/>',
     close: '<path d="M6 6l12 12M18 6 6 18"/>',
@@ -138,6 +139,7 @@
       <span class="hqchip" id="hqchip" hidden title="Alta precisão ativa: Whisper rodando neste computador">🎧 HQ</span>
       <span class="spacer"></span>
       <button class="ib" id="pause" title="Pausar transcrição"></button>
+      <button class="ib" id="end" title="Encerrar transcrição (salva a reunião e abre o pós-reunião, se configurado)">${svg("stop")}</button>
       <button class="ib" id="min" title="Minimizar">${svg("min")}</button>
     </header>
     <div class="body" id="body"></div>
@@ -261,6 +263,10 @@
 
   function bannerHtml() {
     const li = session.langIssue;
+    if (li && li.source === "interface") {
+      return `<div class="banner warn"><b>O Meet está em ${esc(LANG[li.seen] || li.seen)}</b>, e as legendas vêm no idioma da interface.
+        Antes de começar, confira em <i>Mais opções › Configurações › Legendas › Idioma da reunião</i> → ${esc(LANG[li.expected] || li.expected)}.</div>`;
+    }
     if (li) {
       return `<div class="banner warn"><b>As legendas estão em ${esc(LANG[li.seen] || li.seen)}.</b> A transcrição fica bem pior assim.
         No Meet: <i>Mais opções › Configurações › Legendas › Idioma da reunião</i> → ${esc(LANG[li.expected] || li.expected)}.</div>`;
@@ -301,6 +307,7 @@
     $("pause").innerHTML = svg(state.paused ? "play" : "pause");
     $("pause").title = state.paused ? "Retomar transcrição (Alt+Shift+P)" : "Pausar transcrição (Alt+Shift+P)";
     $("pause").disabled = !session;
+    $("end").disabled = !session || state.ended;
     $("hqchip").hidden = !(session && session.hq && session.hq.state === "running");
     const hidden = state.settings.hideCaptions;
     $("caps").innerHTML = svg(hidden ? "eyeOff" : "eye");
@@ -318,6 +325,9 @@
         <div>A transcrição fica salva só neste computador.</div>
         <div class="row"><button class="btn primary" data-consent="once">Sim, desta vez</button>
         <button class="btn" data-consent="always">Sim, sempre</button><button class="btn" data-consent="no">Não</button></div></div>`;
+    } else if (state.ended) {
+      body.innerHTML = `<div class="center"><h4>Transcrição encerrada</h4><div>A reunião ficou salva. O que for dito agora não entra.</div>
+        <div class="row"><button class="btn primary" data-resume="1">Voltar a transcrever</button></div></div>`;
     } else if (state.consent === false) {
       body.innerHTML = `<div class="center"><h4>Transcrição desligada</h4><div>Nada desta reunião está sendo salvo.</div>
         <div class="row"><button class="btn primary" data-consent="once">Transcrever esta reunião</button></div></div>`;
@@ -356,6 +366,11 @@
 
   // ---------- Ações ----------
   $("body").addEventListener("click", async (e) => {
+    if (e.target.closest("[data-resume]")) {
+      bus.resumeSession();
+      refresh();
+      return;
+    }
     const c = e.target.closest("[data-consent]");
     if (c) {
       const v = c.dataset.consent;
@@ -380,6 +395,14 @@
     state.paused = r.paused;
     refresh();
     toast(state.paused ? "Transcrição pausada" : "Transcrição retomada");
+    render();
+  });
+
+  $("end").addEventListener("click", async () => {
+    if (!session) return;
+    await bus.endSession();
+    session = null;
+    toast("Transcrição encerrada");
     render();
   });
 

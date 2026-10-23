@@ -32,6 +32,9 @@ export function normalize(s) {
   s.fixes ||= {}; // id -> texto corrigido pela revisão da IA
   s.reviewed ||= {}; // id -> true (já passou pela revisão)
   s.langs ||= {}; // código de idioma informado pelas legendas -> contagem
+  s.uiLang ??= null; // idioma da interface do Meet (as legendas costumam seguir esse)
+  s.voices ||= {}; // voz identificada pelo Whisper ("voz:1") -> { speakerId: votos } aprendidos pelas legendas
+  s.part ??= 1; // 1ª, 2ª… parte de uma reunião com o mesmo link no mesmo dia
   s.paused ??= false;
   s.endedAt ??= null;
   s.summary ??= null;
@@ -44,8 +47,15 @@ function norm(text) {
 
 // Aplica um evento vindo do coletor. Retorna true se a sessão mudou.
 export function applyEvent(session, ev, now = Date.now()) {
+  if (ev.kind === "ui-lang") {
+    if (!ev.lang || session.uiLang === ev.lang) return false;
+    session.uiLang = ev.lang;
+    return true;
+  }
   if (ev.kind === "speaker") {
     if (!ev.speakerId || !ev.name || session.speakers[ev.speakerId] === ev.name) return false;
+    // Nome lido da tela (casado pelo texto) só preenche lacunas; o nome do protocolo tem prioridade.
+    if (ev.weak && session.speakers[ev.speakerId]) return false;
     session.speakers[ev.speakerId] = ev.name;
     session.updatedAt = now;
     return true;
@@ -183,9 +193,20 @@ export function addAsrSegment(session, seg, meId) {
     if (echo && seg.source === "mic") return false;
     if (echo) session.asr.splice(session.asr.indexOf(echo), 1); // o eco chegou antes: fica a versão limpa
   }
-  const speakerId =
-    seg.source === "mic" ? meId || "me" : seg.source === "system" ? "outros" : resolveSpeaker(session, seg.start, seg.end);
-  session.asr.push({ id: `asr/${seg.start}/${seg.source}`, start: seg.start, end: seg.end, text, source: seg.source, speakerId });
+  let speakerId;
+  if (seg.source === "mic") speakerId = meId || "me";
+  else {
+    const byCaption = seg.source === "system" ? null : resolveSpeaker(session, seg.start, seg.end);
+    if (seg.voice) {
+      // Voz identificada pelo Whisper: aprende a quem ela pertence pelas legendas e, quando as
+      // legendas faltam (ou no gravador, que não tem legendas), usa a voz como falante.
+      const votes = (session.voices[seg.voice] ||= {});
+      if (byCaption) votes[byCaption] = (votes[byCaption] || 0) + 1;
+      const learned = Object.entries(votes).sort((a, b) => b[1] - a[1])[0];
+      speakerId = byCaption || (learned && learned[1] >= 2 ? learned[0] : seg.voice);
+    } else speakerId = seg.source === "system" ? "outros" : byCaption;
+  }
+  session.asr.push({ id: `asr/${seg.start}/${seg.source}`, start: seg.start, end: seg.end, text, source: seg.source, speakerId, ...(seg.voice ? { voice: seg.voice } : {}) });
   session.updatedAt = Math.max(session.updatedAt, seg.end);
   return true;
 }
@@ -240,6 +261,7 @@ export function speakerName(session, speakerId) {
   if (!speakerId || speakerId === "desconhecido") return "Desconhecido";
   if (speakerId === "me") return session.myName || "Você";
   if (speakerId.startsWith("dom:")) return speakerId.slice(4);
+  if (speakerId.startsWith("voz:")) return "Falante " + speakerId.slice(4);
   return "Participante " + shortId(speakerId);
 }
 

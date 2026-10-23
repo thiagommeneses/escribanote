@@ -37,7 +37,12 @@ export function captionLanguageIssue(session, expected = "pt-BR") {
   }
   // 2) Sem código: estima pelo texto das últimas falas.
   const recent = effectiveEntries(session).filter((e) => e.kind === "caption" && e.source !== "whisper").slice(-15);
-  if (recent.length < 6) return null;
+  // 3) Ainda sem falas: o Meet gera as legendas no idioma da própria interface. Se ela está em
+  //    outro idioma, vale avisar antes da primeira fala (lido dos rótulos dos botões do Meet).
+  if (recent.length < 6) {
+    const ui = (session.uiLang || "").slice(0, 2).toLowerCase();
+    return ui && ui !== want ? { seen: ui, expected: want, source: "interface" } : null;
+  }
   const votes = {};
   for (const e of recent) {
     const l = detectLang(e.text);

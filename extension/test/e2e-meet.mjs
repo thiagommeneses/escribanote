@@ -197,6 +197,10 @@ try {
   assert.equal(s.speakers[ANA], "Ana Teste");
   assert.deepEqual(index[0].participants, ["Ana Teste", "Bruno Lima"]);
   step("legendas e nomes captados e salvos");
+  // Idioma da interface lido do botão "Sair da chamada" (pt) e estágio "na reunião"
+  await waitFor(async () => (await sw({ type: "get", id })).uiLang === "pt", "idioma da interface do Meet");
+  assert.equal((await sw({ type: "list" }))[0].part, 1);
+  step("idioma da interface (pt) lido do botão 'Sair da chamada'");
 
   // 3) Widget dentro da reunião
   const body = await waitFor(() => widgetCall(meet, "#body"), "widget visível");
@@ -370,6 +374,18 @@ try {
   assert.equal(s2.asr[0].speakerId, BRUNO);
   step("segmento do Whisper ganha o falante pelas legendas e aparece no widget");
 
+  // Falante sem nome no protocolo: o nome vem da legenda na tela, casada pelo texto
+  const CARLA = "spaces/e2e/devices/9";
+  await evaluate(meet, `(() => {
+    const region = document.querySelector('[role="region"][aria-label="Legendas"]');
+    const block = document.createElement("div");
+    block.innerHTML = "<div>Carla Dias</div><div>vou mandar o relatório final amanhã cedo</div>";
+    region.append(block);
+    __say(701, 1, "vou mandar o relatório final amanhã cedo", ${JSON.stringify(CARLA)});
+  })()`);
+  await waitFor(async () => (await sw({ type: "get", id })).speakers[CARLA] === "Carla Dias", "nome da Carla pela tela", 8000);
+  step("falante sem nome no protocolo recebe o nome da legenda na tela");
+
   // Legenda em idioma errado
   const meet3 = await openMeet("lng-test-abc", "Reunião em inglês");
   await evaluate(meet3, `(async () => { for (let i = 0; i < 4; i++) { __caps.send(window.EscribanoteProto.encode([[1, "message", [[1, "varint", 900 + i], [2, "varint", 1], [3, "message", [[3, "string", "we should close this today " + i], [4, "string", "en-US"], [6, "string", ${JSON.stringify(ANA)}]]]]]])); await new Promise((r) => setTimeout(r, 150)); } })()`);
@@ -388,6 +404,47 @@ try {
   assert.match(await evaluate(app, "document.getElementById('view-settings').innerText"), /Tags de destaque[\s\S]*Inteligência artificial/);
   await screenshot(app, "9-ajustes.png");
   step("layout de painel lateral e Ajustes");
+
+  // 10) Sair da chamada (o botão some, a página continua): a sessão termina sozinha em ~20 s
+  //     e, com o ajuste "Ao sair da reunião: abrir no Escribanote", a tela pós-reunião abre numa aba.
+  await evaluate(app, `(async () => { const { settings = {} } = await chrome.storage.local.get("settings"); await chrome.storage.local.set({ settings: { ...settings, afterCall: "app" } }); })()`);
+  await evaluate(meet, `document.querySelector('button[aria-label="Sair da chamada"]').remove()`);
+  await waitFor(async () => !!(await sw({ type: "get", id })).endedAt, "sessão encerrada ao sair da chamada", 30_000);
+  step("sair da chamada encerra a sessão sem fechar a aba");
+  // A aba criada por chrome.tabs.create não aparece no Target.getTargets do Chrome headless;
+  // confere pela API de abas e, para o aviso, abre a mesma URL no alvo do app.
+  const afterTab = await waitFor(async () => {
+    const { afterCallDiag: d } = await evaluate(app, `chrome.storage.local.get("afterCallDiag")`);
+    if (!d || d.id !== id || d.tabId == null) return null;
+    // sem a permissão "tabs" a URL não vem no objeto da aba: basta a aba existir; a URL está no registro
+    return evaluate(app, `chrome.tabs.get(${d.tabId}).then(() => ${JSON.stringify(d.url)}, () => null)`);
+  }, "aba pós-reunião", 15_000).catch(async (err) => {
+    console.log("afterCallDiag:", JSON.stringify(await evaluate(app, `chrome.storage.local.get("afterCallDiag")`)));
+    console.log("abas:", JSON.stringify(await evaluate(app, `chrome.tabs.query({}).then((ts) => ts.map((t) => [t.id, t.windowId, t.url || t.pendingUrl]))`)));
+    console.log("janelas:", JSON.stringify(await evaluate(app, `chrome.windows.getAll().then((ws) => ws.map((w) => [w.id, w.type, w.state]))`)));
+    throw err;
+  });
+  assert.ok(afterTab.includes(`app.html?id=${id}&fim=1`), "aba pós-reunião com a URL da reunião: " + afterTab);
+  await send("Page.navigate", { url: afterTab }, app);
+  await sleep(1500);
+  assert.match(await evaluate(app, "document.getElementById('t-banner').innerText"), /A chamada terminou/);
+  await screenshot(app, "12-pos-reuniao.png");
+  step("tela pós-reunião abre sozinha com o aviso de encerramento");
+
+  // 11) Botão "Encerrar transcrição" do widget: fecha a sessão na hora e para de captar
+  const meet4 = await openMeet("end-test-xyz", "Encerrar pelo widget");
+  await evaluate(meet4, `(() => { __device(${JSON.stringify(ANA)}, "Ana Teste"); __say(801, 1, "vamos encerrar por aqui, obrigada a todos", ${JSON.stringify(ANA)}); })()`);
+  const id4 = (await waitFor(async () => (await sw({ type: "list" })).find((m) => m.meetingKey === "meet:end-test-xyz" && m.count === 1), "sessão 4")).id;
+  await waitFor(() => widgetCall(meet4, "#end", "function(){ return !this.disabled }"), "botão encerrar");
+  await click(meet4, "#end");
+  await waitFor(async () => !!(await sw({ type: "get", id: id4 })).endedAt, "sessão 4 encerrada pelo widget", 8000);
+  await waitFor(async () => /Transcrição encerrada/.test((await widgetCall(meet4, "#body")) || ""), "widget mostra encerrada");
+  await evaluate(meet4, `__say(802, 1, "isto não deve entrar", ${JSON.stringify(ANA)})`);
+  await sleep(2500);
+  const s4 = await sw({ type: "get", id: id4 });
+  assert.equal(s4.entries.length, 1, "nada entra depois de encerrar");
+  assert.ok(s4.endedAt, "continua encerrada");
+  step("botão Encerrar do widget fecha a sessão e ignora o que vem depois");
 
   console.log("\nE2E OK");
 } finally {

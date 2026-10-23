@@ -99,6 +99,13 @@
     if (!capDecoder && label !== "collections" && label !== "meet_messages") return;
     attached.add(channel);
     emit("status", { platform: "meet", note: `canal ${label} detectado` });
+    // Saúde do canal: se o Meet fecha o canal de legendas (reconexão, legendas desligadas),
+    // o content script pode religá-las em vez de esperar 30 s sem texto.
+    if (capDecoder) {
+      channel.addEventListener("close", safe(() => emit("channel-closed", { platform: "meet", label })));
+      if (channel.readyState === "open") emit("channel-open", { platform: "meet", label });
+      else channel.addEventListener("open", safe(() => emit("channel-open", { platform: "meet", label })));
+    }
 
     channel.addEventListener(
       "message",
