@@ -389,6 +389,7 @@ function renderMeeting() {
       <div class="actions">
         <button class="btn sm" data-act="drawer" data-d="share" ${isPro() ? "" : "disabled"}>Compartilhar</button>
         <button class="btn sm" data-act="drawer" data-d="export">Exportar</button>
+        <button class="btn sm" data-act="drawer" data-d="slack" ${isPro() ? "" : "disabled"}>Slack</button>
         <button class="btn sm ghost danger" data-act="drawer" data-d="delete">Apagar</button>
       </div>
       <div id="drawer"></div>
@@ -659,6 +660,21 @@ function renderDrawer() {
   } else if (d === "delete") {
     el.innerHTML = `<div class="drawer"><p>Apagar esta reunião da conta? Ela fica 30 dias na lixeira (Conta › Lixeira). A cópia no computador, na extensão, não é apagada.</p>
       <div class="row"><button class="btn sm primary" data-act="delete">Apagar da conta</button><button class="btn sm ghost" data-act="drawer" data-d="">Cancelar</button></div></div>`;
+  } else if (d === "slack") {
+    if (!state.meeting.doc.summary?.text) {
+      el.innerHTML = `<div class="drawer"><p>Gere a ata primeiro (aba <b>Ata</b>): é ela que vai para o canal.</p></div>`;
+    } else {
+      el.innerHTML = `<div class="drawer" id="slack-drawer"><p class="small" style="font-weight:700">Publicar a ata num canal do Slack</p><p class="small muted">Carregando…</p></div>`;
+      api.get("/slack").then((st) => {
+        if (!st.configured) return ($("slack-drawer").innerHTML = `<p>A integração com o Slack não está disponível neste servidor.</p>`);
+        if (!st.connected) return ($("slack-drawer").innerHTML = `<p>Conecte o Slack em <a href="#/conta">Conta</a> para publicar atas.</p>`);
+        $("slack-drawer").innerHTML = `<p class="small" style="font-weight:700">Publicar a ata num canal do Slack</p>
+          <div class="row"><select class="input" id="slack-post-channel" style="width:auto;min-width:220px"><option value="">Carregando canais…</option></select>
+          <button class="btn sm dark" data-act="slack-post">Publicar</button></div>
+          <p class="small muted">Quem responder no thread da ata recebe respostas da IA sobre esta reunião (1 crédito cada).</p>`;
+        loadSlackChannels($("slack-post-channel"), st.channel?.id);
+      }).catch(handleError);
+    }
   } else if (d === "share") {
     el.innerHTML = `<div class="drawer"><p class="small" style="font-weight:700">Link de leitura, sem precisar de conta</p>
       <div class="row"><label class="field" style="grid-auto-flow:column;align-items:center">Vale por <select class="input" id="sh-days" style="width:auto"><option value="7">7 dias</option><option value="30" selected>30 dias</option><option value="90">90 dias</option></select></label>
@@ -793,6 +809,7 @@ async function renderAccount(params) {
       <p class="small muted">Conecte a extensão do Escribanote para as reuniões irem para a conta sozinhas e a IA funcionar sem chave.</p>
       ${devices.length ? `<ul class="devices">${devices.map((d) => `<li><span><b>${esc(d.name)}</b><br><span class="small muted">Conectada em ${dateShort(d.createdAt)} · último uso ${dateShort(d.lastUsedAt)}</span></span><button class="btn sm ghost danger" data-act="device-off" data-id="${esc(d.id)}">Desconectar</button></li>`).join("")}</ul>` : ""}
       <div class="row"><a class="btn dark" href="#/conectar">Conectar a extensão</a></div></section>
+    <section class="panel" id="slack-panel" hidden></section>
     <section class="panel"><h2>Seus dados</h2>
       <div class="row"><button class="btn" data-act="export-all">Exportar todas as reuniões (JSON)</button></div>
       ${trash.length ? `<p class="small" style="font-weight:700">Lixeira (apagadas há menos de 30 dias)</p><ul class="devices">${trash.map((t) => `<li><span>${esc(t.title)} <span class="small muted">· ${dateShort(t.startedAt)}</span></span><button class="btn sm" data-act="restore" data-id="${esc(t.id)}">Restaurar</button></li>`).join("")}</ul>` : ""}
@@ -803,6 +820,75 @@ async function renderAccount(params) {
       <div class="row"><button class="btn primary" data-act="delete-account">Apagar para sempre</button></div></div></section>
   </section>`;
   if (justPaid && !isPro()) pollPro();
+  renderSlackPanel(params);
+}
+
+// ---------------- Slack ----------------
+// O Slack como destino: a ata vai para um canal e as perguntas no thread são respondidas pela IA.
+let slackState = null;
+async function renderSlackPanel(params) {
+  const el = $("slack-panel");
+  if (!el || !isPro()) return;
+  try {
+    slackState = await api.get("/slack");
+  } catch {
+    return;
+  }
+  if (!slackState.configured) return;
+  el.hidden = false;
+  const flag = params?.get("slack");
+  const note = { ok: `<div class="notice ok">Slack conectado${slackState.team?.name ? ` ao workspace <b>${esc(slackState.team.name)}</b>` : ""}. Escolha o canal das atas abaixo.</div>`, erro: `<div class="notice">O Slack não concluiu a conexão. Tente de novo.</div>`, expirado: `<div class="notice">A autorização expirou. Tente de novo.</div>`, cancelado: "" }[flag] || "";
+  if (!slackState.connected) {
+    el.innerHTML = `<h2>Slack</h2>${note}
+      <p class="small muted">Publique a ata no canal do huddle ou da reunião e pergunte à IA respondendo no thread, sem sair do Slack.</p>
+      <div class="row"><a class="btn dark" href="/api/v1/slack/install">Conectar o Slack</a></div>`;
+    return;
+  }
+  el.innerHTML = `<h2>Slack</h2>${note}
+    <dl class="kv"><dt>Workspace</dt><dd>${esc(slackState.team?.name || slackState.team?.id || "")}</dd></dl>
+    <label class="field">Canal padrão das atas<select class="input" id="slack-channel"><option value="">Carregando canais…</option></select></label>
+    <label class="row small"><input type="checkbox" id="slack-auto" ${slackState.auto ? "checked" : ""}> Publicar a ata sozinho quando a reunião termina (se a ata automática estiver ligada na extensão)</label>
+    <p class="small muted">Em canais privados, adicione o app Escribanote ao canal antes. Cada resposta da IA no thread usa 1 crédito.</p>
+    <div class="row"><button class="btn dark" data-act="slack-save">Salvar</button><button class="btn ghost danger" data-act="slack-disconnect">Desconectar</button></div>`;
+  loadSlackChannels($("slack-channel"), slackState.channel?.id);
+}
+
+async function loadSlackChannels(sel, current) {
+  try {
+    const { items } = await api.get("/slack/channels");
+    sel.innerHTML = `<option value="">Escolher…</option>` + items.map((c) => `<option value="${esc(c.id)}" data-name="${esc(c.name)}" ${c.id === current ? "selected" : ""}>${c.private ? "🔒 " : "#"}${esc(c.name)}</option>`).join("");
+  } catch (err) {
+    sel.innerHTML = `<option value="">Não deu para listar os canais (${esc(err.message)})</option>`;
+  }
+}
+
+async function saveSlackSettings() {
+  const sel = $("slack-channel");
+  const opt = sel.selectedOptions[0];
+  slackState = await api.put("/slack/settings", { channelId: sel.value || null, channelName: opt?.dataset.name || null, auto: $("slack-auto").checked });
+  toast("Slack salvo");
+}
+
+async function disconnectSlack() {
+  await api.del("/slack");
+  slackState = null;
+  toast("Slack desconectado");
+  renderSlackPanel(new URLSearchParams());
+}
+
+async function postToSlack(btn) {
+  const sel = $("slack-post-channel");
+  if (sel && !sel.value) return toast("Escolha um canal");
+  btn.disabled = true;
+  try {
+    const r = await api.post(`/meetings/${encodeURIComponent(state.meeting.id)}/slack`, { channelId: sel?.value || undefined });
+    $("drawer").innerHTML = `<div class="drawer"><p>Ata publicada no Slack.${r.permalink ? ` <a href="${esc(r.permalink)}" target="_blank" rel="noopener">Abrir a mensagem</a>` : ""} Perguntas no thread dessa mensagem são respondidas pela IA.</p></div>`;
+    toast("Publicada no Slack");
+  } catch (err) {
+    handleError(err);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ---------------- assinar ----------------
@@ -1057,6 +1143,12 @@ view.addEventListener("click", async (e) => {
         return location.reload();
       case "send-local":
         return sendLocal(el);
+      case "slack-save":
+        return saveSlackSettings();
+      case "slack-disconnect":
+        return disconnectSlack();
+      case "slack-post":
+        return postToSlack(el);
       case "relogin":
         e.preventDefault();
         return renderLogin();
