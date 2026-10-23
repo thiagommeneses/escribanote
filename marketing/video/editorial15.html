@@ -73,7 +73,7 @@
   <section class="scene dark" id="s4">
     <div class="glow" style="top:900px"></div>
     <div class="kicker" id="k4">ACABOU A CHAMADA?</div>
-    <div class="device" id="d4"><img id="d4img" src="../remotion/public/capturas/12-painel-ia.png" alt=""></div>
+    <div class="device" id="d4" style="height:1150px;margin-top:-575px"><img id="d4img" src="../remotion/public/capturas/12-painel-ia.png" alt=""></div>
     <div class="stampbig" id="st4">ATA<br>PRONTA.</div>
   </section>
   <!-- 5 · marca -->
@@ -167,9 +167,9 @@ window.seek = function (t) {
   $("k3b").style.opacity = P(t, 6.2, 0.25);
   // 4 · ata
   whip($("d4"), t, 7.25);
-  const z4 = 1.3 + 0.12 * inOut(P(t, 7.6, 3.0));
-  $("d4").style.transform += ` translateY(${330 - 70 * inOut(P(t, 7.6, 3))}px) scale(${z4})`;
-  $("d4img").style.transform = `scale(${760 / 1260}) translateY(-560px)`;
+  const z4 = 1.25 + 0.1 * inOut(P(t, 7.6, 3.0));
+  $("d4").style.transform += ` translateY(${40 - 60 * inOut(P(t, 7.6, 3))}px) scale(${z4})`;
+  $("d4img").style.transform = `scale(${760 / 1260}) translateY(-480px)`;
   $("k4").style.opacity = P(t, 7.4, 0.25);
   const st = P(t, 9.15, 0.22);
   const stamp = $("st4");
