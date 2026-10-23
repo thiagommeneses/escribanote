@@ -175,6 +175,13 @@
   // O protocolo identifica cada fala por deviceId; o nome vem do canal "collections", que às vezes
   // não chega (ou chega só para quem entrou depois). A legenda na tela mostra nome + texto: casando
   // o texto, descobrimos o nome do deviceId. O nome do protocolo, quando existe, tem prioridade.
+  // "Você"/"You" na legenda ou no bloco de vídeo é o próprio usuário; o nome está em data-self-name.
+  const SELF_LABELS = new Set(["você", "voce", "you", "tú", "tu", "vous", "du", "sie", "io", "yo", "eu"]);
+  const isSelfLabel = (s) => SELF_LABELS.has((s || "").trim().toLowerCase().replace(/[()]/g, ""));
+  function selfName() {
+    const el = document.querySelector("[data-self-name]");
+    return ((el && el.getAttribute("data-self-name")) || state.settings.myName || "").trim();
+  }
   const namedIds = new Set();
   const recentProto = []; // {speakerId, text, at}
   const recentDom = []; // {name, text, at}
@@ -195,6 +202,7 @@
     matchNames();
   }
   function rememberDomCaption(name, text) {
+    if (isSelfLabel(name)) name = selfName() || "Você";
     const i = recentDom.findIndex((d) => d.name === name && sameUtterance(d.text, text));
     const item = { name, text, at: Date.now() };
     if (i >= 0) recentDom[i] = item;
@@ -384,8 +392,30 @@
     }
   }
 
+  // ---------- Nomes pelos blocos de participante ----------
+  // Cada bloco de vídeo do Meet traz data-participant-id="spaces/…/devices/N" — o mesmo id que o
+  // protocolo usa nas legendas — e o nome na tela. O próprio usuário aparece como "Você"/"You",
+  // e o nome dele fica em data-self-name. Cobre quem o canal "collections" não trouxe (em geral,
+  // o próprio usuário); o nome do protocolo, quando chega, continua tendo prioridade (weak).
+  const tileNamed = new Map(); // speakerId -> nome já enviado
+  function scanTiles() {
+    const me = selfName();
+    for (const el of document.querySelectorAll("[data-participant-id]")) {
+      const id = el.getAttribute("data-participant-id") || "";
+      if (!/devices\//.test(id) || namedIds.has(id)) continue;
+      const lines = (el.innerText || "").split("\n").map((t) => t.trim()).filter(Boolean);
+      let name = null;
+      if (lines.some(isSelfLabel)) name = me || "Você";
+      else name = lines.find((t) => t.length <= 60 && /\p{L}/u.test(t) && !/^\d/.test(t)) || null;
+      if (!name || tileNamed.get(id) === name) continue;
+      tileNamed.set(id, name);
+      enqueue({ kind: "speaker", platform, speakerId: id, name, source: "dom", weak: true });
+    }
+  }
+
   setInterval(() => {
     document.dispatchEvent(new CustomEvent("escribanote:ping"));
+    if (state.consent) scanTiles();
     const ui = readMeetUi();
     trackStage(!!ui.leave);
     tryEnableCaptions(ui);

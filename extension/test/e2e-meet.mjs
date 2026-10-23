@@ -113,6 +113,8 @@ const click = (sid, sel) => widgetCall(sid, sel, "function(){ this.click(); retu
 
 const MEET_HTML = (title) => `<!doctype html><html><head><title>Meet - ${title}</title></head><body style="background:#202124;margin:0;height:100vh">
 <div style="color:#fff;font:20px sans-serif;padding:40px">Reunião simulada</div>
+<div data-participant-id="spaces/abc/devices/1" data-self-name="Thiago Teste" style="color:#fff"><span>Você</span></div>
+<div data-participant-id="spaces/abc/devices/9" style="color:#fff"><span>Carla Bloco</span></div>
 <div role="region" aria-label="Legendas" style="position:fixed;bottom:80px;left:40px;color:#fff">legenda nativa</div>
 <button aria-label="Sair da chamada" style="position:fixed;bottom:16px;left:50%">sair</button></body></html>`;
 
@@ -197,6 +199,11 @@ try {
   assert.equal(s.speakers[ANA], "Ana Teste");
   assert.deepEqual(index[0].participants, ["Ana Teste", "Bruno Lima"]);
   step("legendas e nomes captados e salvos");
+  await waitFor(async () => {
+    const sp = (await sw({ type: "get", id })).speakers;
+    return sp["spaces/abc/devices/1"] === "Thiago Teste" && sp["spaces/abc/devices/9"] === "Carla Bloco";
+  }, "nomes lidos dos blocos de participante (data-participant-id)");
+  step("próprio usuário e participantes nomeados pelos blocos de vídeo");
   // Idioma da interface lido do botão "Sair da chamada" (pt) e estágio "na reunião"
   await waitFor(async () => (await sw({ type: "get", id })).uiLang === "pt", "idioma da interface do Meet");
   assert.equal((await sw({ type: "list" }))[0].part, 1);

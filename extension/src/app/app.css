@@ -142,7 +142,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .m-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .menu-wrap { position: relative; }
 .menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 10; min-width: 240px; background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px; box-shadow: var(--shadow); padding: 6px; }
+  border-radius: 12px; box-shadow: var(--shadow); padding: 6px; max-width: calc(100vw - 28px); max-height: calc(100vh - 110px); overflow: auto; }
+.menu.flip { left: auto; right: 0; }
 .menu button { display: flex; width: 100%; gap: 8px; align-items: center; border: 0; background: none; padding: 7px 10px; border-radius: 8px; cursor: pointer; text-align: left; }
 .menu button:hover { background: var(--bg-soft); }
 .menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 0; }

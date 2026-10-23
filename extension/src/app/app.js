@@ -348,7 +348,13 @@ function buildExportMenu() {
 buildExportMenu();
 $("m-export").addEventListener("click", (e) => {
   e.stopPropagation();
-  $("export-menu").hidden = !$("export-menu").hidden;
+  const menu = $("export-menu");
+  menu.hidden = !menu.hidden;
+  if (menu.hidden) return;
+  // No painel lateral (estreito) o menu não cabe à direita do botão: ancora pela direita.
+  menu.classList.remove("flip");
+  const r = menu.getBoundingClientRect();
+  if (r.right > document.documentElement.clientWidth - 8) menu.classList.add("flip");
 });
 document.addEventListener("click", () => ($("export-menu").hidden = true));
 $("export-menu").addEventListener("click", async (e) => {
