@@ -1,5 +1,5 @@
 import { toBlocks, speakerName, timeline, participantNames, normalize } from "../lib/transcript.js";
-import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel } from "../lib/format.js";
+import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName } from "../lib/format.js";
 import { computeStats, findMe, fmtDuration } from "../lib/stats.js";
 import { QUICK_PROMPTS, API_ORIGIN } from "../lib/ai.js";
 import { getSettings, setSettings, DEFAULT_TAGS, MODELS, DEFAULTS, HQ_MODELS } from "../lib/settings.js";
@@ -740,6 +740,8 @@ function previousWithSame(s) {
 }
 
 async function renderAI() {
+  if (!state.settings) state.settings = await getSettings();
+  if (!state.templatesLoaded) { await loadTemplates(); state.templatesLoaded = true; }
   const s = state.session;
   const { apiKey, account } = await chrome.storage.local.get(["apiKey", "account"]);
   const model = MODELS.find((m) => m.id === state.settings.aiModel);
@@ -769,7 +771,9 @@ async function renderAI() {
     $("ata-gen").textContent = s.summary ? "Gerar de novo" : "Gerar ata";
   }
   $("ata-copy").hidden = !s.summary;
+  $("ata-dl").hidden = !s.summary;
   $("ata-gen").disabled = !s.entries.length || (state.busy && state.busy !== "ata");
+  renderAtaTemplateSelect(s);
 
   // Conversas
   const sel = $("chat-select");
@@ -884,6 +888,122 @@ $("ata-copy").addEventListener("click", async () => {
     new ClipboardItem({ "text/html": new Blob([mdToHtml(s.summary.text)], { type: "text/html" }), "text/plain": new Blob([s.summary.text], { type: "text/plain" }) }),
   ]);
   toast("Ata copiada");
+});
+
+// ----- Modelos de ata -----
+state.templates = state.templates || [];
+async function loadTemplates() {
+  state.templates = (await send({ type: "ata-templates" }).catch(() => [])) || [];
+  return state.templates;
+}
+function renderAtaTemplateSelect(s) {
+  const sel = $("ata-template");
+  const def = state.settings?.ataTemplate ? state.templates.find((t) => t.id === state.settings.ataTemplate) : null;
+  const opts = [
+    `<option value="">${esc(def ? `Padrão: ${def.name}` : "Formato do Escribanote")}</option>`,
+    ...(def ? ['<option value="none">Formato do Escribanote</option>'] : []),
+    ...state.templates.filter((t) => t.id !== state.settings?.ataTemplate).map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`),
+  ];
+  sel.innerHTML = opts.join("");
+  sel.value = s.ataTemplateId || "";
+  sel.hidden = !state.templates.length;
+}
+$("ata-template").addEventListener("change", async (e) => {
+  if (!state.session) return;
+  state.session = normalize(await send({ type: "update", id: state.session.id, ataTemplateId: e.target.value || null }));
+  toast(e.target.value && e.target.value !== "none" ? "Modelo escolhido. Gere a ata de novo para aplicar." : "Ata no formato padrão na próxima geração.");
+});
+$("ata-dl").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const menu = $("ata-dl-menu");
+  menu.hidden = !menu.hidden;
+  menu.classList.remove("flip");
+  if (!menu.hidden && menu.getBoundingClientRect().right > document.documentElement.clientWidth - 8) menu.classList.add("flip");
+});
+document.addEventListener("click", () => ($("ata-dl-menu").hidden = true));
+$("ata-dl-menu").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-ata]");
+  const s = state.session;
+  if (!b || !s?.summary?.text) return;
+  $("ata-dl-menu").hidden = true;
+  const kind = b.dataset.ata;
+  if (kind === "pdf") return void chrome.tabs.create({ url: chrome.runtime.getURL(`src/app/print.html?id=${s.id}&ata=1`) });
+  const text = kind === "txt" ? ataPlainText(s.summary.text) : s.summary.text;
+  const url = URL.createObjectURL(new Blob([text], { type: `${kind === "txt" ? "text/plain" : "text/markdown"};charset=utf-8` }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: ataFileName(s, kind) });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+});
+
+// Ajustes: lista, editor, importação
+function renderTemplates() {
+  const list = $("tpl-list");
+  list.innerHTML = state.templates.length
+    ? state.templates.map((t) => `<div class="tpl-item" data-id="${esc(t.id)}"><b>${esc(t.name)}</b><small>${t.text.length.toLocaleString("pt-BR")} caracteres</small>
+        <button type="button" class="btn sm ghost" data-tpl="edit">Editar</button><button type="button" class="btn sm ghost" data-tpl="del">Apagar</button></div>`).join("")
+    : '<p class="muted tiny">Nenhum modelo ainda. As atas saem no formato do Escribanote.</p>';
+  const sel = $("tpl-default");
+  const cur = state.settings?.ataTemplate || "";
+  sel.innerHTML = '<option value="">Formato do Escribanote (resumo, decisões, ações)</option>' + state.templates.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");
+  sel.value = state.templates.some((t) => t.id === cur) ? cur : "";
+}
+function openTemplateEditor(t) {
+  $("tpl-editor").hidden = false;
+  $("tpl-editor").dataset.id = t?.id || "";
+  $("tpl-name").value = t?.name || "";
+  $("tpl-text").value = t?.text || "";
+  $("tpl-name").focus();
+}
+$("tpl-new").addEventListener("click", () => openTemplateEditor(null));
+$("tpl-cancel").addEventListener("click", () => ($("tpl-editor").hidden = true));
+$("tpl-save").addEventListener("click", async () => {
+  const id = $("tpl-editor").dataset.id || undefined;
+  const name = $("tpl-name").value.trim() || "Modelo";
+  const text = $("tpl-text").value.trim();
+  if (!text) return toast("Cole ou escreva o modelo antes de salvar.");
+  try {
+    state.templates = await send({ type: "ata-template-save", id, name, text });
+    $("tpl-editor").hidden = true;
+    renderTemplates();
+    toast("Modelo salvo");
+  } catch (err) {
+    toast(err.message);
+  }
+});
+$("tpl-list").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-tpl]");
+  if (!b) return;
+  const id = b.closest(".tpl-item").dataset.id;
+  const t = state.templates.find((x) => x.id === id);
+  if (b.dataset.tpl === "edit") return openTemplateEditor(t);
+  const ok = await askChoice(b, { title: `Apagar "${t.name}"?`, text: "As atas já geradas continuam como estão.", choices: [{ key: "del", label: "Apagar", primary: true }, { key: "cancel", label: "Cancelar" }] });
+  if (ok !== "del") return;
+  state.templates = await send({ type: "ata-template-delete", id });
+  state.settings = await getSettings();
+  renderTemplates();
+});
+$("tpl-import").addEventListener("click", () => $("tpl-file").click());
+$("tpl-file").addEventListener("change", async () => {
+  const file = $("tpl-file").files[0];
+  $("tpl-file").value = "";
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) return toast("Arquivo grande demais (máximo 8 MB).");
+  if (!(await ensureApiPermission())) return toast("Permissão para a API negada");
+  const status = $("tpl-status");
+  status.textContent = "Lendo a ata e extraindo o modelo…";
+  try {
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    const payload = isPdf
+      ? { pdfBase64: await new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = () => fail(new Error("Não deu para ler o arquivo.")); r.readAsDataURL(file); }) }
+      : { text: await file.text() };
+    const r = await send({ type: "ata-template-import", ...payload });
+    status.textContent = "";
+    openTemplateEditor({ name: file.name.replace(/\.(pdf|txt|md)$/i, ""), text: r.text });
+    toast("Modelo extraído. Revise e salve.");
+  } catch (err) {
+    status.textContent = "";
+    toast("Não foi possível extrair o modelo: " + err.message);
+  }
 });
 
 async function ask(question, previousId) {
@@ -1148,6 +1268,8 @@ async function renderSettings() {
   if (document.activeElement !== form.elements.apiKey) form.elements.apiKey.value = apiKey || "";
   $("key-status").textContent = apiKey ? "Chave salva neste navegador." : "";
   renderTagEditor();
+  await loadTemplates();
+  renderTemplates();
 
   // Identificação de falantes pela voz: recurso do Pro (a opção fica visível, mas só liga com a conta Pro).
   const pro = await send({ type: "is-pro" }).catch(() => false);

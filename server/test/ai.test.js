@@ -113,6 +113,36 @@ test("reunião longa custa 2 créditos; perguntar a todas as reuniões custa 2",
   assert.match(ctx.anthropic.calls.at(-1).params.system[0].text, /<reuniao titulo="Planejamento do orçamento"/);
 });
 
+test("ata com modelo do usuário: o modelo vai no prompt e a resposta segue o formato", async () => {
+  const template = "# Registro de Reunião {{numero_do_registro}}\n**Data:** {{data}}\n**Participantes:**\n{{participantes}}\n## Conclusão\n{{conclusao}}\n\nRAFAEL CORREA COSTA\nPromotor de Justiça";
+  const r = await u.post("/api/v1/ai/summary", { meetingId: "mt-1", template });
+  assert.equal(r.statusCode, 200);
+  const call = ctx.anthropic.calls.at(-1).params;
+  const sys = Array.isArray(call.system) ? call.system.map((b) => b.text).join("") : call.system;
+  const user = Array.isArray(call.messages[0].content) ? call.messages[0].content.map((b) => b.text || "").join("") : call.messages[0].content;
+  assert.match(sys, /EXATAMENTE o modelo/);
+  assert.match(user, /<modelo>[\s\S]*Promotor de Justiça[\s\S]*<\/modelo>/);
+  assert.ok(user.includes("<transcricao"), "a transcrição continua no prompt");
+});
+
+test("modelo a partir de uma ata existente (texto ou PDF): 1 crédito, texto do modelo de volta", async () => {
+  ctx.anthropic.reviewText = "# Registro de Reunião {{numero_do_registro}}\n**Data:** {{data}}";
+  const before = await balance();
+  const a = await u.post("/api/v1/ai/template", { text: "Registro de Reunião 2026000638386\nData: 16 de janeiro de 2026\nParticipantes: Ana, Bruno\nConclusão: a reunião foi encerrada." });
+  assert.equal(a.statusCode, 200);
+  assert.match(a.json().text, /\{\{data\}\}/);
+  assert.equal(a.json().credits, 1);
+  assert.equal(await balance(), before - 1);
+  const pdf = Buffer.from("%PDF-1.4 fake").toString("base64");
+  const b = await u.post("/api/v1/ai/template", { pdfBase64: pdf });
+  assert.equal(b.statusCode, 200);
+  const params = ctx.anthropic.calls.at(-1).params;
+  assert.equal(params.messages[0].content[0].type, "document");
+  assert.equal(params.messages[0].content[0].source.media_type, "application/pdf");
+  const bad = await u.post("/api/v1/ai/template", { text: "curto" });
+  assert.equal(bad.statusCode, 400);
+});
+
 test("teto diário de gasto pausa a IA inclusa", async () => {
   await ctx.db.query("INSERT INTO ai_requests (user_id, kind, model, cost_usd, status) VALUES ($1, 'summary', 'x', $2, 'done')", [
     u.me.id, ctx.config.aiDailyBudgetUsd,

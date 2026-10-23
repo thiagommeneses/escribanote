@@ -8,7 +8,7 @@ import { getSettings, DEFAULTS, HQ_MODELS, pushSyncedSettings, pullSyncedSetting
 import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, writeSettingsFile } from "./lib/backup.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
-import { streamClaude, ataRequest, chatRequest, reviewRequest, parseReview, API_ORIGIN } from "./lib/ai.js";
+import { streamClaude, ataRequest, chatRequest, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
 import { computeStats, findMe } from "./lib/stats.js";
 
@@ -346,12 +346,57 @@ async function accountCall(fn) {
   }
 }
 
-async function runAta(ai, s, settings, { onDelta, signal } = {}) {
+// ---------------- Modelos de ata (do usuário) ----------------
+// Ficam em chrome.storage.local (podem ser grandes demais para o sync): [{id, name, text, createdAt, updatedAt}].
+const MAX_TEMPLATE_CHARS = 24000;
+async function loadTemplates() {
+  const { ataTemplates } = await chrome.storage.local.get("ataTemplates");
+  return Array.isArray(ataTemplates) ? ataTemplates : [];
+}
+async function saveTemplate({ id, name, text }) {
+  const list = await loadTemplates();
+  const clean = { name: String(name || "Modelo").trim().slice(0, 80), text: String(text || "").trim().slice(0, MAX_TEMPLATE_CHARS) };
+  if (!clean.text) throw new Error("O modelo está vazio.");
+  const now = Date.now();
+  const i = list.findIndex((t) => t.id === id);
+  if (i >= 0) list[i] = { ...list[i], ...clean, updatedAt: now };
+  else list.push({ id: id || now.toString(36) + Math.random().toString(36).slice(2, 6), ...clean, createdAt: now, updatedAt: now });
+  await chrome.storage.local.set({ ataTemplates: list });
+  return list;
+}
+async function deleteTemplate(id) {
+  const list = (await loadTemplates()).filter((t) => t.id !== id);
+  await chrome.storage.local.set({ ataTemplates: list });
+  const settings = await getSettings();
+  if (settings.ataTemplate === id) await chrome.storage.local.set({ settings: { ...settings, ataTemplate: "" } });
+  return list;
+}
+// Modelo que vale para esta reunião: o escolhido nela, senão o padrão dos Ajustes.
+async function templateFor(s, settings) {
+  const id = s.ataTemplateId !== undefined && s.ataTemplateId !== null ? s.ataTemplateId : settings.ataTemplate;
+  if (!id) return "";
+  const t = (await loadTemplates()).find((x) => x.id === id);
+  return t ? t.text : "";
+}
+// Extrai um modelo a partir de um PDF (base64) ou de um texto colado, pela IA.
+async function importTemplate(ai, { pdfBase64, text }) {
+  const req = pdfBase64 ? templateFromPdfRequest(pdfBase64) : templateFromTextRequest(text || "");
   if (ai.kind === "key") {
-    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...ataRequest(s, settings.tags, settings.glossary), onDelta, signal });
+    const settings = await getSettings();
+    const r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...req, maxTokens: 8000 });
+    return r.text.trim();
+  }
+  const r = await accountCall(() => accountFetch("/ai/template", { method: "POST", body: pdfBase64 ? { pdfBase64 } : { text } }));
+  return (r.text || "").trim();
+}
+
+async function runAta(ai, s, settings, { onDelta, signal } = {}) {
+  const template = await templateFor(s, settings);
+  if (ai.kind === "key") {
+    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...ataRequest(s, settings.tags, settings.glossary, template), onDelta, signal });
   }
   const done = await accountCall(() =>
-    accountStream("/ai/summary", { meeting: forAccount(s), tags: settings.tags, glossary: settings.glossary }, { onDelta, signal }),
+    accountStream("/ai/summary", { meeting: forAccount(s), tags: settings.tags, glossary: settings.glossary, template }, { onDelta, signal }),
   );
   return { text: done.text, model: done.model, stopReason: "end_turn", createdAt: Date.now(), via: "account" };
 }
@@ -672,6 +717,17 @@ async function handle(msg, sender) {
     }
     case "is-pro":
       return isPro();
+    case "ata-templates":
+      return loadTemplates();
+    case "ata-template-save":
+      return saveTemplate(msg);
+    case "ata-template-delete":
+      return deleteTemplate(msg.id);
+    case "ata-template-import": {
+      const ai = await aiProvider();
+      if (!ai) throw new Error(NO_AI);
+      return { text: await importTemplate(ai, msg) };
+    }
     case "speakers-test": {
       // diagnóstico: turnos e vozes das amostras enviadas (identificação de falantes)
       await ensureOffscreen();
@@ -700,6 +756,7 @@ async function handle(msg, sender) {
       if (msg.summary !== undefined) s.summary = msg.summary;
       if (msg.speakers) Object.assign(s.speakers, msg.speakers);
       if (typeof msg.notesText === "string") s.notes.text = msg.notesText;
+      if ("ataTemplateId" in msg) s.ataTemplateId = msg.ataTemplateId || null;
       await changed(s, { now: true });
       return s;
     }

@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { refund, reserve } from "./credits.js";
 import { fail } from "./http.js";
-import { ataRequest, chatRequest, DEFAULT_TAGS, parseReview, reviewRequest, toText } from "./lib.js";
+import { ataRequest, chatRequest, DEFAULT_TAGS, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
 import { cleanDoc, loadDoc, requirePro, saveMeeting } from "./meetings.js";
 
 // US$ por milhão de tokens (entrada, saída, leitura de cache, escrita de cache de 5 min).
@@ -141,7 +141,9 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
     const doc = await meetingFrom(req);
     const tags = tagsFrom(req.body);
     const credits = toText(doc, { tags }).length > LONG_MEETING_CHARS ? 2 : 1;
-    const r = ataRequest(doc, tags, glossaryFrom(req.body));
+    // Modelo de ata do usuário (texto em Markdown, opcional): a ata sai no formato da equipe.
+    const template = typeof req.body?.template === "string" ? req.body.template.slice(0, 24000) : "";
+    const r = ataRequest(doc, tags, glossaryFrom(req.body), template);
     await streamAnswer(req, reply, {
       kind: "summary",
       model: config.models.strong,
@@ -213,6 +215,29 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
       cache: true,
       maxTokens: 6000,
     });
+  });
+
+  // Modelo de ata a partir de uma ata existente (PDF em base64 ou texto): 1 crédito.
+  app.post("/api/v1/ai/template", { ...auth, bodyLimit: 12 * 1024 * 1024 }, async (req) => {
+    await guard(req);
+    const pdf = typeof req.body?.pdfBase64 === "string" ? req.body.pdfBase64 : "";
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    if (pdf && !/^[A-Za-z0-9+/=\s]+$/.test(pdf.slice(0, 2000))) fail(400, "bad_request", "PDF inválido.");
+    if (pdf.length > 11 * 1024 * 1024) fail(413, "too_large", "O PDF passou de 8 MB.");
+    if (!pdf && text.length < 40) fail(400, "bad_request", "Envie um PDF ou o texto de uma ata.");
+    const model = config.models.strong;
+    const call = { ...(await start(req, "template", model, 1, null)), model };
+    const r = pdf ? templateFromPdfRequest(pdf) : templateFromTextRequest(text);
+    try {
+      const msg = await anthropic.messages.create({ model, max_tokens: 8000, system: r.system, messages: r.messages, output_config: { effort: "medium" } });
+      if (msg.stop_reason === "refusal") throw new Error("O modelo recusou esta solicitação.");
+      const out = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+      await finish(call.id, model, msg.usage || {});
+      return { text: out, balance: call.balance, credits: 1 };
+    } catch (err) {
+      const balance = await failed(req, call, 1, err);
+      fail(502, "ai_failed", friendly(err), { balance });
+    }
   });
 
   // Revisão (sem streaming): 1 crédito por reunião a cada 24 h, porque a extensão revisa em lotes.
