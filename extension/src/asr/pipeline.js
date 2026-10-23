@@ -3,6 +3,7 @@
 // gravador (áudio do computador, para apps como o Slack). O áudio nunca sai do computador.
 import { Segmenter } from "./segmenter.js";
 import { createEngine, saveDiag } from "./engine.js";
+import { createSpeakerEngine } from "./speakers.js";
 import { HQ_MODELS, WHISPER_LANG } from "../lib/settings.js";
 
 const SR = 16000;
@@ -13,6 +14,7 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
   const state = {
     modelKey: null,
     engine: null,
+    speakers: null, // motor de identificação de falantes (opcional)
     queue: [],
     busy: false,
     streams: [],
@@ -78,11 +80,23 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
       while (state.queue.length && state.engine) {
         const seg = state.queue.shift();
         const t0 = performance.now();
-        const text = await state.engine.transcribe(seg.samples);
+        // Com identificação de falantes, o trecho é dividido por voz e cada parte é transcrita
+        // separadamente (falas de pessoas diferentes não se misturam num bloco só).
+        let parts = [{ startMs: 0, endMs: seg.end - seg.start, samples: seg.samples, voice: null }];
+        if (state.speakers) {
+          try {
+            parts = await state.speakers.split(seg.samples);
+          } catch (err) {
+            saveDiag({ speakersError: err.message || String(err) });
+          }
+        }
+        for (const part of parts) {
+          const text = await state.engine.transcribe(part.samples);
+          if (text) onResult({ start: seg.start + part.startMs, end: seg.start + part.endMs, text, source: seg.source, ...(part.voice ? { voice: part.voice } : {}) });
+        }
         state.stats.workMs += performance.now() - t0;
         state.stats.audioMs += (seg.samples.length / SR) * 1000;
         state.stats.segments++;
-        if (text) onResult({ start: seg.start, end: seg.end, text, source: seg.source });
         // rtf < 1: transcreve mais rápido que o tempo real
         report({ state: "running", rtf: +(state.stats.workMs / Math.max(1, state.stats.audioMs)).toFixed(2), segments: state.stats.segments });
       }
@@ -118,12 +132,45 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
     return engine;
   }
 
+  // Modelos de identificação de falantes (pyannote + WeSpeaker). Rodam no processador: são
+  // pequenos e a placa de vídeo fica com o Whisper.
+  async function loadSpeakers() {
+    if (state.speakers) return state.speakers;
+    const files = {};
+    report({ state: "loading", progress: 0, model: "falantes" });
+    state.speakers = await createSpeakerEngine({
+      device: "wasm",
+      onProgress: (p) => {
+        files[p.file] = p;
+        const list = Object.values(files);
+        const total = list.reduce((a, f) => a + (f.total || 0), 0);
+        const loaded = list.reduce((a, f) => a + (f.loaded || 0), 0);
+        report({ state: "loading", progress: total ? Math.round((loaded / total) * 100) : 0, model: "falantes" });
+      },
+    });
+    return state.speakers;
+  }
+
+  async function unloadSpeakers() {
+    if (!state.speakers) return;
+    await state.speakers.dispose().catch(() => {});
+    state.speakers = null;
+  }
+
   // Começa a transcrever o que já foi (e será) segmentado; o áudio capturado durante o
   // carregamento do modelo fica na fila, então nada se perde.
-  async function run(modelKey, lang) {
+  async function run(modelKey, lang, { diarize = false } = {}) {
     state.stats = { segments: 0, audioMs: 0, workMs: 0 };
     const engine = await loadEngine(modelKey, lang);
-    report({ state: "running", device: engine.device, progress: 100 });
+    if (diarize) {
+      try {
+        await loadSpeakers();
+      } catch (err) {
+        saveDiag({ speakersError: err.message || String(err) });
+        report({ warning: "Não deu para carregar os modelos de identificação de falantes (" + err.message + "). A transcrição segue sem eles." });
+      }
+    } else await unloadSpeakers();
+    report({ state: "running", device: engine.device, progress: 100, speakers: !!state.speakers });
     pump();
     return engine;
   }
@@ -155,5 +202,5 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
     state.queue = [];
   }
 
-  return { addStream, loadEngine, run, stop, stopCapture, drain, reset, pump, get busy() { return state.busy || state.queue.length > 0; } };
+  return { addStream, loadEngine, loadSpeakers, run, stop, stopCapture, drain, reset, pump, get busy() { return state.busy || state.queue.length > 0; }, get speakers() { return state.speakers; } };
 }

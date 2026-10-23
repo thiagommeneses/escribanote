@@ -52,6 +52,8 @@ export const DEFAULTS = {
   autoReview: false,
   hq: "off", // "off" | "base" | "small" | "turbo" — motor Whisper local
   hqMic: false,
+  diarize: false, // identificar falantes pela voz (Pro): pyannote + WeSpeaker locais
+  afterCall: "off", // ao sair da chamada: "off" | "app" (abre a reunião no Escribanote) | "web" (app web da conta Pro)
   myName: "",
   // Gravador do computador (Slack e outros apps): últimas escolhas
   recorderModel: "",

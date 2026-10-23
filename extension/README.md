@@ -9,6 +9,34 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Falantes, idioma e partes da reunião (novo na 2.7)
+
+- **Quem está falando, pela voz (Pro):** com a alta precisão ou o gravador do computador ligados, o
+  pyannote (segmentação) e o WeSpeaker (impressão de voz) separam as vozes no próprio computador
+  (`src/asr/speakers.js`, ~32 MB baixados uma vez). Quando as legendas trazem nomes, a extensão aprende
+  de quem é cada voz (`session.voices`); sem legendas (gravador), as falas saem como "Falante 1",
+  "Falante 2"… que você renomeia. Um trecho com duas pessoas é transcrito em duas partes.
+- **Nome certo para cada deviceId:** quando o canal `collections` do Meet não traz o nome, o content
+  script casa o texto da legenda do protocolo com a legenda na tela (nome + texto) e descobre o nome.
+  O nome do protocolo tem prioridade sobre o da tela.
+- **Idioma pelos botões do Meet:** os rótulos ("Sair da chamada", "Turn on captions"…) dizem o idioma
+  da interface, e o Meet gera as legendas nesse idioma. O aviso de idioma errado aparece antes da
+  primeira fala (`captionLanguageIssue` com `source: "interface"`).
+- **Estágio da reunião e partes:** sair da chamada não descarrega a página; a extensão percebe pelo
+  botão de sair e encerra a sessão 20 s depois (ata automática, backup, Whisper). Voltar em menos de
+  10 min continua a mesma reunião; mais tarde no mesmo dia vira "parte 2" (`part`).
+- **Botão Encerrar no widget:** fecha a transcrição na hora em qualquer plataforma (Meet, Teams, Zoom),
+  ignora o que vier depois até "Voltar a transcrever" e dispara o mesmo pós-reunião abaixo.
+- **Ao sair da reunião (Ajustes › Quando a chamada termina):** "só encerrar", "abrir a reunião no
+  Escribanote" (aba com ata, destaques, exportação e IA, com aviso de encerramento) ou, no Pro,
+  "abrir no app web da conta" (a reunião é enviada antes; se não der, abre no Escribanote).
+  Reuniões vazias e o gravador do computador não abrem nada.
+- **Legendas que caem:** se o Meet fecha o canal de legendas (reconexão), a extensão religa as legendas
+  (até 3 cliques por queda, 12 por página).
+- **App web lê a extensão:** com a conta conectada, o app pede
+  `escribanote-list`, `escribanote-unsynced`, `escribanote-get` e `escribanote-save` por mensagem
+  externa e oferece "Enviar agora" para reuniões que ficaram só no computador.
+
 ## Huddles do Slack e outros apps (novo na 2.2)
 
 O **gravador do computador** transcreve o que toca em qualquer programa, inclusive o app do Slack para
@@ -174,6 +202,7 @@ página da reunião (main world)        isolated world                     servi
 npm test                                                     # 33 testes unitários
 CHROME=/caminho/do/chrome node test/e2e-meet.mjs [pasta]     # ponta a ponta num Chrome real (+ screenshots)
 CHROME=/caminho/do/chrome node test/e2e-asr.mjs audio.f32    # Whisper real na extensão (PCM float32 16 kHz)
+CHROME=/caminho/do/chrome node test/e2e-speakers.mjs          # modelos de voz reais: mesma fala = mesma voz, tom alterado = outra
 CHROME=/caminho/do/chrome node test/e2e-backup.mjs [pasta]    # backup na pasta, restauração e ajustes sincronizados
 CHROME=/caminho/do/chrome node test/e2e-account.mjs [pasta]   # conta Pro: conectar, sincronizar, conflito, IA da conta (precisa do Postgres de teste, ver ../server)
 PULSE_SERVER=unix:/nonexistent CHROME=/caminho/do/chrome node test/e2e-recorder.mjs sistema.wav mic.wav [pasta]  # gravador do computador (no WSL, sem o servidor de som travar o AudioContext)

@@ -267,6 +267,10 @@ function renderHqButton() {
 
 function renderBanner() {
   const parts = [];
+  // Aberto sozinho ao sair da chamada (ajuste "Ao sair da reunião")
+  if (params.get("fim") && state.session?.endedAt && params.get("id") === state.session.id) {
+    parts.push(`<div class="banner"><b>A chamada terminou e a transcrição foi encerrada.</b> ${state.session.summary?.text ? "A ata já está na aba <b>Ata</b>." : state.settings.autoAta ? "A ata está sendo gerada e aparece na aba <b>Ata</b>." : "Gere a ata na aba <b>Ata</b>,"} revise os destaques ou exporte pelo botão <b>Exportar</b>.</div>`);
+  }
   const li = state.langIssue;
   if (li) {
     parts.push(`<div class="banner warn"><b>As legendas parecem estar em ${esc(LANG_NAMES[li.seen] || li.seen)}</b>, mas a reunião é em ${esc(LANG_NAMES[li.expected] || li.expected)}.
@@ -871,6 +875,7 @@ function cardHtml(m, snippet) {
       <span>${esc(PLATFORM[m.platform] || m.platform)}</span>
       ${m.endedAt ? `<span>${fmtDuration(m.endedAt - m.startedAt)}</span>` : ""}
       <span class="avatars">${names.slice(0, 4).map((n) => avatar(n, n)).join("")}</span>
+      ${m.part > 1 ? `<span class="badge" title="Mesmo link de reunião, retomado no mesmo dia">parte ${m.part}</span>` : ""}
       ${m.hasSummary ? '<span class="badge ok">ata</span>' : ""}${m.highlights ? `<span class="badge">⭐ ${m.highlights}</span>` : ""}</div>
     ${snippet ? `<div class="snippet">${highlight(snippet, state.listQuery.trim())}</div>` : ""}
   </button>`;
@@ -1009,6 +1014,14 @@ async function renderSettings() {
   if (document.activeElement !== form.elements.apiKey) form.elements.apiKey.value = apiKey || "";
   $("key-status").textContent = apiKey ? "Chave salva neste navegador." : "";
   renderTagEditor();
+
+  // Identificação de falantes pela voz: recurso do Pro (a opção fica visível, mas só liga com a conta Pro).
+  const pro = await send({ type: "is-pro" }).catch(() => false);
+  form.elements.diarize.disabled = !pro;
+  $("diarize-row").title = pro ? "" : "Disponível no Escribanote Pro";
+  $("diarize-row").classList.toggle("muted", !pro);
+  $("after-call-web").disabled = !pro;
+  if (!pro) $("after-call-web").textContent += " (Pro)";
 
   const shots = await chrome.permissions.contains({ origins: ["<all_urls>"] });
   $("grant-shots").hidden = shots;

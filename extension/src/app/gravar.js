@@ -200,7 +200,10 @@ async function start() {
   rec.timer = setInterval(tick, 120);
 
   // O áudio já está sendo segmentado enquanto o modelo carrega; nada se perde.
-  rec.running = rec.pipe.run(modelKey, settings.captionLang).catch((err) => {
+  // Identificação de falantes pela voz (Pro): no gravador não há legendas, então é ela que separa
+  // "Falante 1", "Falante 2"… em vez de juntar tudo em "Participantes".
+  const diarize = !!settings.diarize && (await chrome.runtime.sendMessage({ type: "is-pro" }).catch(() => false));
+  rec.running = rec.pipe.run(modelKey, settings.captionLang, { diarize }).catch((err) => {
     rec.status = { state: "error", message: err.message };
     renderStatus();
   });

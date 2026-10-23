@@ -91,6 +91,7 @@ function indexEntry(s) {
     highlights: Object.keys(s.highlights).length,
     hasSummary: !!(s.summary && s.summary.text),
     meetingKey: s.meetingKey,
+    part: s.part || 1,
   };
 }
 
@@ -210,6 +211,10 @@ async function sessionForTab(tabId, meeting) {
     startedAt: now,
   });
   s.meetingKey = meeting.key;
+  // Mesmo link de novo no mesmo dia (saiu e voltou depois de um tempo, reunião em dois blocos):
+  // nova parte, numerada, em vez de misturar tudo ou perder o vínculo.
+  const sameDay = (await loadIndex()).filter((m) => m.meetingKey === meeting.key && new Date(m.startedAt).toDateString() === new Date(now).toDateString());
+  if (sameDay.length) s.part = Math.max(...sameDay.map((m) => m.part || 1)) + 1;
   cache.set(s.id, s);
   sessionTab.set(s.id, tabId);
   await chrome.storage.session.set({ [`active:${tabId}`]: { id: s.id, meetingKey: meeting.key } });
@@ -245,8 +250,39 @@ async function endSession(tabId) {
   queueBackup([s.id], { now: true }); // reunião terminou: backup já, sem esperar o lote
   await stopHq(tabId);
   const settings = await getSettings();
+  // a tela pós-reunião abre já; revisão e ata continuam em segundo plano e aparecem nela
+  openAfterCall(s, settings).catch((err) => console.warn("abrir após a chamada:", err));
   if (settings.autoReview) await reviewPending(s).catch(() => {});
   maybeAutoAta(s);
+}
+
+// Ajuste "Ao sair da reunião": abre a tela pós-reunião assim que a chamada termina.
+// "app" abre a reunião no Escribanote; "web" (Pro) envia a reunião para a conta e abre o app web
+// nela (transcrição, ata e chat); se o envio não der, abre no Escribanote mesmo.
+async function openAfterCall(s, settings) {
+  const mode = settings.afterCall || "off";
+  const diag = { at: Date.now(), id: s.id, mode, entries: s.entries.length + s.asr.length, recorder: !!s.recorder };
+  const note = (patch) => chrome.storage.local.set({ afterCallDiag: Object.assign(diag, patch) }).catch(() => {});
+  if (mode === "off" || s.recorder || diag.entries === 0) return note({ skipped: true });
+  let url = chrome.runtime.getURL(`src/app/app.html?id=${encodeURIComponent(s.id)}&fim=1`);
+  if (mode === "web" && (await isPro())) {
+    try {
+      if (await syncActive()) {
+        queueSync([s.id], { now: true });
+        await flushSync();
+      }
+      if ((await getSyncMeta()).versions[s.id]) url = `${await accountBase()}/app/#/r/${encodeURIComponent(s.id)}`;
+    } catch (err) {
+      note({ syncError: err.message });
+    }
+  }
+  try {
+    const tab = await chrome.tabs.create({ url, active: true });
+    note({ url, tabId: tab.id });
+  } catch (err) {
+    note({ url, error: err.message });
+    throw err;
+  }
 }
 
 async function maybeAutoAta(s) {
@@ -408,7 +444,7 @@ async function startHq(tabId) {
   }
   await ensureOffscreen();
   broadcastHq(tabId, { state: "starting" });
-  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: settings.hqMic });
+  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: settings.hqMic, diarize: settings.diarize && (await isPro()) });
   if (r && r.error) {
     broadcastHq(tabId, { state: "error", message: r.error });
     throw new Error(r.error);
@@ -420,6 +456,12 @@ async function stopHq(tabId) {
   if (!hqStatus.has(tabId) || hqStatus.get(tabId).state === "idle") return;
   await toOffscreen({ type: "stop" }).catch(() => {});
   broadcastHq(tabId, { state: "idle" });
+}
+
+// Identificação de falantes pela voz é do plano Pro (roda no computador, mas é um diferencial do plano).
+async function isPro() {
+  const a = await getAccount();
+  return !!(a && a.plan === "pro" && !a.invalid);
 }
 
 function meIdFor(s, myName) {
@@ -609,6 +651,13 @@ async function handle(msg, sender) {
       const { asrDiag = {} } = await chrome.storage.local.get("asrDiag");
       await chrome.storage.local.set({ asrDiag: { ...asrDiag, ...msg.patch, at: Date.now() } });
       return true;
+    }
+    case "is-pro":
+      return isPro();
+    case "speakers-test": {
+      // diagnóstico: turnos e vozes das amostras enviadas (identificação de falantes)
+      await ensureOffscreen();
+      return toOffscreen({ type: "analyze-speakers", clips: msg.clips });
     }
     case "hq-test": {
       // diagnóstico: transcreve amostras enviadas pela página de ajustes/testes
@@ -923,6 +972,7 @@ async function handleExternal(msg, sender) {
   const allowed = new URL(await accountBase()).origin;
   if (!sender.origin || sender.origin !== allowed) return { ok: false, reason: "origem não autorizada" };
   if (msg?.type === "escribanote-ping") return { ok: true, version: chrome.runtime.getManifest().version };
+  if (["escribanote-list", "escribanote-unsynced", "escribanote-get", "escribanote-save"].includes(msg?.type)) return externalLibrary(msg);
   if (msg?.type !== "escribanote-connect") return { ok: false, reason: "mensagem desconhecida" };
   if (typeof msg.token !== "string" || msg.token.length < 20) return { ok: false, reason: "token inválido" };
   await setAccount({ token: msg.token, email: String(msg.email || ""), deviceId: String(msg.deviceId || ""), connectedAt: Date.now(), invalid: false });
@@ -935,6 +985,49 @@ async function handleExternal(msg, sender) {
   await refreshAccount().catch(() => {});
   notifyAccount();
   return { ok: true, pending: meta.consent ? 0 : (await loadIndex()).length };
+}
+
+// O app web (Pro, logado, com a extensão conectada) enxerga as reuniões deste navegador e pode
+// pedir o envio das que ainda não estão na conta. Só metadados sem consentimento de sincronização;
+// o texto só sai daqui quando a pessoa já aceitou sincronizar ou pede o envio explicitamente.
+async function externalLibrary(msg) {
+  const acct = await getAccount();
+  if (!acct || acct.invalid) return { ok: false, reason: "extensão não conectada à conta" };
+  const meta = await getSyncMeta();
+  const index = await loadIndex();
+  const status = (m) => (meta.versions[m.id] ? "synced" : meta.remoteDeleted[m.id] ? "deleted" : meta.localOnly[m.id] ? "local" : "pending");
+  if (msg.type === "escribanote-list") {
+    return {
+      ok: true,
+      meetings: index.map((m) => ({ id: m.id, title: m.title, platform: m.platform, startedAt: m.startedAt, endedAt: m.endedAt, count: m.count, participants: m.participants, part: m.part || 1, status: status(m) })),
+      sync: { consent: meta.consent, pending: meta.pending.length, error: meta.error, lastSyncAt: meta.lastSyncAt, plan: acct.plan },
+    };
+  }
+  if (msg.type === "escribanote-unsynced") {
+    const ids = index.filter((m) => status(m) !== "synced" && status(m) !== "deleted").map((m) => m.id);
+    return { ok: true, ids, count: ids.length };
+  }
+  if (msg.type === "escribanote-get") {
+    if (!meta.consent) return { ok: false, reason: "sincronização ainda não autorizada na extensão" };
+    const s = await getSession(String(msg.id || ""));
+    if (!s) return { ok: false, reason: "reunião não encontrada neste navegador" };
+    const { shots, aliases, ...doc } = s;
+    return { ok: true, doc };
+  }
+  // escribanote-save: envia agora as reuniões pedidas (ou todas as pendentes)
+  if (acct.plan !== "pro") return { ok: false, reason: "o envio para a conta é do Escribanote Pro" };
+  const wanted = Array.isArray(msg.ids) && msg.ids.length ? msg.ids.map(String) : index.filter((m) => status(m) === "pending" || status(m) === "local").map((m) => m.id);
+  const ids = wanted.filter((id) => index.some((m) => m.id === id) && !meta.remoteDeleted[id]);
+  if (!ids.length) return { ok: true, synced: [], failed: [] };
+  if (!meta.consent) meta.consent = "new"; // a pessoa pediu o envio pelo app: as próximas reuniões passam a ir sozinhas
+  for (const id of ids) delete meta.localOnly[id];
+  await saveSyncMeta(meta);
+  notifyAccount();
+  queueSync(ids, { now: true });
+  await flushSync();
+  const after = await getSyncMeta();
+  const synced = ids.filter((id) => after.versions[id]);
+  return { ok: true, synced, failed: ids.filter((id) => !after.versions[id]), error: after.error };
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

@@ -6,7 +6,7 @@ import "../src/main/proto.js";
 import "../src/main/meet.js";
 import "../src/main/teams.js";
 import "../src/main/zoom.js";
-import { createSession, applyEvent, toBlocks } from "../src/lib/transcript.js";
+import { createSession, applyEvent, toBlocks, speakerName } from "../src/lib/transcript.js";
 import { toSrt, toVtt, toMarkdown, toText, fileName } from "../src/lib/format.js";
 
 const { encode } = globalThis.EscribanoteProto;
@@ -315,6 +315,27 @@ test("detecta o idioma das legendas e avisa quando não bate", () => {
   assert.equal(captionLanguageIssue(t, "pt-BR").seen, "en");
 });
 
+test("idioma da interface do Meet avisa antes da primeira fala; some quando as legendas confirmam", () => {
+  const s = session();
+  assert.equal(applyEvent(s, { kind: "ui-lang", platform: "meet", lang: "en" }), true);
+  assert.equal(applyEvent(s, { kind: "ui-lang", platform: "meet", lang: "en" }), false);
+  assert.deepEqual(captionLanguageIssue(s, "pt-BR"), { seen: "en", expected: "pt", source: "interface" });
+  assert.equal(captionLanguageIssue(s, "en-US"), null);
+  // as legendas chegam com código pt-BR: a interface deixa de importar
+  for (let i = 0; i < 3; i++) applyEvent(s, { kind: "caption", id: `${i}/a`, speakerId: "a", text: "vamos começar a reunião de hoje", lang: "pt-BR" }, 1_001_000 + i * 2000);
+  assert.equal(captionLanguageIssue(s, "pt-BR"), null);
+});
+
+test("nome lido da tela só preenche lacunas; o nome do protocolo tem prioridade", () => {
+  const s = session();
+  assert.equal(applyEvent(s, { kind: "speaker", speakerId: "spaces/x/devices/1", name: "Ana (tela)", source: "dom", weak: true }), true);
+  assert.equal(speakerName(s, "spaces/x/devices/1"), "Ana (tela)");
+  assert.equal(applyEvent(s, { kind: "speaker", speakerId: "spaces/x/devices/1", name: "Ana Teste" }), true);
+  assert.equal(applyEvent(s, { kind: "speaker", speakerId: "spaces/x/devices/1", name: "Outro Nome", weak: true }), false);
+  assert.equal(speakerName(s, "spaces/x/devices/1"), "Ana Teste");
+  assert.equal(speakerName(s, "voz:2"), "Falante 2");
+});
+
 test("revisão: pedido com glossário e contexto; resposta validada", () => {
   const items = [{ id: "1/a", speaker: "Ana", text: "o orçamento do quiu quatro" }, { id: "2/b", speaker: "Bruno", text: "fechado" }];
   const req = reviewRequest(items, { glossary: "Q4\nOKR", context: [{ id: "0/a", speaker: "Ana", text: "Bom dia" }] });
@@ -379,6 +400,44 @@ test("Gravador do computador: áudio do sistema vira 'outros', microfone vira 'v
   addAsrSegment(s, { start: 2_005_000, end: 2_007_000, text: "Pode começar, estou ouvindo.", source: "mic" }, "me");
   const blocks = toBlocks(s);
   assert.deepEqual(blocks.map((b) => b.speaker), ["Participantes", "Você"]);
+});
+
+import { VoiceBook } from "../src/asr/speakers.js";
+
+test("vozes: embeddings parecidos viram o mesmo falante; diferentes viram outro", () => {
+  const book = new VoiceBook();
+  const a = Float32Array.from([1, 0, 0, 0.1]);
+  const a2 = Float32Array.from([0.95, 0.1, 0, 0.1]);
+  const b = Float32Array.from([0, 1, 0.1, 0]);
+  assert.equal(book.assign(a), "voz:1");
+  assert.equal(book.assign(a2), "voz:1");
+  assert.equal(book.assign(b), "voz:2");
+  assert.equal(book.assign(Float32Array.from([0.1, 0.9, 0.1, 0])), "voz:2");
+  assert.equal(book.size, 2);
+});
+
+test("vozes: aprende o nome pela legenda e usa a voz quando a legenda falta (ou no gravador)", () => {
+  const s = session();
+  applyEvent(s, { kind: "speaker", speakerId: "dev/ana", name: "Ana" });
+  // duas falas da Ana cobertas por legendas: a voz 1 aprende que é a Ana
+  for (let i = 0; i < 2; i++) {
+    const at = 1_000_000 + i * 10_000;
+    applyEvent(s, { kind: "caption", id: `c${i}/dev/ana`, speakerId: "dev/ana", text: "estamos revisando o orçamento do trimestre" }, at + 1200);
+    s.entries[s.entries.length - 1].updatedAt = at + 4000;
+    assert.equal(addAsrSegment(s, { start: at, end: at + 3000, text: "estamos revisando o orçamento", source: "tab", voice: "voz:1" }), true);
+    assert.equal(s.asr[s.asr.length - 1].speakerId, "dev/ana");
+  }
+  // sem legenda nenhuma por perto: a voz 1 ainda é a Ana; a voz 2 vira "Falante 2"
+  assert.equal(addAsrSegment(s, { start: 2_000_000, end: 2_003_000, text: "fechamos então", source: "tab", voice: "voz:1" }), true);
+  assert.equal(s.asr[s.asr.length - 1].speakerId, "dev/ana");
+  assert.equal(addAsrSegment(s, { start: 2_010_000, end: 2_013_000, text: "concordo com a proposta", source: "tab", voice: "voz:2" }), true);
+  assert.equal(speakerName(s, s.asr[s.asr.length - 1].speakerId), "Falante 2");
+  // gravador: áudio do sistema com voz identificada não vira "outros"
+  const r = session();
+  addAsrSegment(r, { start: 10_000, end: 13_000, text: "bom dia a todos", source: "system", voice: "voz:1" }, "me");
+  addAsrSegment(r, { start: 20_000, end: 23_000, text: "bom dia", source: "system", voice: "voz:2" }, "me");
+  assert.deepEqual(r.asr.map((a) => a.speakerId), ["voz:1", "voz:2"]);
+  assert.deepEqual(toBlocks(r).map((b) => b.speaker), ["Falante 1", "Falante 2"]);
 });
 
 test("Gravador do computador: eco da caixa de som no microfone é descartado", () => {
