@@ -116,7 +116,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .avatars { display: inline-flex; }
 .av { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 10px; font-weight: 700; color: #fff; border: 2px solid var(--bg-soft); margin-left: -6px; }
 .av:first-child { margin-left: 0; }
-.list-foot { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--border); }
+.list-foot { display: flex; flex-wrap: wrap; gap: 2px 4px; padding: 6px 8px; border-top: 1px solid var(--border); }
+.list-foot .btn { padding: 4px 8px; font-size: 12.5px; }
 .list-empty { text-align: center; color: var(--muted); padding: 32px 12px; }
 .list-empty .btn { margin-top: 12px; }
 .bk-banner { margin: 8px 12px 0; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
@@ -319,6 +320,35 @@ select.sm { font-size: 12.5px; padding: 5px 8px; max-width: 190px; }
 .ata-model { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-size: 12px; color: var(--muted); }
 .ata-model select { flex: 1; min-width: 0; max-width: none; }
 .ata-bar .btn.primary { flex: none; }
+.star { flex: none; border: 0; background: none; padding: 2px; cursor: pointer; color: var(--muted); display: grid; place-items: center; border-radius: 6px; }
+.star svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.star:hover { background: var(--bg-soft); color: var(--text); }
+.star[aria-pressed="true"] { color: #d97706; } .star[aria-pressed="true"] svg { fill: #f59e0b; stroke: #d97706; }
+.ata-prompt { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-soft); margin-bottom: 10px; padding: 0 10px; }
+.ata-prompt summary { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12.5px; color: var(--text-2); padding: 7px 0; list-style: none; }
+.ata-prompt summary::-webkit-details-marker { display: none; }
+.ata-prompt summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .15s; }
+.ata-prompt[open] summary::after { transform: rotate(180deg); }
+.ata-prompt summary svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ata-prompt .pill { font-style: normal; font-size: 10.5px; font-weight: 600; border-radius: 999px; padding: 0 6px; background: var(--accent); color: #fff; }
+.ata-prompt textarea { width: 100%; font-size: 12.5px; line-height: 1.45; resize: vertical; }
+.ata-prompt .tiny { margin: 6px 0 8px; }
+.ata-prompt.active summary { color: var(--accent); }
+/* leitura de atas longas: sumário, seções recolhíveis, tamanho do texto */
+.ata-tools { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.ata-outline { display: flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.ata-outline a { font-size: 11.5px; color: var(--text-2); background: var(--bg-soft); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; text-decoration: none; white-space: nowrap; }
+.ata-outline a:hover, .ata-outline a.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.ata-tools-r { display: flex; gap: 10px; flex: none; align-items: center; }
+.ata-tools-r .linkish { text-decoration: none; font-size: 12px; color: var(--muted); } .ata-tools-r .linkish:hover { color: var(--accent); }
+#ata-font small { font-size: 9px; }
+.ata-sec > h3 { cursor: pointer; display: flex; align-items: center; gap: 6px; scroll-margin-top: 100px; }
+.ata-sec > h3::before { content: "▾"; font-size: 11px; color: var(--muted); transition: transform .15s; }
+.ata-sec.closed > h3::before { transform: rotate(-90deg); }
+.ata-sec.closed > :not(h3) { display: none; }
+.ata-sec.closed > h3::after { content: attr(data-n); font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+.ata-doc.big .ata-text { font-size: 15px; line-height: 1.65; }
+.ata-doc.big .ata-text h3 { font-size: 15.5px; }
 .ata-doc { position: relative; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); padding: 14px 16px 16px; }
 .ata-doc.empty { background: var(--bg-soft); box-shadow: none; border-style: dashed; }
 .ata-text { font-size: 13.5px; line-height: 1.55; }

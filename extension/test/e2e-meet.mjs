@@ -453,10 +453,24 @@ try {
     await sleep(1200);
     await evaluate(app, `document.querySelector('[data-tab="ata"]').click()`);
     await sleep(300);
-    assert.equal(await evaluate(app, "document.getElementById('ata-template').value"), tpls[0].id, "seletor mostra o modelo da reunião");
+    // instruções extras digitadas na aba Ata são salvas na reunião
+    await evaluate(app, `(() => { const t = document.getElementById("ata-prompt"); t.value = "Conclusão em um parágrafo só."; t.dispatchEvent(new Event("blur")); })()`);
+    await waitFor(async () => (await sw({ type: "get", id })).ataPrompt === "Conclusão em um parágrafo só.", "instruções salvas");
+    assert.equal(await evaluate(app, "document.getElementById('ata-prompt-on').hidden"), false, "selo 'ativas'");
+    // estrela torna o modelo escolhido o padrão dos Ajustes
+    await evaluate(app, "document.getElementById('ata-default').click()");
+    await waitFor(async () => (await evaluate(app, `(async () => (await chrome.storage.local.get("settings")).settings.ataTemplate)()`)) === tpls[0].id, "modelo padrão salvo");
+    await waitFor(async () => (await evaluate(app, "document.getElementById('ata-default').getAttribute('aria-pressed')")) === "true", "estrela marcada");
+    await evaluate(app, "location.reload(); true");
+    await sleep(1200);
+    await evaluate(app, `document.querySelector('[data-tab="ata"]').click()`);
+    await sleep(300);
+    assert.match(await evaluate(app, "document.getElementById('ata-template').selectedOptions[0].textContent"), /Padrão: Registro \(Atena\)/, "seletor mostra o modelo padrão");
     await evaluate(app, "document.getElementById('ata-gen').click()");
     await waitFor(async () => /Registro de Reunião/.test((await sw({ type: "get", id })).summary?.text || ""), "ata no formato do modelo");
     assert.match(JSON.stringify(apiCalls.at(-1).body.messages), /<modelo>[\s\S]*Registro de Reunião[\s\S]*<\/modelo>/, "o modelo foi para a IA");
+    assert.match(JSON.stringify(apiCalls.at(-1).body.system), /<instrucoes>\\nConclusão em um parágrafo só\.\\n<\/instrucoes>/, "as instruções extras foram para a IA");
+    assert.match((await sw({ type: "get", id })).summaryHistory.at(-1).label, /com instruções extras/);
     await sleep(400);
     assert.equal(await evaluate(app, "document.getElementById('ata-dl').hidden"), false, "botão Baixar visível com ata");
     assert.deepEqual(await evaluate(app, "[...document.querySelectorAll('#ata-dl-menu [data-ata]')].map(b => b.dataset.ata)"), ["txt", "md", "pdf"]);

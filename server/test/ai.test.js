@@ -115,12 +115,13 @@ test("reunião longa custa 2 créditos; perguntar a todas as reuniões custa 2",
 
 test("ata com modelo do usuário: o modelo vai no prompt e a resposta segue o formato", async () => {
   const template = "# Registro de Reunião {{numero_do_registro}}\n**Data:** {{data}}\n**Participantes:**\n{{participantes}}\n## Conclusão\n{{conclusao}}\n\nRAFAEL CORREA COSTA\nPromotor de Justiça";
-  const r = await u.post("/api/v1/ai/summary", { meetingId: "mt-1", template });
+  const r = await u.post("/api/v1/ai/summary", { meetingId: "mt-1", template, instructions: "Conclusão em um parágrafo só." });
   assert.equal(r.statusCode, 200);
   const call = ctx.anthropic.calls.at(-1).params;
   const sys = Array.isArray(call.system) ? call.system.map((b) => b.text).join("") : call.system;
   const user = Array.isArray(call.messages[0].content) ? call.messages[0].content.map((b) => b.text || "").join("") : call.messages[0].content;
   assert.match(sys, /EXATAMENTE o modelo/);
+  assert.match(sys, /INSTRUÇÕES EXTRAS DO USUÁRIO[\s\S]*<instrucoes>\nConclusão em um parágrafo só\.\n<\/instrucoes>$/, "instruções extras no fim do system prompt");
   assert.match(user, /<modelo>[\s\S]*Promotor de Justiça[\s\S]*<\/modelo>/);
   assert.ok(user.includes("<transcricao"), "a transcrição continua no prompt");
 });

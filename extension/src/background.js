@@ -398,16 +398,21 @@ async function commitAta(s, settings) {
   const id = s.ataTemplateId !== undefined && s.ataTemplateId !== null ? s.ataTemplateId : settings.ataTemplate;
   const tpl = id && id !== "none" ? (await loadTemplates()).find((x) => x.id === id) : null;
   s.summary.templateId = tpl ? tpl.id : null;
-  commitSummary(s, s.summary, { source: "ai", label: tpl ? `Gerada pela IA · modelo ${tpl.name}` : "Gerada pela IA" });
+  const withInstr = ataInstructions(s, settings) ? " · com instruções extras" : "";
+  commitSummary(s, s.summary, { source: "ai", label: (tpl ? `Gerada pela IA · modelo ${tpl.name}` : "Gerada pela IA") + withInstr });
 }
+
+// Instruções extras em vigor para a ata: as da reunião, senão as padrão dos Ajustes.
+const ataInstructions = (s, settings) => (s.ataPrompt || "").trim() || (settings.ataInstructions || "").trim();
 
 async function runAta(ai, s, settings, { onDelta, signal } = {}) {
   const template = await templateFor(s, settings);
+  const instructions = ataInstructions(s, settings);
   if (ai.kind === "key") {
-    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...ataRequest(s, settings.tags, settings.glossary, template), onDelta, signal });
+    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...ataRequest(s, settings.tags, settings.glossary, template, instructions), onDelta, signal });
   }
   const done = await accountCall(() =>
-    accountStream("/ai/summary", { meeting: forAccount(s), tags: settings.tags, glossary: settings.glossary, template }, { onDelta, signal }),
+    accountStream("/ai/summary", { meeting: forAccount(s), tags: settings.tags, glossary: settings.glossary, template, instructions }, { onDelta, signal }),
   );
   return { text: done.text, model: done.model, stopReason: "end_turn", createdAt: Date.now(), via: "account" };
 }
@@ -787,6 +792,7 @@ async function handle(msg, sender) {
       if (msg.speakers) Object.assign(s.speakers, msg.speakers);
       if (typeof msg.notesText === "string") s.notes.text = msg.notesText;
       if ("ataTemplateId" in msg) s.ataTemplateId = msg.ataTemplateId || null;
+      if (typeof msg.ataPrompt === "string") s.ataPrompt = msg.ataPrompt.trim().slice(0, 4000);
       await changed(s, { now: true });
       return s;
     }

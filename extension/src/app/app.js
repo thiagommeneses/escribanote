@@ -775,6 +775,7 @@ async function aiStatus() {
 // ----- Aba Ata -----
 state.viewing = null; // id de uma versão antiga sendo exibida no lugar da atual (só leitura)
 async function renderAta() {
+  if (!state.settings) state.settings = await getSettings();
   if (!state.templatesLoaded) { await loadTemplates(); state.templatesLoaded = true; }
   const s = state.session;
   const hist = s.summaryHistory || [];
@@ -784,16 +785,23 @@ async function renderAta() {
   $("ata-gen").textContent = s.summary ? "Gerar de novo" : "Gerar ata";
   $("ata-gen").disabled = !s.entries.length || (state.busy && state.busy !== "ata");
   renderAtaTemplateSelect(s);
+  // instruções extras desta reunião
+  if (document.activeElement !== $("ata-prompt")) $("ata-prompt").value = s.ataPrompt || "";
+  const hasPrompt = !!(s.ataPrompt || "").trim();
+  $("ata-prompt-on").hidden = !hasPrompt;
+  $("ata-prompt-box").classList.toggle("active", hasPrompt);
 
   const editing = !$("ata-editor").hidden;
   if (state.busy !== "ata" && !editing) {
     if (viewing) $("ata-body").innerHTML = mdToHtml(viewing.text);
     else if (s.summary) $("ata-body").innerHTML = mdToHtml(s.summary.text);
+    if (viewing || s.summary) decorateAta();
     else $("ata-body").innerHTML = s.entries.length
       ? `<div class="ata-empty"><div class="ico">📝</div><b>Nenhuma ata ainda</b><p>Gere uma ata com resumo, decisões, itens de ação e pendências. Escolha um modelo acima se a sua equipe tem um formato próprio.</p></div>`
       : `<div class="ata-empty"><div class="ico">🎙️</div><b>A ata nasce da transcrição</b><p>Quando a reunião tiver falas registradas, gere a ata por aqui.</p></div>`;
   }
   $("ata-doc").classList.toggle("empty", !s.summary && !viewing);
+  if (!s.summary && !viewing) $("ata-tools").hidden = true;
   // faixa com o estado da ata atual
   const meta = $("ata-meta");
   if (cur && s.summary && !viewing) {
@@ -1062,6 +1070,99 @@ $("ata-editor-save").addEventListener("click", async () => {
   toast(`Salva como v${state.session.summaryHistory.length}`);
 });
 
+// ----- Leitura de atas longas: sumário, seções recolhíveis e tamanho do texto -----
+const ATA_LONG = 2200; // caracteres a partir dos quais vale mostrar o sumário
+function decorateAta() {
+  const body = $("ata-body");
+  const heads = [...body.querySelectorAll("h3")];
+  // embrulha cada título com o que vem depois dele numa seção recolhível
+  for (const [i, h] of heads.entries()) {
+    const sec = document.createElement("section");
+    sec.className = "ata-sec";
+    sec.id = `ata-s${i + 1}`;
+    h.before(sec);
+    let n = h;
+    let words = 0;
+    while (n && !(n !== h && n.tagName === "H3")) { const next = n.nextSibling; sec.append(n); if (n !== h) words += (n.textContent || "").split(/\s+/).filter(Boolean).length; n = next; }
+    h.dataset.n = `${words} palavras`;
+    if (state.folded.has(h.textContent.trim())) sec.classList.add("closed");
+  }
+  const long = body.textContent.length >= ATA_LONG || heads.length >= 4;
+  $("ata-tools").hidden = !long;
+  if (!long) return;
+  $("ata-outline").innerHTML = heads.map((h, i) => `<a href="#ata-s${i + 1}" data-sec="ata-s${i + 1}">${esc(h.textContent.replace(/:$/, "").trim().slice(0, 28))}</a>`).join("");
+  const anyOpen = heads.some((h) => !h.parentElement.classList.contains("closed"));
+  $("ata-fold").textContent = anyOpen ? "Recolher tudo" : "Expandir tudo";
+  $("ata-doc").classList.toggle("big", localStorage.getItem("ataFont") === "big");
+}
+state.folded = new Set(); // títulos recolhidos (por texto, para sobreviver a re-renders)
+$("ata-body").addEventListener("click", (e) => {
+  const h = e.target.closest(".ata-sec > h3");
+  if (!h || e.target.closest("a")) return;
+  const sec = h.parentElement;
+  sec.classList.toggle("closed");
+  const key = h.textContent.trim();
+  sec.classList.contains("closed") ? state.folded.add(key) : state.folded.delete(key);
+  const anyOpen = [...$("ata-body").querySelectorAll(".ata-sec")].some((x) => !x.classList.contains("closed"));
+  $("ata-fold").textContent = anyOpen ? "Recolher tudo" : "Expandir tudo";
+});
+$("ata-outline").addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-sec]");
+  if (!a) return;
+  e.preventDefault();
+  const sec = $(a.dataset.sec);
+  if (!sec) return;
+  sec.classList.remove("closed");
+  state.folded.delete(sec.querySelector("h3").textContent.trim());
+  sec.querySelector("h3").scrollIntoView({ behavior: "smooth", block: "start" });
+  for (const x of $("ata-outline").children) x.classList.toggle("on", x === a);
+});
+$("ata-fold").addEventListener("click", () => {
+  const secs = [...$("ata-body").querySelectorAll(".ata-sec")];
+  const close = secs.some((x) => !x.classList.contains("closed"));
+  for (const x of secs) { x.classList.toggle("closed", close); const k = x.querySelector("h3").textContent.trim(); close ? state.folded.add(k) : state.folded.delete(k); }
+  $("ata-fold").textContent = close ? "Expandir tudo" : "Recolher tudo";
+});
+$("ata-font").addEventListener("click", () => {
+  const big = !$("ata-doc").classList.contains("big");
+  $("ata-doc").classList.toggle("big", big);
+  localStorage.setItem("ataFont", big ? "big" : "normal");
+});
+
+// ----- Instruções extras da ata (por reunião) -----
+let promptTimer;
+$("ata-prompt").addEventListener("input", () => {
+  clearTimeout(promptTimer);
+  promptTimer = setTimeout(saveAtaPrompt, 600);
+});
+$("ata-prompt").addEventListener("blur", () => { clearTimeout(promptTimer); saveAtaPrompt(); });
+async function saveAtaPrompt() {
+  const s = state.session;
+  if (!s) return;
+  const text = $("ata-prompt").value.trim();
+  if (text === (s.ataPrompt || "").trim()) return;
+  state.session = normalize(await send({ type: "update", id: s.id, ataPrompt: text }));
+  $("ata-prompt-on").hidden = !text;
+  $("ata-prompt-box").classList.toggle("active", !!text);
+  if (s.summary) toast(text ? "Instruções salvas. Gere a ata de novo para aplicar." : "Instruções removidas.");
+}
+
+// ----- Modelo padrão direto na aba Ata -----
+$("ata-default").addEventListener("click", async () => {
+  const s = state.session;
+  if (!s) return;
+  const sel = $("ata-template").value;
+  const chosen = sel === "none" ? "" : sel || state.settings?.ataTemplate || "";
+  const already = (state.settings?.ataTemplate || "") === chosen;
+  if (already) return toast(chosen ? "Este já é o modelo padrão." : "O formato do Escribanote já é o padrão.");
+  state.settings = await setSettings({ ataTemplate: chosen });
+  // a reunião passa a seguir o padrão (não precisa mais da escolha própria)
+  if (s.ataTemplateId) state.session = normalize(await send({ type: "update", id: s.id, ataTemplateId: null }));
+  renderAtaTemplateSelect(state.session);
+  const name = state.templates.find((t) => t.id === chosen)?.name;
+  toast(name ? `"${name}" agora é o modelo padrão para novas reuniões.` : "Formato do Escribanote é o padrão de novo.");
+});
+
 // ----- Modelos de ata -----
 state.templates = state.templates || [];
 async function loadTemplates() {
@@ -1079,10 +1180,16 @@ function renderAtaTemplateSelect(s) {
   sel.innerHTML = opts.join("");
   sel.value = s.ataTemplateId || "";
   sel.hidden = !state.templates.length;
+  $("ata-default").hidden = !state.templates.length;
+  const effective = sel.value === "none" ? "" : sel.value || state.settings?.ataTemplate || "";
+  const isDefault = effective === (state.settings?.ataTemplate || "");
+  $("ata-default").setAttribute("aria-pressed", String(isDefault));
+  $("ata-default").title = isDefault ? (effective ? "Este é o modelo padrão para novas reuniões" : "O formato do Escribanote é o padrão") : "Tornar este modelo o padrão para novas reuniões";
 }
 $("ata-template").addEventListener("change", async (e) => {
   if (!state.session) return;
   state.session = normalize(await send({ type: "update", id: state.session.id, ataTemplateId: e.target.value || null }));
+  renderAtaTemplateSelect(state.session);
   toast(e.target.value && e.target.value !== "none" ? "Modelo escolhido. Gere a ata de novo para aplicar." : "Ata no formato padrão na próxima geração.");
 });
 $("ata-dl").addEventListener("click", (e) => {

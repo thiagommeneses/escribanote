@@ -50,6 +50,7 @@ export const DEFAULTS = {
   captionLang: "pt-BR",
   glossary: "",
   ataTemplate: "", // id do modelo de ata padrão ("" = formato do Escribanote)
+  ataInstructions: "", // instruções extras padrão para todas as atas (a reunião pode ter as suas)
   autoReview: false,
   hq: "off", // "off" | "base" | "small" | "turbo" — motor Whisper local
   hqMic: false,

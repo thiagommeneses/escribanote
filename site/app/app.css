@@ -302,3 +302,10 @@ p { margin: 0; }
 .diff .drow:has(.dcell) { display: grid; grid-template-columns: 1fr 1fr; padding: 0; }
 .dcell { padding: 2px 10px; border-right: 1px solid var(--rule); white-space: pre-wrap; word-break: break-word; } .dcell:last-child { border-right: 0; }
 .dgap { text-align: center; color: var(--ink-3); background: var(--paper-2); font-size: 12px; letter-spacing: .2em; }
+/* Instruções extras da ata */
+.ata-prompt { border: 1px solid var(--rule); border-radius: 10px; padding: 0 10px; margin-top: 8px; width: 100%; }
+.ata-prompt summary { cursor: pointer; padding: 7px 0; list-style: none; }
+.ata-prompt summary::-webkit-details-marker { display: none; }
+.ata-prompt summary .pill { padding: 0 7px; font-size: 11px; cursor: default; }
+.ata-prompt textarea { width: 100%; font-size: 13px; resize: vertical; }
+.ata-prompt p { margin: 6px 0 8px; }

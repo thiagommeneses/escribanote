@@ -44,6 +44,7 @@ export function mergeDocs(local, remote) {
   out.summary = newer.summary ?? older.summary ?? null;
   out.summaryHistory = unionById(older.summaryHistory, newer.summaryHistory).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).map((v, i) => ({ ...v, n: i + 1 }));
   out.ataTemplateId = newer.ataTemplateId ?? older.ataTemplateId ?? null;
+  out.ataPrompt = newer.ataPrompt ?? older.ataPrompt ?? "";
   out.endedAt = newer.endedAt ?? older.endedAt ?? null;
   out.shots = local.shots || []; // capturas de tela só existem no computador
   out.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0);

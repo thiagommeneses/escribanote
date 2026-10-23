@@ -500,7 +500,10 @@ function ataPane() {
   const tpls = templates();
   const picker = isPro() ? `<label class="small muted" style="display:flex;gap:8px;align-items:center">Modelo
       <select class="input" style="width:auto;padding:5px 8px" data-act="tpl-pick"><option value="">Formato do Escribanote</option>${tpls.map((t) => `<option value="${esc(t.id)}" ${doc.ataTemplateId === t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>
-      <button class="btn sm ghost" data-act="drawer" data-d="templates">Modelos…</button></label>` : "";
+      <button class="btn sm ghost" data-act="drawer" data-d="templates">Modelos…</button></label>
+    <details class="ata-prompt" ${(doc.ataPrompt || "").trim() ? "open" : ""}><summary class="small muted">Instruções extras para a IA${(doc.ataPrompt || "").trim() ? ' <b class="pill">ativas</b>' : ""}</summary>
+      <textarea class="input" data-act="ata-prompt" rows="3" maxlength="4000" placeholder="Ex.: conclusão em um parágrafo só; não cite valores; inclua uma seção de riscos.">${esc(doc.ataPrompt || "")}</textarea>
+      <p class="small muted">Valem só para esta reunião e prevalecem sobre o formato e o modelo. Salvas ao sair do campo; gere a ata de novo para aplicar.</p></details>` : "";
   const gen = `<button class="btn ${s?.text ? "sm ghost" : "primary"}" data-act="ata">${s?.text ? "Gerar de novo" : "Gerar ata"} <span class="cost">${cost} crédito${cost > 1 ? "s" : ""}</span></button>`;
   if (!s?.text) {
     return `<div class="empty-pane"><p style="font:400 20px/1.3 var(--serif)">Ata desta reunião</p>
@@ -775,6 +778,13 @@ document.addEventListener("change", (e) => {
   renderPane();
 });
 document.addEventListener("change", async (e) => {
+  const ta = e.target.closest('[data-act="ata-prompt"]');
+  if (ta && state.meeting) {
+    const text = ta.value.trim().slice(0, 4000);
+    if (text === (state.meeting.doc.ataPrompt || "").trim()) return;
+    await saveDoc((d) => (d.ataPrompt = text));
+    return toast(text ? "Instruções salvas. Gere a ata de novo para aplicar." : "Instruções removidas.");
+  }
   const sel = e.target.closest('[data-act="tpl-pick"]');
   if (!sel || !state.meeting) return;
   await saveDoc((d) => (d.ataTemplateId = sel.value || null));
@@ -790,7 +800,8 @@ async function generateAta() {
   pane.innerHTML = `<div class="ata typing" id="ata-live"></div><p class="small muted">Escrevendo a ata…</p>`;
   try {
     const template = templateText(state.meeting.doc);
-    const done = await stream("/ai/summary", { meetingId: state.meeting.id, ...(template ? { template } : {}) }, {
+    const instructions = (state.meeting.doc.ataPrompt || "").trim();
+    const done = await stream("/ai/summary", { meetingId: state.meeting.id, ...(template ? { template } : {}), ...(instructions ? { instructions } : {}) }, {
       onStart: (d) => setCredits(d.balance),
       onDelta: (text) => ($("ata-live").innerHTML = mdToHtml(text)),
     });
@@ -1415,6 +1426,7 @@ view.addEventListener("click", async (e) => {
         return renderPane();
       }
       case "tpl-pick":
+      case "ata-prompt":
         return;
       case "tpl-import":
         return document.getElementById("tpl-file")?.click();
