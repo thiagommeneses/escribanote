@@ -17,6 +17,12 @@ services:
       caddy_0.header.Strict-Transport-Security: "max-age=31536000"
       caddy_0.header.X-Content-Type-Options: nosniff
       caddy_0.header.Referrer-Policy: strict-origin-when-cross-origin
+      # O app web e as bibliotecas mudam a cada versão: o navegador revalida sempre (ETag), em vez de usar
+      # a cópia antiga por heurística, o que deixava a página em branco quando app.js e lib/ ficavam de versões diferentes.
+      caddy_0.header_1: /app/*
+      caddy_0.header_1.Cache-Control: no-cache
+      caddy_0.header_2: /download/latest.json
+      caddy_0.header_2.Cache-Control: no-cache
       caddy_1: escriba.meneseslabs.com.br reunilo.meneseslabs.com.br
       caddy_1.redir: "https://escribanote.meneseslabs.com.br{uri} permanent"
     networks:
