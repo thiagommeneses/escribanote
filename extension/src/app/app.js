@@ -242,9 +242,11 @@ function renderMeeting() {
   $("c-hl").textContent = hlCount || "";
   $("c-notes").textContent = s.notes.items.length || "";
   for (const b of document.querySelectorAll(".subtabs button")) b.setAttribute("aria-selected", b.dataset.tab === state.tab);
-  for (const p of ["transcript", "highlights", "notes", "ai", "stats"]) $(`pane-${p}`).hidden = p !== state.tab;
+  const nv = (s.summaryHistory || []).length;
+  $("c-ata").textContent = nv > 1 ? `v${nv}` : "";
+  for (const p of ["transcript", "highlights", "notes", "ata", "ai", "stats"]) $(`pane-${p}`).hidden = p !== state.tab;
 
-  ({ transcript: renderTranscript, highlights: renderHighlights, notes: renderNotes, ai: renderAI, stats: renderStats })[state.tab]();
+  ({ transcript: renderTranscript, highlights: renderHighlights, notes: renderNotes, ata: renderAta, ai: renderAI, stats: renderStats })[state.tab]();
 }
 
 function renderHqButton() {
@@ -310,8 +312,28 @@ for (const b of document.querySelectorAll(".subtabs button")) {
   b.addEventListener("click", () => {
     state.tab = b.dataset.tab;
     renderMeeting();
+    scrollPaneTop();
   });
 }
+// Volta ao topo da área rolável ao trocar de aba (senão a aba nova abre no meio).
+function scrollPaneTop() {
+  let el = document.querySelector(".subtabs");
+  while (el && el !== document.body) {
+    const o = getComputedStyle(el).overflowY;
+    if ((o === "auto" || o === "scroll") && el.scrollHeight > el.clientHeight) { el.scrollTop = 0; return; }
+    el = el.parentElement;
+  }
+  window.scrollTo(0, 0);
+}
+document.addEventListener("click", (e) => {
+  const v = e.target.closest("[data-goto-view]");
+  if (v) return nav(v.dataset.gotoView);
+  const b = e.target.closest("[data-goto-tab]");
+  if (!b) return;
+  state.tab = b.dataset.gotoTab;
+  renderMeeting();
+  scrollPaneTop();
+});
 
 $("m-title").addEventListener("change", async (e) => {
   if (!state.session) return;
@@ -740,18 +762,61 @@ function previousWithSame(s) {
     .slice(0, 5);
 }
 
-async function renderAI() {
+async function aiStatus() {
   if (!state.settings) state.settings = await getSettings();
-  if (!state.templatesLoaded) { await loadTemplates(); state.templatesLoaded = true; }
-  const s = state.session;
   const { apiKey, account } = await chrome.storage.local.get(["apiKey", "account"]);
   const model = MODELS.find((m) => m.id === state.settings.aiModel);
   const pro = account?.token && account.plan === "pro" && !account.invalid;
-  $("ai-hint").textContent = apiKey
-    ? `Modelo: ${model ? model.label : state.settings.aiModel}. A transcrição só é enviada quando você pede.`
-    : pro
-      ? `IA da conta Escribanote Pro: ${account.balance ?? 0} créditos. Ata, revisão e pergunta custam 1 crédito cada.`
-      : "Para usar a IA, cadastre sua chave da API do Claude em Ajustes ou conecte a sua conta Escribanote Pro.";
+  if (apiKey) return { ok: true, kind: "key", text: `Sua chave da API · ${model ? model.label : state.settings.aiModel}`, hint: "A transcrição só é enviada quando você pede." };
+  if (pro) return { ok: true, kind: "pro", text: `Escribanote Pro · ${account.balance ?? 0} crédito${account.balance === 1 ? "" : "s"}`, hint: "Ata, revisão e pergunta custam 1 crédito cada." };
+  return { ok: false, kind: "none", text: "IA não configurada", hint: "Cadastre sua chave da API do Claude em Ajustes ou conecte a sua conta Escribanote Pro." };
+}
+
+// ----- Aba Ata -----
+state.viewing = null; // id de uma versão antiga sendo exibida no lugar da atual (só leitura)
+async function renderAta() {
+  if (!state.templatesLoaded) { await loadTemplates(); state.templatesLoaded = true; }
+  const s = state.session;
+  const hist = s.summaryHistory || [];
+  const cur = hist[hist.length - 1];
+  const viewing = state.viewing && state.viewing !== cur?.id ? hist.find((v) => v.id === state.viewing) : null;
+  if (!viewing) state.viewing = null;
+  $("ata-gen").textContent = s.summary ? "Gerar de novo" : "Gerar ata";
+  $("ata-gen").disabled = !s.entries.length || (state.busy && state.busy !== "ata");
+  renderAtaTemplateSelect(s);
+
+  const editing = !$("ata-editor").hidden;
+  if (state.busy !== "ata" && !editing) {
+    if (viewing) $("ata-body").innerHTML = mdToHtml(viewing.text);
+    else if (s.summary) $("ata-body").innerHTML = mdToHtml(s.summary.text);
+    else $("ata-body").innerHTML = s.entries.length
+      ? `<div class="ata-empty"><div class="ico">📝</div><b>Nenhuma ata ainda</b><p>Gere uma ata com resumo, decisões, itens de ação e pendências. Escolha um modelo acima se a sua equipe tem um formato próprio.</p></div>`
+      : `<div class="ata-empty"><div class="ico">🎙️</div><b>A ata nasce da transcrição</b><p>Quando a reunião tiver falas registradas, gere a ata por aqui.</p></div>`;
+  }
+  $("ata-doc").classList.toggle("empty", !s.summary && !viewing);
+  // faixa com o estado da ata atual
+  const meta = $("ata-meta");
+  if (cur && s.summary && !viewing) {
+    meta.hidden = false;
+    const tpl = state.templates.find((t) => t.id === (s.summary.templateId ?? cur.templateId));
+    meta.innerHTML = `<span class="vtag">v${cur.n}</span><span>${esc(cur.label.split(" · ")[0])}</span><span class="dot">·</span><span>${fmtWhen(cur.createdAt)}</span>${tpl ? `<span class="dot">·</span><span>modelo ${esc(tpl.name)}</span>` : ""}${hist.length > 1 ? `<span class="dot">·</span><span>${hist.length} versões</span>` : ""}`;
+  } else meta.hidden = true;
+  const vw = $("ata-viewing");
+  vw.hidden = !viewing;
+  if (viewing) vw.innerHTML = `<span><b>Você está vendo a v${viewing.n}</b> (${esc(viewing.label)}, ${fmtWhen(viewing.createdAt)}). A ata atual é a v${cur.n}.</span><span class="row"><button class="btn sm ghost" data-vact="restore" data-v="${esc(viewing.id)}">Restaurar esta</button><button class="btn sm" id="ata-back">Voltar à atual</button></span>`;
+
+  $("ata-actions").hidden = !s.summary;
+  $("ata-versions-label").textContent = hist.length > 1 ? `Versões (${hist.length})` : "Versões";
+  $("ata-versions-btn").classList.toggle("has-history", hist.length > 1);
+  if (!$("ata-versions").hidden) renderVersions();
+}
+
+// ----- Aba IA -----
+async function renderAI() {
+  const s = state.session;
+  const st = await aiStatus();
+  $("ai-hint").className = `ai-status ${st.kind}`;
+  $("ai-hint").innerHTML = `<span class="ai-dot"></span><b>${esc(st.text)}</b><span class="muted">${esc(st.hint)}</span>${st.ok ? "" : ' <button type="button" class="linkish" data-goto-view="settings">Abrir Ajustes</button>'}`;
 
   // Revisão
   if (state.busy !== "review") {
@@ -763,23 +828,6 @@ async function renderAI() {
       : "Corrige palavras mal reconhecidas (fala rápida, nomes, siglas) usando o contexto e o seu glossário. O texto original fica guardado.";
   }
   $("review-run").disabled = !s.entries.length || (state.busy && state.busy !== "review");
-
-  // Ata
-  if (state.busy !== "ata") {
-    $("ata-body").innerHTML = s.summary
-      ? mdToHtml(s.summary.text)
-      : '<p class="muted">Gere uma ata com resumo, pontos principais, decisões, itens de ação e pendências.</p>';
-    $("ata-gen").textContent = s.summary ? "Gerar de novo" : "Gerar ata";
-  }
-  $("ata-copy").hidden = !s.summary;
-  $("ata-dl").hidden = !s.summary;
-  $("ata-edit").hidden = !s.summary;
-  const nv = (s.summaryHistory || []).length;
-  $("ata-versions-btn").hidden = !nv;
-  $("ata-versions-btn").textContent = nv > 1 ? `Versões (${nv})` : "Versões";
-  if (!$("ata-versions").hidden) renderVersions();
-  $("ata-gen").disabled = !s.entries.length || (state.busy && state.busy !== "ata");
-  renderAtaTemplateSelect(s);
 
   // Conversas
   const sel = $("chat-select");
@@ -837,10 +885,14 @@ $("ata-gen").addEventListener("click", async () => {
     state.aiPort?.disconnect();
     state.aiPort = null;
     state.busy = null;
-    return renderAI();
+    return renderAta();
   }
   if (!(await ensureApiPermission())) return toast("Permissão para a API negada");
   state.busy = "ata";
+  state.viewing = null;
+  $("ata-viewing").hidden = true;
+  $("ata-editor").hidden = true;
+  $("ata-body").hidden = false;
   $("ata-gen").textContent = "Cancelar";
   $("ata-body").innerHTML = '<p class="muted">Gerando a ata…</p>';
   runAI(
@@ -898,31 +950,38 @@ $("ata-copy").addEventListener("click", async () => {
 
 // ----- Versões da ata (histórico + comparador) -----
 const fmtWhen = (t) => new Date(t).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-state.cmp = state.cmp || { a: null, b: null };
+state.cmp = state.cmp || { a: null, b: null, mode: "inline" };
 function renderVersions() {
   const s = state.session;
   const hist = s?.summaryHistory || [];
   const box = $("ata-versions");
   if (!hist.length) { box.hidden = true; return; }
   const cur = hist[hist.length - 1];
-  // seletores de comparação: padrão = anterior × atual
   const ids = hist.map((v) => v.id);
   if (!ids.includes(state.cmp.b)) state.cmp.b = cur.id;
   if (!ids.includes(state.cmp.a)) state.cmp.a = hist.length > 1 ? hist[hist.length - 2].id : cur.id;
   const opt = (sel) => hist.map((v) => `<option value="${esc(v.id)}" ${sel === v.id ? "selected" : ""}>v${v.n} · ${fmtWhen(v.createdAt)}</option>`).join("");
   $("cmp-a").innerHTML = opt(state.cmp.a);
   $("cmp-b").innerHTML = opt(state.cmp.b);
+  const kindIcon = { ai: "✦", edit: "✎", restore: "↺", sync: "⇅" };
   $("versions-list").innerHTML = hist.slice().reverse().map((v) => {
     const prev = hist.find((x) => x.id === v.parentId);
     const st = prev ? diffStats(diffDocument(prev.text, v.text)) : null;
-    const isCur = s.summary && s.summary.text.trim() === v.text.trim();
-    return `<div class="ver ${isCur ? "current" : ""}" data-v="${esc(v.id)}"><span class="vn">v${v.n}</span>
-      <span class="vl">${esc(v.label)}${isCur ? " · <b>atual</b>" : ""}<small>${fmtWhen(v.createdAt)}${v.model && v.model !== "manual" ? ` · ${esc(v.model)}` : ""}</small></span>
-      <span class="vs">${st ? `<b class="plus">+${st.added}</b> <b class="minus">−${st.removed}</b>` : "primeira"}</span>
-      <button class="btn sm ghost" data-vact="view" title="Ver esta versão na ata">Ver</button>
-      <button class="btn sm ghost" data-vact="cmp" title="Comparar com a atual">Comparar</button>
-      ${isCur ? "" : '<button class="btn sm ghost" data-vact="restore" title="Volta a ser a ata atual (vira uma nova versão)">Restaurar</button>'}</div>`;
+    const isCur = v.id === cur.id;
+    const isViewing = state.viewing === v.id;
+    const [what, detail] = v.label.split(" · ");
+    return `<li class="ver ${isCur ? "current" : ""} ${isViewing ? "viewing" : ""}" data-v="${esc(v.id)}">
+      <span class="vk ${esc(v.source || "ai")}" title="${esc(what)}">${kindIcon[v.source] || "✦"}</span>
+      <span class="vmain"><span class="vtitle"><b>v${v.n}</b> ${esc(what)}${isCur ? '<i class="pill">atual</i>' : ""}${isViewing ? '<i class="pill view">vendo</i>' : ""}</span>
+        <small>${fmtWhen(v.createdAt)}${detail ? ` · ${esc(detail)}` : ""}${v.model && v.model !== "manual" && !/modelo/.test(detail || "") ? ` · ${esc(v.model)}` : ""}</small></span>
+      <span class="vs">${st ? `<b class="plus">+${st.added}</b><b class="minus">−${st.removed}</b>` : '<span class="muted">início</span>'}</span>
+      <span class="vacts">${isCur ? "" : `<button class="btn sm ghost" data-vact="view" title="Ver esta versão no lugar da atual (só leitura)">Ver</button>`}
+      ${hist.length > 1 ? `<button class="btn sm ghost" data-vact="cmp" title="${isCur ? "Comparar com a anterior" : "Comparar com a atual"}">Comparar</button>` : ""}
+      ${isCur ? "" : '<button class="btn sm ghost" data-vact="restore" title="Volta a ser a ata atual (vira uma nova versão)">Restaurar</button>'}</span></li>`;
   }).join("");
+  $("cmp").hidden = hist.length < 2;
+  if (hist.length < 2) $("versions-hint").textContent = "Edite a ata ou gere de novo para criar a v2 e poder comparar.";
+  else $("versions-hint").textContent = "Cada geração, edição ou restauração vira uma versão. Nada se perde.";
   renderDiff();
 }
 function renderDiff() {
@@ -930,42 +989,61 @@ function renderDiff() {
   const A = hist.find((v) => v.id === state.cmp.a);
   const B = hist.find((v) => v.id === state.cmp.b);
   if (!A || !B) return;
+  for (const b of document.querySelectorAll("[data-cmp-mode]")) b.setAttribute("aria-pressed", String(b.dataset.cmpMode === state.cmp.mode));
   const blocks = diffDocument(A.text, B.text);
   const st = diffStats(blocks);
-  $("diff-stats").innerHTML = A.id === B.id ? "Escolha duas versões diferentes para comparar." : `v${A.n} → v${B.n}: <b style="color:#15803d">+${st.added}</b> palavras adicionadas, <b style="color:#b91c1c">−${st.removed}</b> removidas, ${st.changedLines} linha${st.changedLines === 1 ? "" : "s"} alterada${st.changedLines === 1 ? "" : "s"}.`;
-  $("diff-view").innerHTML = versionDiffHtml(blocks, { mode: $("cmp-side").checked ? "side" : "inline", onlyChanges: $("cmp-only").checked });
+  $("diff-stats").innerHTML = A.id === B.id ? "Escolha duas versões diferentes para comparar." : `v${A.n} → v${B.n}: <b class="plus">+${st.added}</b> palavras adicionadas, <b class="minus">−${st.removed}</b> removidas, ${st.changedLines} linha${st.changedLines === 1 ? "" : "s"} alterada${st.changedLines === 1 ? "" : "s"}.`;
+  $("diff-view").innerHTML = versionDiffHtml(blocks, { mode: state.cmp.mode, onlyChanges: $("cmp-only").checked });
+  $("diff-view").classList.toggle("side", state.cmp.mode === "side");
 }
 $("ata-versions-btn").addEventListener("click", () => {
   const box = $("ata-versions");
   box.hidden = !box.hidden;
-  if (!box.hidden) renderVersions();
+  $("ata-versions-btn").setAttribute("aria-expanded", String(!box.hidden));
+  if (!box.hidden) { renderVersions(); box.scrollIntoView({ behavior: "smooth", block: "start" }); }
 });
 for (const id of ["cmp-a", "cmp-b"]) $(id).addEventListener("change", (e) => { state.cmp[id === "cmp-a" ? "a" : "b"] = e.target.value; renderDiff(); });
-for (const id of ["cmp-side", "cmp-only"]) $(id).addEventListener("change", renderDiff);
-$("versions-list").addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-vact]");
-  if (!b) return;
-  const vid = b.closest(".ver").dataset.v;
+$("cmp-only").addEventListener("change", renderDiff);
+for (const b of document.querySelectorAll("[data-cmp-mode]")) b.addEventListener("click", () => { state.cmp.mode = b.dataset.cmpMode; renderDiff(); });
+async function versionAction(act, vid, anchor) {
   const s = state.session;
-  const v = s.summaryHistory.find((x) => x.id === vid);
-  if (b.dataset.vact === "view") {
-    $("ata-body").innerHTML = `<p class="muted tiny">Mostrando a v${v.n} (${esc(v.label)}). A ata atual não mudou.</p>` + mdToHtml(v.text);
-    $("ata-body").scrollIntoView({ behavior: "smooth", block: "start" });
-  } else if (b.dataset.vact === "cmp") {
-    const cur = s.summaryHistory[s.summaryHistory.length - 1];
-    state.cmp = { a: v.id, b: cur.id === v.id && s.summaryHistory.length > 1 ? s.summaryHistory[s.summaryHistory.length - 2].id : cur.id };
+  const hist = s.summaryHistory;
+  const v = hist.find((x) => x.id === vid);
+  if (!v) return;
+  const cur = hist[hist.length - 1];
+  if (act === "view") {
+    state.viewing = v.id;
+    $("ata-editor").hidden = true;
+    renderAta();
+    $("ata-doc").scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (act === "cmp") {
+    state.cmp = { ...state.cmp, a: v.id === cur.id ? hist[hist.length - 2].id : v.id, b: cur.id };
     renderVersions();
-    $("diff-view").scrollIntoView({ behavior: "smooth", block: "start" });
-  } else if (b.dataset.vact === "restore") {
-    const ok = await askChoice(b, { title: `Restaurar a v${v.n}?`, text: "Ela volta a ser a ata atual, como uma nova versão. Nada é apagado do histórico.", choices: [{ key: "ok", label: "Restaurar", primary: true }, { key: "cancel", label: "Cancelar" }] });
+    $("cmp").scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (act === "restore") {
+    const ok = await askChoice(anchor, { title: `Restaurar a v${v.n}?`, text: `Ela volta a ser a ata atual, como a v${cur.n + 1}. Nada é apagado do histórico.`, choices: [{ key: "ok", label: "Restaurar", primary: true }, { key: "cancel", label: "Cancelar" }] });
     if (ok !== "ok") return;
     state.session = normalize(await send({ type: "ata-restore", id: s.id, versionId: v.id }));
-    renderAI();
-    toast(`v${v.n} restaurada`);
+    state.viewing = null;
+    renderMeeting();
+    toast(`v${v.n} restaurada como v${state.session.summaryHistory.length}`);
   }
+}
+$("versions-list").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-vact]");
+  if (b) return versionAction(b.dataset.vact, b.closest(".ver").dataset.v, b);
+  const row = e.target.closest(".ver");
+  if (row && !row.classList.contains("current")) versionAction("view", row.dataset.v, row);
+});
+$("ata-viewing").addEventListener("click", (e) => {
+  if (e.target.closest("#ata-back")) { state.viewing = null; renderAta(); return; }
+  const b = e.target.closest("[data-vact]");
+  if (b) versionAction(b.dataset.vact, b.dataset.v, b);
 });
 $("ata-edit").addEventListener("click", () => {
   const s = state.session;
+  state.viewing = null;
+  $("ata-viewing").hidden = true;
   $("ata-editor-text").value = s.summary?.text || "";
   $("ata-editor-label").value = "";
   $("ata-editor").hidden = false;
@@ -980,8 +1058,8 @@ $("ata-editor-save").addEventListener("click", async () => {
   state.session = normalize(await send({ type: "ata-save", id: state.session.id, text, label: $("ata-editor-label").value.trim() }));
   $("ata-editor").hidden = true;
   $("ata-body").hidden = false;
-  renderAI();
-  toast("Nova versão salva");
+  renderMeeting();
+  toast(`Salva como v${state.session.summaryHistory.length}`);
 });
 
 // ----- Modelos de ata -----
@@ -1657,7 +1735,7 @@ if (!IS_TAB) {
   chrome.tabs.onActivated.addListener(() => !state.pinned && state.view === "meeting" && followCurrent());
   chrome.tabs.onUpdated.addListener((id, info) => id === state.tabId && info.status === "complete" && !state.pinned && followCurrent());
 }
-setInterval(() => isLive(state.session) && state.view === "meeting" && state.tab !== "ai" && renderMeeting(), 20_000);
+setInterval(() => isLive(state.session) && state.view === "meeting" && state.tab !== "ai" && state.tab !== "ata" && renderMeeting(), 20_000);
 
 // ---------------- Início ----------------
 if (params.get("perm") === "mic") {

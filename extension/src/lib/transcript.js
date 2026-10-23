@@ -42,6 +42,20 @@ export function normalize(s) {
   s.paused ??= false;
   s.endedAt ??= null;
   s.summary ??= null;
+  // Ata gerada antes do histórico existir (ou vinda de outro dispositivo) vira a v1, para nunca se perder ao gerar de novo.
+  if (s.summary?.text && !s.summaryHistory.length) {
+    s.summaryHistory.push({
+      id: "v1-" + (s.summary.createdAt || 0).toString(36),
+      n: 1,
+      text: s.summary.text,
+      createdAt: s.summary.createdAt || s.startedAt || Date.now(),
+      source: s.summary.model === "manual" ? "edit" : "ai",
+      label: s.summary.model === "manual" ? "Editada à mão" : "Gerada pela IA",
+      model: s.summary.model || null,
+      templateId: s.summary.templateId ?? null,
+      parentId: null,
+    });
+  }
   return s;
 }
 

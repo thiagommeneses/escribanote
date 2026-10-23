@@ -333,7 +333,8 @@ try {
   await screenshot(app, "4-app-analise.png");
   assert.match(await pane("ai"), /Pergunte à IA[\s\S]*Itens de ação/);
   await screenshot(app, "5-app-ia.png");
-  step("app mostra transcrição, destaques, análise e IA");
+  assert.match(await pane("ata"), /Nenhuma ata ainda/);
+  step("app mostra transcrição, destaques, análise, IA e a aba Ata vazia");
 
   const hits = await sw({ type: "search", q: "marketing" });
   assert.equal(hits.length, 1);
@@ -450,7 +451,7 @@ try {
     await sw({ type: "update", id, ataTemplateId: tpls[0].id });
     await evaluate(app, "location.reload(); true");
     await sleep(1200);
-    await evaluate(app, `document.querySelector('[data-tab="ai"]').click()`);
+    await evaluate(app, `document.querySelector('[data-tab="ata"]').click()`);
     await sleep(300);
     assert.equal(await evaluate(app, "document.getElementById('ata-template').value"), tpls[0].id, "seletor mostra o modelo da reunião");
     await evaluate(app, "document.getElementById('ata-gen').click()");
@@ -470,14 +471,26 @@ try {
     assert.equal(sv.summaryHistory[1].source, "edit");
     await evaluate(app, "location.reload(); true");
     await sleep(1200);
-    await evaluate(app, `document.querySelector('[data-tab="ai"]').click()`);
+    await evaluate(app, `document.querySelector('[data-tab="ata"]').click()`);
     await sleep(300);
-    assert.equal(await evaluate(app, "document.getElementById('ata-versions-btn').textContent"), "Versões (2)");
+    assert.equal(await evaluate(app, "document.getElementById('ata-versions-label').textContent"), "Versões (2)");
+    assert.match(await evaluate(app, "document.getElementById('ata-meta').innerText"), /v2[\s\S]*Editada à mão/, "faixa da ata mostra a versão atual");
+    assert.equal(await evaluate(app, "document.getElementById('c-ata').textContent"), "v2", "aba Ata mostra a versão");
     await evaluate(app, "document.getElementById('ata-versions-btn').click()");
     await sleep(200);
     assert.match(await evaluate(app, "document.getElementById('diff-stats').innerText"), /v1 → v2: \+3 palavras adicionadas, −0 removidas/);
     assert.match(await evaluate(app, "document.getElementById('diff-view').innerHTML"), /<ins>[^<]*cronograma/);
     assert.equal(await evaluate(app, "document.querySelectorAll('#versions-list .ver').length"), 2);
+    // "Ver" uma versão antiga mostra o texto dela no documento, com faixa e botão de voltar
+    await evaluate(app, "document.querySelector('#versions-list .ver:not(.current) [data-vact=view]').click()");
+    await sleep(200);
+    assert.match(await evaluate(app, "document.getElementById('ata-viewing').innerText"), /Você está vendo a v1/);
+    assert.doesNotMatch(await evaluate(app, "document.getElementById('ata-body').innerText"), /cronograma/);
+    await screenshot(app, "11-ata-versoes.png");
+    await evaluate(app, "document.getElementById('ata-back').click()");
+    await sleep(200);
+    assert.equal(await evaluate(app, "document.getElementById('ata-viewing').hidden"), true);
+    assert.match(await evaluate(app, "document.getElementById('ata-body').innerText"), /cronograma/);
     // restaurar v1 pelo serviço (o botão abre uma confirmação)
     sv = await sw({ type: "ata-restore", id, versionId: sv.summaryHistory[0].id });
     assert.equal(sv.summaryHistory.length, 3);
