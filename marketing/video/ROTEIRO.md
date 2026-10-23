@@ -104,3 +104,33 @@ render com `node render.mjs caderno out/_caderno15-mudo.mp4 --file=caderno15.htm
   Para trocar por uma composição da ElevenLabs (precisa de ~220 créditos), gere `audio/v15/musica15.mp3`
   com `elevenlabs music compose` e aponte `mix15.mjs` para ele.
 - **Efeitos** (ElevenLabs SFX): baque do caderno, folha virando, caneta, carimbo.
+
+## Vídeo de lançamento SaaS em Remotion (16:9, 27 s) — `marketing/remotion/`
+
+Feito a partir do prompt em `marketing/video/PROMPT-lancamento-saas.md`. Projeto Remotion 4 (React), composição
+`Lancamento`, 1920×1080, 30 fps, 810 quadros. As telas são capturas reais do app rodando em Chromium com uma reunião
+fictícia ("Planejamento do Q4", Ana Teixeira, Bruno Lima, Paula Franco e Thiago), geradas por `capturas.mjs`, que
+também grava as coordenadas dos elementos (`public/capturas/rects.json`) usadas pelo cursor e pela digitação.
+
+| Quadros | Cena | Legenda |
+|---|---|---|
+| 0–90 | Título; a janela do app sobe com inclinação 3D e assenta | Cada palavra da reunião, *anotada*. |
+| 90–200 | Zoom na lista; o cursor clica na reunião de hoje | Suas reuniões, do Meet ao Slack, num só lugar. |
+| 200–320 | Ângulo 3/4; zoom na transcrição; destaque nos chips dos participantes | Quem disse o quê, ao vivo. |
+| 320–480 | Cursor clica no nome, editor abre, "Paula Franco (PM)" é digitado, Salvar | Nomes certos. Dois iguais? Ele pergunta e junta. |
+| 480–620 | Aba IA; pergunta digitada; resposta revelada como streaming | Pergunte à reunião. A resposta vem da transcrição. |
+| 620–700 | Zoom na ata; corte para a análise com ângulo | A ata pronta quando a chamada acaba. / Quem falou quanto… |
+| 700–760 | Janela do Meet vista de cima com o widget real no canto | Dentro do Meet, do Teams, do Zoom e dos huddles do Slack. |
+| 760–810 | Ícone, nome, "Grátis para instalar · Chrome e Edge", URL | — |
+
+Trilha: o instrumental de lançamento da ElevenLabs (`public/audio/musica.mp3`); efeitos de clique, whoosh e chime
+nos eventos. Normalização final em -14 LUFS com ffmpeg.
+
+```bash
+cd marketing/remotion
+npm install
+CHROME=/caminho/chrome node capturas.mjs        # refaz as capturas do app (opcional)
+npx remotion render src/index.ts Lancamento out/_render.mp4 --browser-executable=/caminho/chrome --concurrency=4
+ffmpeg -i out/_render.mp4 -c:v copy -af loudnorm=I=-14:TP=-1:LRA=11 -c:a aac out/escribanote-lancamento-saas.mp4
+npx remotion studio src/index.ts                 # pré-visualização interativa
+```
