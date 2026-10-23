@@ -2,7 +2,7 @@
 // e análise com as mesmas bibliotecas da extensão (copiadas para ./lib na publicação).
 import { api, ApiError, stream } from "./api.js";
 import { QUICK_PROMPTS } from "./lib/ai.js";
-import { clock, FORMATS, fileName, mdToHtml, PLATFORM, toHtml, ataPlainText, ataFileName } from "./lib/format.js";
+import { clock, FORMATS, fileName, mdToHtml, PLATFORM, toHtml, ataPlainText, ataFileName, ataEditorHtml } from "./lib/format.js";
 import { DEFAULT_TAGS } from "./lib/settings.js";
 import { computeStats, fmtDuration } from "./lib/stats.js";
 import { normalize, toBlocks, mergeSpeakers, speakerName } from "./lib/transcript.js";
@@ -520,6 +520,8 @@ function ataPane() {
   return `${body}
     <div class="row" style="margin-top:10px">
       <button class="btn sm" data-act="copy-ata">Copiar</button>
+      <button class="btn sm" data-act="copy-ata" data-k="editor" title="HTML no formato do editor do Atena (TinyMCE): cole direto no editor">Copiar p/ Atena</button>
+      <button class="btn sm" data-act="copy-ata" data-k="html" title="Código HTML para o 'Código-fonte' do editor">Copiar HTML</button>
       <button class="btn sm" data-act="dl-ata" data-f="txt">Baixar .txt</button>
       <button class="btn sm" data-act="dl-ata" data-f="md">Baixar .md</button>
       <button class="btn sm" data-act="dl-ata" data-f="pdf">PDF</button>
@@ -1384,8 +1386,12 @@ view.addEventListener("click", async (e) => {
         return jumpTo(el.dataset.e);
       case "ata":
         return generateAta();
-      case "copy-ata":
-        return copy(m.doc.summary.text, mdToHtml(m.doc.summary.text));
+      case "copy-ata": {
+        const md = m.doc.summary.text;
+        if (el.dataset.k === "html") return copy(ataEditorHtml(md));
+        if (el.dataset.k === "editor") return copy(ataPlainText(md), ataEditorHtml(md));
+        return copy(md, mdToHtml(md));
+      }
       case "dl-ata":
         return downloadAta(m.doc, el.dataset.f);
       case "ata-versions":

@@ -599,3 +599,44 @@ test("ataRequest: instruções extras entram no fim do system prompt e prevalece
   const seeded = normalize({ id: "i2", startedAt: 0, ataPrompt: undefined });
   assert.equal(seeded.ataPrompt, "", "campo novo em sessões antigas");
 });
+
+test("ataEditorHtml: HTML no formato do TinyMCE do Atena (justificado, <li><p>, <hr />, assinatura centralizada)", async () => {
+  const { ataEditorHtml } = await import("../src/lib/format.js");
+  const md = `# SUBPLEI / ASSESSORIA 2
+
+**Registro de Reunião [preencher]**
+
+**Data:** 16 de janeiro de 2026
+**Horário:** 13h30min
+**Assunto Principal:** Padronização *arquitetural* e logs
+
+**Participantes:**
+
+- Dr. Rafael Correa Costa, Promotor de Justiça
+- André Pereira Teles, Desenvolvedor
+
+**Resumo das Atividades por Participante:**
+
+- **André Pereira Teles:** Apresentou a nova estrutura modular.
+- **Dr. Rafael Correa Costa:** Validou a arquitetura & sugeriu pre-commit.
+
+**Conclusão:**
+
+Após as atualizações de todos os presentes e a definição dos encaminhamentos, e não havendo mais pautas, a reunião foi encerrada.
+
+RAFAEL CORREA COSTA
+Promotor de Justiça
+Assessor Jurídico-Administrativo da PGJ`;
+  const html = ataEditorHtml(md);
+  assert.match(html, /^<p style="text-align: justify;"><strong>SUBPLEI \/ ASSESSORIA 2<\/strong><\/p>/);
+  assert.match(html, /<p style="text-align: justify;"><strong>Data:<\/strong> 16 de janeiro de 2026<\/p>/);
+  assert.match(html, /<strong>Assunto Principal:<\/strong> Padronização <em>arquitetural<\/em> e logs/);
+  assert.match(html, /<strong>Participantes:<\/strong><\/p>\n<ul style="text-align: justify;">\n<li>\n<p>Dr\. Rafael Correa Costa, Promotor de Justiça<\/p>\n<\/li>/);
+  assert.match(html, /<\/ul>\n<hr \/>\n<p style="text-align: justify;"><strong>Resumo das Atividades por Participante:<\/strong><\/p>/, "hr antes de uma seção que vem depois de lista");
+  assert.match(html, /<li>\n<p><strong>Dr\. Rafael Correa Costa:<\/strong> Validou a arquitetura &amp; sugeriu pre-commit\.<\/p>/);
+  assert.match(html, /<hr \/>\n<p style="text-align: justify;"><strong>Conclusão:<\/strong><\/p>\n<p style="text-align: justify;">Após as atualizações/);
+  assert.match(html, /a reunião foi encerrada\.<\/p>\n<hr \/>\n<p style="text-align: center;">&nbsp;<\/p>\n<p style="text-align: center;"><strong>RAFAEL CORREA COSTA<\/strong><\/p>\n<p style="text-align: center;">Promotor de Justiça<\/p>\n<p style="text-align: center;">Assessor Jurídico-Administrativo da PGJ<\/p>$/, "assinatura centralizada no fim");
+  assert.doesNotMatch(html, /<h\d|<ul>\s*<li>[^<]/, "sem títulos h e sem li sem parágrafo");
+  // sem assinatura: nada centralizado
+  assert.doesNotMatch(ataEditorHtml("## Resumo\nTexto.\n\n## Decisões\n- A\n- B"), /center/);
+});

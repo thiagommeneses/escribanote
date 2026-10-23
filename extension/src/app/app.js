@@ -1,5 +1,5 @@
 import { toBlocks, speakerName, timeline, participantNames, normalize } from "../lib/transcript.js";
-import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName } from "../lib/format.js";
+import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName, ataEditorHtml } from "../lib/format.js";
 import { computeStats, findMe, fmtDuration } from "../lib/stats.js";
 import { QUICK_PROMPTS, API_ORIGIN } from "../lib/ai.js";
 import { getSettings, setSettings, DEFAULT_TAGS, MODELS, DEFAULTS, HQ_MODELS } from "../lib/settings.js";
@@ -948,13 +948,30 @@ $("review-run").addEventListener("click", async () => {
   port.postMessage({ action: "review", id: state.session.id });
 });
 
-$("ata-copy").addEventListener("click", async () => {
-  const s = state.session;
-  await navigator.clipboard.write([
-    new ClipboardItem({ "text/html": new Blob([mdToHtml(s.summary.text)], { type: "text/html" }), "text/plain": new Blob([s.summary.text], { type: "text/plain" }) }),
-  ]);
-  toast("Ata copiada");
+$("ata-copy").addEventListener("click", (e) => {
+  e.stopPropagation();
+  $("ata-dl-menu").hidden = true;
+  const menu = $("ata-copy-menu");
+  menu.hidden = !menu.hidden;
+  if (!menu.hidden) menu.classList.toggle("flip", menu.getBoundingClientRect().right > innerWidth - 8);
 });
+document.addEventListener("click", () => ($("ata-copy-menu").hidden = true));
+$("ata-copy-menu").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-copy]");
+  const s = state.session;
+  if (!b || !s?.summary?.text) return;
+  $("ata-copy-menu").hidden = true;
+  await copyAta(s.summary.text, b.dataset.copy);
+});
+// kind: rich (HTML simples + texto), editor (HTML do Atena/TinyMCE + texto simples), html (código-fonte), plain
+async function copyAta(md, kind) {
+  const blob = (t, type) => new Blob([t], { type });
+  if (kind === "html") { await navigator.clipboard.writeText(ataEditorHtml(md)); return toast("Código HTML copiado. Cole no \"Código-fonte\" do editor."); }
+  if (kind === "plain") { await navigator.clipboard.writeText(ataPlainText(md)); return toast("Texto simples copiado"); }
+  const html = kind === "editor" ? ataEditorHtml(md) : mdToHtml(md);
+  await navigator.clipboard.write([new ClipboardItem({ "text/html": blob(html, "text/html"), "text/plain": blob(kind === "editor" ? ataPlainText(md) : md, "text/plain") })]);
+  toast(kind === "editor" ? "Ata copiada no formato do Atena. Cole no editor." : "Ata copiada");
+}
 
 // ----- Versões da ata (histórico + comparador) -----
 const fmtWhen = (t) => new Date(t).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -1194,6 +1211,7 @@ $("ata-template").addEventListener("change", async (e) => {
 });
 $("ata-dl").addEventListener("click", (e) => {
   e.stopPropagation();
+  $("ata-copy-menu").hidden = true;
   const menu = $("ata-dl-menu");
   menu.hidden = !menu.hidden;
   menu.classList.remove("flip");
@@ -1207,8 +1225,8 @@ $("ata-dl-menu").addEventListener("click", (e) => {
   $("ata-dl-menu").hidden = true;
   const kind = b.dataset.ata;
   if (kind === "pdf") return void chrome.tabs.create({ url: chrome.runtime.getURL(`src/app/print.html?id=${s.id}&ata=1`) });
-  const text = kind === "txt" ? ataPlainText(s.summary.text) : s.summary.text;
-  const url = URL.createObjectURL(new Blob([text], { type: `${kind === "txt" ? "text/plain" : "text/markdown"};charset=utf-8` }));
+  const text = kind === "txt" ? ataPlainText(s.summary.text) : kind === "html" ? `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n</head>\n<body>\n${ataEditorHtml(s.summary.text)}\n</body>\n</html>` : s.summary.text;
+  const url = URL.createObjectURL(new Blob([text], { type: `${kind === "txt" ? "text/plain" : kind === "html" ? "text/html" : "text/markdown"};charset=utf-8` }));
   const a = Object.assign(document.createElement("a"), { href: url, download: ataFileName(s, kind) });
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);

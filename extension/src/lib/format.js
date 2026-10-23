@@ -215,3 +215,72 @@ export function ataFileName(session, ext) {
   const slug = (session.title || "reuniao").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 60) || "reuniao";
   return `ata-${stamp}-${slug}.${ext}`;
 }
+
+// HTML no formato que o editor do Atena (TinyMCE) produz: parágrafos justificados com rótulo em
+// negrito, listas com <li><p>, <hr /> entre seções, bloco de assinatura centralizado. Para colar
+// direto no editor ou no "Código-fonte" dele.
+export function ataEditorHtml(md) {
+  const P = (t, align = "justify") => `<p style="text-align: ${align};">${t}</p>`;
+  const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*(?!\*)([^*\n]+)\*/g, "$1<em>$2</em>").replace(/_([^_\n]+)_/g, "<em>$1</em>").replace(/`([^`]+)`/g, "$1");
+  const lines = String(md || "").replace(/\r/g, "").split("\n");
+  // 1) agrupa em blocos: title | label | list | para | rule
+  const blocks = [];
+  let list = null;
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    const li = line.match(/^\s*[-*]\s+(\[( |x|X)\]\s+)?(.*)$/);
+    if (li) {
+      if (!list) blocks.push((list = { kind: "list", items: [] }));
+      list.items.push((li[1] ? (li[2].trim() ? "☑ " : "☐ ") : "") + li[3].trim());
+      continue;
+    }
+    list = null;
+    if (!line.trim()) continue;
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { blocks.push({ kind: "rule" }); continue; }
+    const h = line.match(/^#{1,6}\s+(.*)$/);
+    if (h) { blocks.push({ kind: "title", text: h[1].replace(/\*\*/g, "").trim() }); continue; }
+    const onlyBold = line.match(/^\*\*(.+?)\*\*\s*$/);
+    if (onlyBold) { blocks.push({ kind: "title", text: onlyBold[1].trim() }); continue; }
+    const label = line.match(/^\*\*([^*]+?:)\*\*\s*(.*)$/);
+    if (label) { blocks.push({ kind: "label", label: label[1].trim(), text: label[2].trim() }); continue; }
+    blocks.push({ kind: "para", text: line.trim() });
+  }
+  // 2) bloco de assinatura: até 4 linhas curtas no fim, sem dois-pontos, depois do último conteúdo
+  let sig = [];
+  while (blocks.length && blocks[blocks.length - 1].kind === "rule") blocks.pop();
+  for (let i = blocks.length - 1; i >= 0 && sig.length < 4; i--) {
+    const b = blocks[i];
+    if ((b.kind === "para" || b.kind === "title") && b.text.length <= 70 && !/[:.]$/.test(b.text) && !/[:]/.test(b.text)) sig.unshift(b.text);
+    else break;
+  }
+  if (sig.length >= 2) blocks.splice(blocks.length - sig.length, sig.length);
+  else sig = [];
+  while (blocks.length && blocks[blocks.length - 1].kind === "rule") blocks.pop();
+  // 3) monta o HTML
+  const out = [];
+  let prev = null;
+  for (const b of blocks) {
+    if (b.kind === "rule") { if (prev && prev !== "rule") out.push("<hr />"); prev = "rule"; continue; }
+    if (b.kind === "title") {
+      const needsRule = prev === "list" || prev === "longpara";
+      if (needsRule) out.push("<hr />");
+      else if (prev && prev !== "rule" && prev !== "title") out.push(P("&nbsp;"));
+      out.push(P(`<strong>${inline(b.text)}</strong>`));
+      prev = "title";
+      continue;
+    }
+    if (b.kind === "label") { out.push(P(`<strong>${inline(b.label)}</strong>${b.text ? " " + inline(b.text) : ""}`)); prev = "label"; continue; }
+    if (b.kind === "list") {
+      out.push(`<ul style="text-align: justify;">\n${b.items.map((t) => `<li>\n<p>${inline(t)}</p>\n</li>`).join("\n")}\n</ul>`);
+      prev = "list";
+      continue;
+    }
+    out.push(P(inline(b.text)));
+    prev = b.text.length > 120 ? "longpara" : "para";
+  }
+  if (sig.length) {
+    out.push("<hr />", P("&nbsp;", "center"));
+    sig.forEach((t, i) => out.push(P(i === 0 ? `<strong>${inline(t)}</strong>` : inline(t), "center")));
+  }
+  return out.join("\n");
+}

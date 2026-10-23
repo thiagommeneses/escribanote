@@ -473,7 +473,8 @@ try {
     assert.match((await sw({ type: "get", id })).summaryHistory.at(-1).label, /com instruções extras/);
     await sleep(400);
     assert.equal(await evaluate(app, "document.getElementById('ata-dl').hidden"), false, "botão Baixar visível com ata");
-    assert.deepEqual(await evaluate(app, "[...document.querySelectorAll('#ata-dl-menu [data-ata]')].map(b => b.dataset.ata)"), ["txt", "md", "pdf"]);
+    assert.deepEqual(await evaluate(app, "[...document.querySelectorAll('#ata-dl-menu [data-ata]')].map(b => b.dataset.ata)"), ["txt", "md", "html", "pdf"]);
+    assert.deepEqual(await evaluate(app, "[...document.querySelectorAll('#ata-copy-menu [data-copy]')].map(b => b.dataset.copy)"), ["rich", "editor", "html", "plain"]);
     step("modelo de ata importado de PDF, escolhido na reunião e usado na geração; download em txt/md/pdf");
 
     // Versões da ata: a geração virou v1; uma edição à mão vira v2; o comparador mostra o diff; restaurar vira v3
