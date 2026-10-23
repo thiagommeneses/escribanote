@@ -1,0 +1,26 @@
+{
+  "vozes": {
+    "masc": { "id": "ZYCQDYoXnl78dNdU6JeG", "nome": "Arnold - Br" },
+    "fem": { "id": "Eyspt3SYhZzXd1Jd3J8O", "nome": "Bia - Confident - Professional" },
+    "dueto_a": { "id": "ZYCQDYoXnl78dNdU6JeG", "nome": "Arnold - Br" },
+    "dueto_b": { "id": "RGymW84CSmfVugnA5tvA", "nome": "Roberta - Smooth and Confident" }
+  },
+  "solo": [
+    "Uma hora de reunião. E ninguém anotou nada.",
+    "O Escribanote transcreve ao vivo, direto do Meet, do Teams, do Zoom e do Slack. Com o nome de quem falou.",
+    "Nome errado? Clique e corrija. Duas vezes a mesma pessoa? Ele pergunta e junta.",
+    "Acabou a chamada? A ata já está pronta: resumo, decisões e pendências.",
+    "Publica no Slack. E responde às perguntas no thread.",
+    "E tudo fica no seu computador.",
+    "Escribanote. Grátis para instalar no Chrome e no Edge. Cada palavra da reunião, anotada."
+  ],
+  "dueto": [
+    [["a", "Uma hora de reunião."], ["b", "E ninguém anotou nada."]],
+    [["a", "O Escribanote transcreve ao vivo, direto do Meet, do Teams, do Zoom e do Slack."], ["b", "Com o nome de quem falou."]],
+    [["b", "Nome errado? Clique e corrija."], ["a", "Duas vezes a mesma pessoa? Ele pergunta e junta."]],
+    [["a", "Acabou a chamada?"], ["b", "A ata já está pronta: resumo, decisões e pendências."]],
+    [["b", "Publica no Slack."], ["a", "E responde às perguntas no thread."]],
+    [["a", "E tudo fica no seu computador."], ["b", "Nada sai sem você mandar."]],
+    [["b", "Escribanote."], ["a", "Grátis para instalar no Chrome e no Edge."], ["b", "Cada palavra da reunião, anotada."]]
+  ]
+}

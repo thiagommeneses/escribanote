@@ -24,7 +24,8 @@ for (let i = 0; i < 50; i++) { try { const v = await (await fetch(`http://127.0.
 let seq = 0; const pending = new Map();
 ws.onmessage = (m) => { const msg = JSON.parse(m.data); if (msg.id && pending.has(msg.id)) { const p = pending.get(msg.id); pending.delete(msg.id); msg.error ? p.fail(new Error(JSON.stringify(msg.error))) : p.ok(msg.result); } };
 const send = (method, params = {}, sessionId) => new Promise((ok, fail) => { const id = ++seq; pending.set(id, { ok, fail }); ws.send(JSON.stringify({ id, method, params, sessionId })); });
-const url = "file://" + resolve(import.meta.dirname, "lancamento.html") + `?v=${variant}&still=1`;
+const durs = (process.argv.find((a) => a.startsWith("--d=")) || "").slice(4);
+const url = "file://" + resolve(import.meta.dirname, "lancamento.html") + `?v=${variant}&still=1` + (durs ? `&d=${durs}` : "");
 const { targetId } = await send("Target.createTarget", { url });
 const { sessionId: sid } = await send("Target.attachToTarget", { targetId, flatten: true });
 await send("Page.enable", {}, sid);

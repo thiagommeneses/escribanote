@@ -42,3 +42,39 @@ CHROME=/caminho/do/chrome node render.mjs shorts --stills # um PNG por segundo e
 Para ver a animação em tempo real, abra `lancamento.html` no navegador (`?v=story` para o corte curto).
 As cenas são funções de tempo em `lancamento.html`: cada uma recebe o tempo local e posiciona tudo,
 então o render é determinístico quadro a quadro (30 fps, 1080×1920, H.264).
+
+## Versões narradas (ElevenLabs)
+
+| Arquivo | Voz | Duração |
+|---|---|---|
+| `out/escribanote-shorts-narracao-masc.mp4` | Arnold (Br), masculina profissional | 44 s |
+| `out/escribanote-shorts-narracao-fem.mp4` | Bia, feminina confiante | 45 s |
+| `out/escribanote-shorts-narracao-dueto.mp4` | Arnold + Roberta, alternando frases | 45 s |
+
+Trilha: instrumental de lançamento composta pela ElevenLabs Music (`audio/musica.mp3`, 40 s, 112 BPM:
+piano e pads na entrada, groove aos 8 s, virada aos 17 s, final limpo). Efeitos de interface
+(`audio/sfx-*.mp3`): whoosh na passagem para a transcrição, pop nos cliques de Salvar e Mesclar,
+chime quando a ata aparece. A música é abaixada automaticamente enquanto a voz fala (sidechain)
+e o conjunto é normalizado em -14 LUFS, o padrão das plataformas.
+
+Cada cena dura o tempo da fala mais uma folga, então as três versões têm cortes um pouco diferentes.
+As narrações ficam em `audio/<voz>/<cena>.mp3` e os textos em `audio/roteiro.json`.
+
+### Narração (solo)
+
+1. Uma hora de reunião. E ninguém anotou nada.
+2. O Escribanote transcreve ao vivo, direto do Meet, do Teams, do Zoom e do Slack. Com o nome de quem falou.
+3. Nome errado? Clique e corrija. Duas vezes a mesma pessoa? Ele pergunta e junta.
+4. Acabou a chamada? A ata já está pronta: resumo, decisões e pendências.
+5. Publica no Slack. E responde às perguntas no thread.
+6. E tudo fica no seu computador.
+7. Escribanote. Grátis para instalar no Chrome e no Edge. Cada palavra da reunião, anotada.
+
+No dueto as mesmas ideias são divididas entre as duas vozes (ver `audio/roteiro.json`).
+
+### Como regerar
+
+```bash
+audio/gerar.sh masc        # ou fem, dueto — usa a CLI da ElevenLabs já autenticada; pula clipes existentes
+CHROME=... node mix.mjs masc --render   # renderiza o vídeo com as durações desta narração e mixa
+```
