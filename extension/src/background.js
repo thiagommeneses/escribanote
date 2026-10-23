@@ -1175,6 +1175,8 @@ chrome.runtime.onConnect.addListener((port) => {
       }
 
       if (req.action === "ata") {
+        // A ata atual entra no histórico antes de ser substituída (se ainda não estiver lá).
+        if (s.summary?.text) commitSummary(s, s.summary, { source: s.summary.model === "manual" ? "edit" : "ai" });
         s.summary = await runAta(ai, s, settings, { onDelta, signal: abort.signal });
         await commitAta(s, settings);
         await changed(s, { now: true });

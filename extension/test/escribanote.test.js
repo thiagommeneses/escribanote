@@ -571,3 +571,18 @@ test("histórico da ata: versões encadeadas, sem duplicar texto igual, com rót
   assert.equal(v3.n, 3);
   assert.equal(s.summaryHistory.length, 3);
 });
+
+test("normalize transforma uma ata antiga (sem histórico) na v1, sem duplicar", async () => {
+  const { commitSummary } = await import("../src/lib/diff.js");
+  const s = normalize({ id: "a1", startedAt: 1000, summary: { text: "# Ata\nAprovado.", createdAt: 5000, model: "claude-x" } });
+  assert.equal(s.summaryHistory.length, 1);
+  assert.equal(s.summaryHistory[0].n, 1);
+  assert.equal(s.summaryHistory[0].text, "# Ata\nAprovado.");
+  assert.equal(s.summaryHistory[0].createdAt, 5000);
+  assert.equal(s.summaryHistory[0].id, "v1-" + (5000).toString(36), "id determinístico: o mesmo em todos os dispositivos");
+  assert.equal(normalize(s).summaryHistory.length, 1, "normalizar de novo não duplica");
+  assert.equal(commitSummary(s, s.summary, { source: "ai" }), null, "texto igual não vira nova versão");
+  commitSummary(s, { text: "# Ata\nAprovado e assinado.", createdAt: 6000 }, { source: "ai" });
+  assert.equal(s.summaryHistory.length, 2);
+  assert.equal(s.summaryHistory[1].parentId, s.summaryHistory[0].id);
+});
