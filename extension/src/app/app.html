@@ -109,7 +109,15 @@
             </div>
             <div class="card ata">
               <div class="card-head"><b>Ata da reunião</b>
-                <div class="row"><button class="btn sm ghost" id="ata-copy" hidden>Copiar</button><button class="btn sm primary" id="ata-gen">Gerar ata</button></div></div>
+                <div class="row">
+                  <select class="sm" id="ata-template" title="Modelo usado para gerar a ata"></select>
+                  <div class="menu-wrap"><button class="btn sm ghost" id="ata-dl" hidden>Baixar <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+                    <div class="menu" id="ata-dl-menu" hidden>
+                      <button data-ata="txt"><span>⬇</span>Texto (.txt)<small>para colar no sistema</small></button>
+                      <button data-ata="md"><span>⬇</span>Markdown (.md)</button>
+                      <button data-ata="pdf"><span>🖨️</span>PDF<small>só a ata</small></button>
+                    </div></div>
+                  <button class="btn sm ghost" id="ata-copy" hidden>Copiar</button><button class="btn sm primary" id="ata-gen">Gerar ata</button></div></div>
               <div class="md" id="ata-body"></div>
             </div>
             <div class="card chat">
@@ -158,6 +166,21 @@
             <label class="field"><span>Glossário: nomes, siglas e termos da sua equipe (um por linha)</span>
               <textarea name="glossary" rows="4" placeholder="Q4&#10;OKR&#10;Thiago Meneses&#10;meneseslabs"></textarea></label>
             <label class="switch"><input type="checkbox" name="autoReview"><span></span>Revisar com IA automaticamente durante a reunião (usa sua chave de API ou 1 crédito do Pro por reunião)</label>
+          </div>
+
+          <div class="card" id="tpl-card">
+            <h3>Modelos de ata</h3>
+            <p class="muted tiny">Sua equipe tem um formato próprio de ata? Importe um PDF ou texto de uma ata já feita: o Escribanote extrai a estrutura (títulos, campos, lista de participantes, assinatura) e passa a gerar as atas nesse formato, prontas para colar no seu sistema. Logotipos, QR codes e assinaturas eletrônicas são ignorados.</p>
+            <label class="field"><span>Modelo padrão para novas atas</span>
+              <select name="ataTemplate" id="tpl-default"><option value="">Formato do Escribanote (resumo, decisões, ações)</option></select></label>
+            <div id="tpl-list" class="tpl-list"></div>
+            <div class="row"><button type="button" class="btn sm" id="tpl-import">Importar de PDF ou texto</button><button type="button" class="btn sm ghost" id="tpl-new">Escrever um modelo</button><input type="file" id="tpl-file" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden><span class="muted tiny" id="tpl-status"></span></div>
+            <div id="tpl-editor" class="tpl-editor" hidden>
+              <label class="field"><span>Nome do modelo</span><input id="tpl-name" maxlength="80" placeholder="Ex.: Registro de reunião (Atena)"></label>
+              <label class="field"><span>Modelo em Markdown. Use {{data}}, {{horario}}, {{participantes}}, {{resumo_por_participante}}, {{conclusao}}… onde a IA deve preencher; o resto fica como está.</span>
+                <textarea id="tpl-text" rows="16" spellcheck="false"></textarea></label>
+              <div class="row"><button type="button" class="btn sm primary" id="tpl-save">Salvar modelo</button><button type="button" class="btn sm ghost" id="tpl-cancel">Cancelar</button></div>
+            </div>
           </div>
 
           <div class="card">

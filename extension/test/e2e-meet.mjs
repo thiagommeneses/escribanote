@@ -395,7 +395,9 @@ try {
       const items = [...body.messages[0].content.matchAll(/\{"id":"([^"]+)","falante":"[^"]*","texto":"([^"]*)"\}/g)];
       const fixes = items.filter((m) => /quiu quatro/.test(m[2])).map((m) => ({ id: m[1], text: m[2].replace("quiu quatro", "Q4") }));
       text = JSON.stringify({ fixes });
-    } else if (/decidido/.test(JSON.stringify(body.messages))) text = "- Aprovado o orçamento do **Q4**.";
+    } else if (/Extraia o modelo/.test(JSON.stringify(body.messages))) text = "# Registro de Reunião {{numero_do_registro}}\n**Data:** {{data}}\n**Participantes:**\n{{participantes}}\n## Conclusão\n{{conclusao}}";
+    else if (/<modelo>/.test(JSON.stringify(body.messages))) text = "# Registro de Reunião [preencher]\n**Data:** hoje\n**Participantes:**\n- Ana Teste\n- Bruno Lima\n## Conclusão\nAprovado o orçamento do Q4.";
+    else if (/decidido/.test(JSON.stringify(body.messages))) text = "- Aprovado o orçamento do **Q4**.";
     send("Fetch.fulfillRequest", {
       requestId: msg.params.requestId, responseCode: 200,
       responseHeaders: [{ name: "Content-Type", value: "text/event-stream" }],
@@ -438,6 +440,26 @@ try {
     await waitFor(async () => (await sw({ type: "get", id })).chats.at(-1)?.messages.length === 2, "resposta do chat");
     assert.match(await evaluate(app, "document.getElementById('chat-log').innerText"), /Aprovado o orçamento do Q4/);
     step("Pergunte à IA responde em streaming e salva a conversa");
+
+    // Modelos de ata: importa de um "PDF" (API simulada), salva, escolhe para a reunião e gera a ata no formato
+    const imported = await sw({ type: "ata-template-import", pdfBase64: Buffer.from("%PDF-1.4 teste").toString("base64") });
+    assert.match(imported.text, /\{\{data\}\}/, "modelo extraído do PDF");
+    assert.equal(apiCalls.at(-1).body.messages[0].content[0].type, "document", "o PDF vai como documento para a IA");
+    const tpls = await sw({ type: "ata-template-save", name: "Registro (Atena)", text: imported.text });
+    assert.equal(tpls.length, 1);
+    await sw({ type: "update", id, ataTemplateId: tpls[0].id });
+    await evaluate(app, "location.reload(); true");
+    await sleep(1200);
+    await evaluate(app, `document.querySelector('[data-tab="ai"]').click()`);
+    await sleep(300);
+    assert.equal(await evaluate(app, "document.getElementById('ata-template').value"), tpls[0].id, "seletor mostra o modelo da reunião");
+    await evaluate(app, "document.getElementById('ata-gen').click()");
+    await waitFor(async () => /Registro de Reunião/.test((await sw({ type: "get", id })).summary?.text || ""), "ata no formato do modelo");
+    assert.match(JSON.stringify(apiCalls.at(-1).body.messages), /<modelo>[\s\S]*Registro de Reunião[\s\S]*<\/modelo>/, "o modelo foi para a IA");
+    await sleep(400);
+    assert.equal(await evaluate(app, "document.getElementById('ata-dl').hidden"), false, "botão Baixar visível com ata");
+    assert.deepEqual(await evaluate(app, "[...document.querySelectorAll('#ata-dl-menu [data-ata]')].map(b => b.dataset.ata)"), ["txt", "md", "pdf"]);
+    step("modelo de ata importado de PDF, escolhido na reunião e usado na geração; download em txt/md/pdf");
   }
 
   // Segmento do Whisper (simulando o documento offscreen) substitui a legenda

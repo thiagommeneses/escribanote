@@ -34,12 +34,61 @@ function context(session, tags) {
   return `<transcricao titulo="${session.title.replace(/"/g, "'")}" data="${dateLabel(session.startedAt)}">\n${toText(session, { tags })}\n</transcricao>`;
 }
 
-export function ataRequest(session, tags, glossary) {
+// Ata seguindo um modelo do próprio usuário (ex.: o formato que a equipe cola num sistema interno).
+const ATA_TEMPLATE_SYSTEM = `Você produz atas de reunião em português do Brasil seguindo EXATAMENTE o modelo fornecido pelo usuário.
+${GUARD}
+
+Regras do modelo (<modelo>):
+- Reproduza a estrutura, a ordem, os títulos, os rótulos de campo e o estilo de formatação do modelo (negrito, listas, linhas separadoras). Não acrescente seções que não existam nele nem remova as que existem.
+- Marcadores entre chaves duplas, como {{data}} ou {{participantes}}, e trechos entre colchetes indicam o que deve ser preenchido com o conteúdo da reunião.
+- Preencha data, horário e plataforma a partir dos dados da transcrição. Dados administrativos que a transcrição não informa (números de processo, registro, protocolo) ficam como "[preencher]".
+- Participantes: use os nomes de quem falou na transcrição; mantenha cargo ou função só quando o modelo pedir e a informação existir (caso contrário, deixe só o nome).
+- Quando o modelo pede um resumo por participante, escreva um parágrafo por pessoa, em terceira pessoa, com o que ela relatou, decidiu ou assumiu.
+- Blocos de assinatura, fechos e textos fixos do modelo devem ser mantidos como estão; não invente nomes de signatários: se o modelo tiver um nome próprio no bloco de assinatura, mantenha-o.
+- Responda apenas com a ata preenchida, em Markdown simples (títulos com #, negrito com **, listas com -), sem comentários antes ou depois.`;
+
+export function ataRequest(session, tags, glossary, template) {
   const terms = (glossary || "").split(/[\n,;]+/).map((t) => t.trim()).filter(Boolean);
+  const glossaryNote = terms.length ? `\n\nGrafia correta de nomes e termos desta equipe: ${terms.join(", ")}.` : "";
+  const tpl = (template || "").trim();
+  if (tpl) {
+    return {
+      system: ATA_TEMPLATE_SYSTEM + glossaryNote,
+      effort: "medium",
+      messages: [{ role: "user", content: `<modelo>\n${tpl.replace(/<\/?modelo>/g, "")}\n</modelo>\n\n${context(session, tags)}\n\nPreencha o modelo com o conteúdo desta reunião.` }],
+    };
+  }
   return {
-    system: ATA_SYSTEM + (terms.length ? `\n\nGrafia correta de nomes e termos desta equipe: ${terms.join(", ")}.` : ""),
+    system: ATA_SYSTEM + glossaryNote,
     effort: "medium",
     messages: [{ role: "user", content: `${context(session, tags)}\n\nGere a ata desta reunião.` }],
+  };
+}
+
+// Extrai um modelo reutilizável de uma ata existente (PDF em base64 ou texto colado).
+export const TEMPLATE_EXTRACT_SYSTEM = `Você transforma uma ata de reunião real em um MODELO reutilizável, em português do Brasil.
+Mantenha títulos, rótulos de campo, ordem das seções, estilo (negrito, listas, linhas separadoras) e o bloco de assinatura ou fecho.
+Substitua o conteúdo específico daquela reunião por marcadores entre chaves duplas, por exemplo {{data}}, {{horario}}, {{local}}, {{assunto}}, {{participantes}}, {{resumo_por_participante}}, {{conclusao}}; dados administrativos viram {{numero_dos_autos}}, {{numero_do_registro}} etc.
+Ignore logotipos, cabeçalhos gráficos institucionais, QR codes, textos de assinatura eletrônica/autenticação e textos impressos na vertical na margem da página.
+Se o bloco de assinatura trouxer nome e cargo de uma pessoa, mantenha-os como texto fixo (é a mesma pessoa que assina todas as atas).
+Responda apenas com o modelo em Markdown simples, sem comentários.`;
+
+export function templateFromPdfRequest(base64) {
+  return {
+    system: TEMPLATE_EXTRACT_SYSTEM,
+    effort: "medium",
+    messages: [{ role: "user", content: [
+      { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+      { type: "text", text: "Extraia o modelo desta ata." },
+    ] }],
+  };
+}
+
+export function templateFromTextRequest(text) {
+  return {
+    system: TEMPLATE_EXTRACT_SYSTEM,
+    effort: "medium",
+    messages: [{ role: "user", content: `<ata>\n${text.slice(0, 60000)}\n</ata>\n\nExtraia o modelo desta ata.` }],
   };
 }
 

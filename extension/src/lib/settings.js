@@ -49,6 +49,7 @@ export const DEFAULTS = {
   talkTarget: 30, // % de fala desejada para "você"
   captionLang: "pt-BR",
   glossary: "",
+  ataTemplate: "", // id do modelo de ata padrão ("" = formato do Escribanote)
   autoReview: false,
   hq: "off", // "off" | "base" | "small" | "turbo" — motor Whisper local
   hqMic: false,

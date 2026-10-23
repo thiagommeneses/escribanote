@@ -190,3 +190,28 @@ export function fileName(session, ext) {
     .toLowerCase();
   return `${stamp}_${slug || "reuniao"}.${ext}`;
 }
+
+// Ata em texto puro (para colar em sistemas que não aceitam Markdown): remove a marcação, mantém títulos e listas.
+export function ataPlainText(md) {
+  return (md || "")
+    .replace(/\r/g, "")
+    .replace(/^#{1,6}\s+(.*)$/gm, (_, t) => t.toUpperCase())
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/(^|[^*])\*(?!\*)([^*\n]+)\*/g, "$1$2")
+    .replace(/_([^_\n]+)_/g, "$1")
+    .replace(/^\s*-\s+\[( |x|X)\]\s+/gm, (_, c) => (c === " " ? "[ ] " : "[x] "))
+    .replace(/^\s*[-*]\s+/gm, "• ")
+    .replace(/^\s*(\d+)\.\s+/gm, "$1. ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/gm, "――――――――――――――――――――")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function ataFileName(session, ext) {
+  const d = new Date(session.startedAt);
+  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const slug = (session.title || "reuniao").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 60) || "reuniao";
+  return `ata-${stamp}-${slug}.${ext}`;
+}

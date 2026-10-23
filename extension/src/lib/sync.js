@@ -42,6 +42,7 @@ export function mergeDocs(local, remote) {
   out.langs = { ...(older.langs || {}) };
   for (const [k, v] of Object.entries(newer.langs || {})) out.langs[k] = Math.max(out.langs[k] || 0, v);
   out.summary = newer.summary ?? older.summary ?? null;
+  out.ataTemplateId = newer.ataTemplateId ?? older.ataTemplateId ?? null;
   out.endedAt = newer.endedAt ?? older.endedAt ?? null;
   out.shots = local.shots || []; // capturas de tela só existem no computador
   out.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0);

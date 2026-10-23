@@ -2,7 +2,7 @@
 // e análise com as mesmas bibliotecas da extensão (copiadas para ./lib na publicação).
 import { api, ApiError, stream } from "./api.js";
 import { QUICK_PROMPTS } from "./lib/ai.js";
-import { clock, FORMATS, fileName, mdToHtml, PLATFORM, toHtml } from "./lib/format.js";
+import { clock, FORMATS, fileName, mdToHtml, PLATFORM, toHtml, ataPlainText, ataFileName } from "./lib/format.js";
 import { DEFAULT_TAGS } from "./lib/settings.js";
 import { computeStats, fmtDuration } from "./lib/stats.js";
 import { normalize, toBlocks, mergeSpeakers, speakerName } from "./lib/transcript.js";
@@ -477,18 +477,80 @@ function renderPane() {
 
 const upsell = (what) => `<div class="empty-pane"><p>${what} faz parte do Escribanote Pro.</p><a class="btn sm primary" href="#/conta">Conhecer o Pro</a></div>`;
 
+// Modelos de ata do usuário: ficam neste navegador (localStorage); o escolhido para a reunião fica no documento.
+const TPL_KEY = "escribanote.ataTemplates";
+function templates() {
+  try { const v = JSON.parse(localStorage.getItem(TPL_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function saveTemplates(list) {
+  try { localStorage.setItem(TPL_KEY, JSON.stringify(list)); } catch { toast("Não deu para guardar o modelo neste navegador."); }
+}
+function templateText(doc) {
+  const id = doc.ataTemplateId;
+  if (!id || id === "none") return "";
+  return templates().find((t) => t.id === id)?.text || "";
+}
 function ataPane() {
-  const s = state.meeting.doc.summary;
+  const doc = state.meeting.doc;
+  const s = doc.summary;
   if (!isPro() && !s?.text) return upsell("A ata com IA");
-  const cost = toBlocks(state.meeting.doc).reduce((a, b) => a + b.text.length, 0) > 180_000 ? 2 : 1;
+  const cost = toBlocks(doc).reduce((a, b) => a + b.text.length, 0) > 180_000 ? 2 : 1;
+  const tpls = templates();
+  const picker = isPro() ? `<label class="small muted" style="display:flex;gap:8px;align-items:center">Modelo
+      <select class="input" style="width:auto;padding:5px 8px" data-act="tpl-pick"><option value="">Formato do Escribanote</option>${tpls.map((t) => `<option value="${esc(t.id)}" ${doc.ataTemplateId === t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>
+      <button class="btn sm ghost" data-act="drawer" data-d="templates">Modelos…</button></label>` : "";
+  const gen = `<button class="btn ${s?.text ? "sm ghost" : "primary"}" data-act="ata">${s?.text ? "Gerar de novo" : "Gerar ata"} <span class="cost">${cost} crédito${cost > 1 ? "s" : ""}</span></button>`;
   if (!s?.text) {
     return `<div class="empty-pane"><p style="font:400 20px/1.3 var(--serif)">Ata desta reunião</p>
-      <p class="small muted">Resumo, pontos principais, decisões, itens de ação e pendências.</p>
-      <button class="btn primary" data-act="ata">Gerar ata <span class="cost">${cost} crédito${cost > 1 ? "s" : ""}</span></button></div>
+      <p class="small muted">${tpls.length && doc.ataTemplateId ? "No formato do seu modelo, pronta para colar no seu sistema." : "Resumo, pontos principais, decisões, itens de ação e pendências."}</p>
+      ${picker}${gen}</div>
       <div class="ata" id="ata-live" hidden></div>`;
   }
   return `<div class="ata" id="ata-live">${mdToHtml(s.text)}</div>
-    <div class="row"><button class="btn sm" data-act="copy-ata">Copiar</button>${isPro() ? `<button class="btn sm ghost" data-act="ata">Gerar de novo <span class="cost">${cost} crédito${cost > 1 ? "s" : ""}</span></button>` : ""}</div>`;
+    <div class="row" style="margin-top:10px">
+      <button class="btn sm" data-act="copy-ata">Copiar</button>
+      <button class="btn sm" data-act="dl-ata" data-f="txt">Baixar .txt</button>
+      <button class="btn sm" data-act="dl-ata" data-f="md">Baixar .md</button>
+      <button class="btn sm" data-act="dl-ata" data-f="pdf">PDF</button>
+      ${isPro() ? gen : ""}</div>
+    ${picker ? `<div class="row" style="margin-top:8px">${picker}</div>` : ""}`;
+}
+
+function downloadAta(doc, kind) {
+  if (!doc.summary?.text) return;
+  if (kind === "pdf") {
+    const w = window.open("", "_blank");
+    if (!w) return toast("O navegador bloqueou a janela. Libere pop-ups para salvar o PDF.");
+    w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Ata — ${esc(doc.title)}</title>
+      <style>body{font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;color:#16181d;max-width:780px;margin:40px auto;padding:0 24px}h1{font-size:22px}h2{font-size:16px;margin-top:24px}h3{font-size:14px}hr{border:0;border-top:1px solid #999;margin:18px 0}@media print{body{margin:0}}</style></head>
+      <body>${mdToHtml(doc.summary.text)}<script>setTimeout(()=>print(),300)</script></body></html>`);
+    w.document.close();
+    return;
+  }
+  const text = kind === "txt" ? ataPlainText(doc.summary.text) : doc.summary.text;
+  const url = URL.createObjectURL(new Blob([text], { type: `${kind === "txt" ? "text/plain" : "text/markdown"};charset=utf-8` }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: ataFileName(doc, kind) });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+async function importTemplateFile(file) {
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) return toast("Arquivo grande demais (máximo 8 MB).");
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  toast("Lendo a ata e extraindo o modelo…");
+  try {
+    const body = isPdf
+      ? { pdfBase64: await new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = () => fail(new Error("Não deu para ler o arquivo.")); r.readAsDataURL(file); }) }
+      : { text: await file.text() };
+    const r = await api.post("/ai/template", body);
+    setCredits(r.balance);
+    state.tplEdit = { id: "", name: file.name.replace(/\.(pdf|txt|md)$/i, ""), text: r.text };
+    renderDrawer();
+    toast("Modelo extraído. Revise e salve.");
+  } catch (err) {
+    handleError(err);
+  }
 }
 
 function iaPane() {
@@ -661,6 +723,13 @@ async function renameSpeaker(id, anchor) {
   renderTranscript();
 }
 
+document.addEventListener("change", async (e) => {
+  const sel = e.target.closest('[data-act="tpl-pick"]');
+  if (!sel || !state.meeting) return;
+  await saveDoc((d) => (d.ataTemplateId = sel.value || null));
+  toast(sel.value ? "Modelo escolhido. Gere a ata para aplicar." : "Formato padrão na próxima ata.");
+});
+
 async function generateAta() {
   if (state.busy) return;
   state.busy = true;
@@ -669,7 +738,8 @@ async function generateAta() {
   const pane = $("pane");
   pane.innerHTML = `<div class="ata typing" id="ata-live"></div><p class="small muted">Escrevendo a ata…</p>`;
   try {
-    const done = await stream("/ai/summary", { meetingId: state.meeting.id }, {
+    const template = templateText(state.meeting.doc);
+    const done = await stream("/ai/summary", { meetingId: state.meeting.id, ...(template ? { template } : {}) }, {
       onStart: (d) => setCredits(d.balance),
       onDelta: (text) => ($("ata-live").innerHTML = mdToHtml(text)),
     });
@@ -733,6 +803,18 @@ function renderDrawer() {
     el.innerHTML = `<div class="drawer"><p class="small" style="font-weight:700">Exportar esta reunião</p>
       <div class="row">${Object.entries(FORMATS).map(([k, f]) => `<button class="btn sm" data-act="export" data-f="${k}">${esc(f.label)}</button>`).join("")}
       <button class="btn sm dark" data-act="copy-rich">Copiar para Docs/Notion</button></div></div>`;
+  } else if (d === "templates") {
+    const tpls = templates();
+    const e = state.tplEdit;
+    el.innerHTML = `<div class="drawer"><p class="small" style="font-weight:700">Modelos de ata</p>
+      <p class="small muted">Importe um PDF ou texto de uma ata que a sua equipe usa: a IA extrai a estrutura (títulos, campos, participantes, assinatura) e as próximas atas saem nesse formato. Logotipos, QR codes e assinaturas eletrônicas são ignorados. 1 crédito por importação.</p>
+      ${tpls.length ? tpls.map((t) => `<div class="row" style="justify-content:space-between"><b class="small">${esc(t.name)}</b><span><button class="btn sm ghost" data-act="tpl-edit" data-id="${esc(t.id)}">Editar</button><button class="btn sm ghost" data-act="tpl-del" data-id="${esc(t.id)}">Apagar</button></span></div>`).join("") : '<p class="small muted">Nenhum modelo ainda.</p>'}
+      <div class="row"><button class="btn sm" data-act="tpl-import">Importar de PDF ou texto</button><button class="btn sm ghost" data-act="tpl-new">Escrever um modelo</button><input type="file" id="tpl-file" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden></div>
+      ${e ? `<label class="field"><span class="small muted">Nome</span><input class="input" id="tpl-name" maxlength="80" value="${esc(e.name)}"></label>
+        <label class="field"><span class="small muted">Modelo em Markdown. Use {{data}}, {{participantes}}, {{resumo_por_participante}}, {{conclusao}}… onde a IA deve preencher.</span><textarea class="input" id="tpl-text" rows="14" spellcheck="false">${esc(e.text)}</textarea></label>
+        <div class="row"><button class="btn sm primary" data-act="tpl-save">Salvar modelo</button><button class="btn sm ghost" data-act="tpl-cancel">Cancelar</button></div>` : ""}
+      </div>`;
+    el.querySelector("#tpl-file")?.addEventListener("change", (ev) => importTemplateFile(ev.target.files[0]));
   } else if (d === "delete") {
     el.innerHTML = `<div class="drawer"><p>Apagar esta reunião da conta? Ela fica 30 dias na lixeira (Conta › Lixeira). A cópia no computador, na extensão, não é apagada.</p>
       <div class="row"><button class="btn sm primary" data-act="delete">Apagar da conta</button><button class="btn sm ghost" data-act="drawer" data-d="">Cancelar</button></div></div>`;
@@ -1242,6 +1324,45 @@ view.addEventListener("click", async (e) => {
         return generateAta();
       case "copy-ata":
         return copy(m.doc.summary.text, mdToHtml(m.doc.summary.text));
+      case "dl-ata":
+        return downloadAta(m.doc, el.dataset.f);
+      case "tpl-pick":
+        return;
+      case "tpl-import":
+        return document.getElementById("tpl-file")?.click();
+      case "tpl-new":
+        state.tplEdit = { id: "", name: "", text: "" };
+        return renderDrawer();
+      case "tpl-edit":
+        state.tplEdit = { ...templates().find((t) => t.id === el.dataset.id) };
+        return renderDrawer();
+      case "tpl-del": {
+        const t = templates().find((x) => x.id === el.dataset.id);
+        const ok = await askChoice(el, { title: `Apagar "${t?.name}"?`, text: "As atas já geradas continuam como estão.", choices: [{ key: "del", label: "Apagar", primary: true }, { key: "cancel", label: "Cancelar" }] });
+        if (ok !== "del") return;
+        saveTemplates(templates().filter((x) => x.id !== el.dataset.id));
+        if (m?.doc.ataTemplateId === el.dataset.id) await saveDoc((d) => (d.ataTemplateId = null));
+        renderDrawer();
+        return renderPane();
+      }
+      case "tpl-save": {
+        const name = document.getElementById("tpl-name").value.trim() || "Modelo";
+        const text = document.getElementById("tpl-text").value.trim();
+        if (!text) return toast("Cole ou escreva o modelo antes de salvar.");
+        const list = templates();
+        const id = state.tplEdit?.id || Date.now().toString(36);
+        const i = list.findIndex((t) => t.id === id);
+        const item = { id, name, text: text.slice(0, 24000), updatedAt: Date.now() };
+        if (i >= 0) list[i] = item; else list.push(item);
+        saveTemplates(list);
+        state.tplEdit = null;
+        renderDrawer();
+        toast("Modelo salvo");
+        return renderPane();
+      }
+      case "tpl-cancel":
+        state.tplEdit = null;
+        return renderDrawer();
       case "quick":
         return askMeeting(el.dataset.q);
       case "ask":
