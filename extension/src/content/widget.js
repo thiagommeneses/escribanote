@@ -93,6 +93,7 @@
     .rn { display: inline-flex; gap: 4px; align-items: center; }
     .rn input { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; color: #e8eaed; font: inherit; font-size: 12px; padding: 2px 6px; width: 140px; outline: none; }
     .rn input:focus { border-color: #8ab4f8; }
+    .rn { flex-wrap: wrap; }
     .rn button { padding: 1px 6px; border-radius: 6px; font-size: 12px; background: rgba(255,255,255,.1); color: #e8eaed; }
     .blk .who time { color: #9aa0a6; font-size: 11px; }
     .blk .tags { margin-left: auto; font-size: 12px; }
@@ -398,12 +399,38 @@
       input.value = current;
       who.replaceWith(form);
       const finish = async (save) => {
-        if (!renaming) return;
+        if (!renaming || renaming.asking) return;
         const name = input.value.trim();
-        renaming = null;
         if (save && name && name !== current) {
+          // Outro participante já tem esse nome? Pergunta antes de juntar os dois.
+          const otherId = Object.keys(session.names || {}).find((id) => id !== speakerId && session.names[id].trim().toLowerCase() === name.toLowerCase());
+          const other = otherId ? { speakerId: otherId, speaker: session.names[otherId] } : null;
+          if (other) {
+            renaming.asking = true;
+            form.innerHTML = `<span class="muted">Mesclar ${esc(current)} em ${esc(other.speaker)}?</span>
+              <button data-rn-merge>Mesclar</button><button data-rn-keep>Manter separados</button><button data-rn-cancel>Cancelar</button>`;
+            form.querySelector("[data-rn-merge]").addEventListener("click", async () => {
+              renaming = null;
+              await send({ type: "merge-speakers", id: session.id, from: speakerId, to: other.speakerId }).catch(() => {});
+              refresh();
+              render();
+            });
+            form.querySelector("[data-rn-keep]").addEventListener("click", async () => {
+              renaming = null;
+              await send({ type: "update", id: session.id, speakers: { [speakerId]: name.slice(0, 120) } }).catch(() => {});
+              refresh();
+              render();
+            });
+            form.querySelector("[data-rn-cancel]").addEventListener("click", () => {
+              renaming = null;
+              refresh();
+              render();
+            });
+            return;
+          }
+          renaming = null;
           await send({ type: "update", id: session.id, speakers: { [speakerId]: name.slice(0, 120) } }).catch(() => {});
-        }
+        } else renaming = null;
         refresh();
         render();
       };

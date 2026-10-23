@@ -35,11 +35,39 @@ export function normalize(s) {
   s.uiLang ??= null; // idioma da interface do Meet (as legendas costumam seguir esse)
   s.voices ||= {}; // voz identificada pelo Whisper ("voz:1") -> { speakerId: votos } aprendidos pelas legendas
   s.part ??= 1; // 1ª, 2ª… parte de uma reunião com o mesmo link no mesmo dia
+  s.merged ||= {}; // falante mesclado em outro: idAntigo -> idDestino (as falas novas do antigo vão para o destino)
   s.turns ||= []; // quem estava falando (indicador da plataforma, ex.: Slack): {id, speakerId, start, end}
   s.paused ??= false;
   s.endedAt ??= null;
   s.summary ??= null;
   return s;
+}
+
+// Id efetivo de um falante depois das mesclagens (segue a cadeia, com limite).
+export function canonicalSpeaker(session, speakerId) {
+  const m = session.merged || {};
+  let id = speakerId;
+  for (let i = 0; i < 8 && m[id] && m[id] !== id; i++) id = m[id];
+  return id;
+}
+
+// Mescla o falante `fromId` em `toId`: as falas, segmentos do Whisper, turnos e votos de voz
+// passam para o destino, e falas novas que chegarem com o id antigo também. Retorna quantas falas mudaram.
+export function mergeSpeakers(session, fromId, toId, now = Date.now()) {
+  toId = canonicalSpeaker(session, toId);
+  if (!fromId || !toId || fromId === toId) return 0;
+  let moved = 0;
+  for (const list of [session.entries, session.asr, session.turns]) {
+    for (const e of list) if (e.speakerId === fromId) { e.speakerId = toId; moved++; }
+  }
+  for (const votes of Object.values(session.voices)) {
+    if (votes[fromId]) { votes[toId] = (votes[toId] || 0) + votes[fromId]; delete votes[fromId]; }
+  }
+  for (const [k, v] of Object.entries(session.merged)) if (v === fromId) session.merged[k] = toId;
+  session.merged[fromId] = toId;
+  delete session.speakers[fromId];
+  session.updatedAt = now;
+  return moved;
 }
 
 function norm(text) {
@@ -49,6 +77,11 @@ function norm(text) {
 // Aplica um evento vindo do coletor. Retorna true se a sessão mudou.
 export function applyEvent(session, ev, now = Date.now()) {
   if (ev.kind === "meeting-start") return false; // só cria a sessão (tratado pelo service worker)
+  if (ev.speakerId && session.merged && session.merged[ev.speakerId]) {
+    const to = canonicalSpeaker(session, ev.speakerId);
+    if (ev.kind === "speaker") return false; // o destino já tem nome; o antigo não volta
+    ev = { ...ev, speakerId: to };
+  }
   if (ev.kind === "turn") {
     if (!ev.id || !ev.speakerId || !(ev.end > ev.start)) return false;
     if (ev.speakerName && !session.speakers[ev.speakerId]) session.speakers[ev.speakerId] = ev.speakerName;
@@ -239,7 +272,7 @@ export function effectiveEntries(session) {
   const asr = (session.asr || []).map((s) => ({
     id: s.id,
     kind: "caption",
-    speakerId: s.speakerId || resolveSpeaker(session, s.start, s.end) || "desconhecido",
+    speakerId: canonicalSpeaker(session, s.speakerId || resolveSpeaker(session, s.start, s.end) || "desconhecido"),
     text: s.text,
     at: s.start,
     updatedAt: s.end,
@@ -263,7 +296,7 @@ export function effectiveEntries(session) {
         continue;
       }
     }
-    out.push({ ...e });
+    out.push({ ...e, speakerId: canonicalSpeaker(session, e.speakerId) });
   }
   out.push(...asr);
   out.sort((a, b) => a.at - b.at);
@@ -278,6 +311,7 @@ export function effectiveEntries(session) {
 }
 
 export function speakerName(session, speakerId) {
+  speakerId = canonicalSpeaker(session, speakerId);
   if (session.speakers[speakerId]) return session.speakers[speakerId];
   if (!speakerId || speakerId === "desconhecido") return "Desconhecido";
   if (speakerId === "me") return session.myName || "Você";

@@ -165,6 +165,20 @@ try {
     return r.doc?.speakers?.b === "Bruno Lima" ? r : null;
   }, "nome salvo na conta");
   check(!!renamed && (await evalIn(web, `document.querySelector('#pane, main, body').innerText.includes("Bruno Lima")`)), "falante renomeado pelo editor do app web");
+  // Mesclar no app web: renomear "Ana" para "Bruno Lima" → pergunta → Mesclar
+  const atA = await evalIn(web, `(() => { const r = document.querySelector('.blk .who b[data-act="rename"][data-spk="a"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()`);
+  for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: atA.x, y: atA.y, button: "left", clickCount: 1 }, web);
+  await waitFor(() => evalIn(web, `document.activeElement === document.querySelector('.ask input')`), "editor para a Ana no app web");
+  await send("Input.insertText", { text: "bruno lima" }, web);
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 }, web);
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 }, web);
+  await waitFor(() => evalIn(web, `!!document.querySelector('.ask [data-choice="merge"]')`), "pergunta de mesclagem no app web");
+  await evalIn(web, `document.querySelector('.ask [data-choice="merge"]').click(); true`);
+  const mergedWeb = await waitFor(async () => { const r = await api("/meetings/loc-1"); return r.doc?.merged?.a === "b" ? r : null; }, "mesclagem salva na conta");
+  check(mergedWeb.doc.entries.every((e) => e.speakerId === "b") && !("a" in mergedWeb.doc.speakers), "falante mesclado pelo app web");
+  await msg({ type: "sync-now" });
+  const pulledMerge = await waitFor(async () => { const s = await msg({ type: "get", id: "loc-1" }); return s?.merged?.a === "b" ? s : null; }, "mesclagem chega à extensão");
+  check(!!pulledMerge, "mesclagem feita na web aparece na extensão");
 
   // 5) Conflito: título muda na web e nota muda na extensão ao mesmo tempo -> as duas ficam
   const r2 = await api("/meetings/loc-2");
