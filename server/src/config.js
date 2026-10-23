@@ -35,6 +35,11 @@ export function loadConfig(overrides = {}) {
       portalConfig: env.STRIPE_PORTAL_CONFIG || "",
       pixMandateMax: num(env.PIX_MANDATE_MAX_CENTS, 18000), // teto do débito anual automático (R$ 180; o plano custa R$ 150)
     },
+    slack: {
+      clientId: env.SLACK_CLIENT_ID || "",
+      clientSecret: env.SLACK_CLIENT_SECRET || "",
+      signingSecret: env.SLACK_SIGNING_SECRET || "",
+    },
     sessionDays: 30,
     loginTokenMinutes: 15,
     ...overrides,

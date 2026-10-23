@@ -15,6 +15,23 @@ Todas em `/api/v1` (mais `/s/{token}` para os links públicos). Tabela completa 
 endpoints". Autenticação: cookie `rs` (app web, com o cabeçalho `X-Escribanote: 1` nas escritas) ou
 `Authorization: Bearer` (extensão).
 
+## Slack (opcional)
+
+Crie o app uma vez em https://api.slack.com/apps › *Create New App* › *From a manifest*, colando
+[`slack-app-manifest.json`](slack-app-manifest.json). Em *Basic Information* copie o Client ID, o
+Client Secret e o Signing Secret para `pro.env`:
+
+```
+SLACK_CLIENT_ID=...
+SLACK_CLIENT_SECRET=...
+SLACK_SIGNING_SECRET=...
+```
+
+Sem essas variáveis as rotas `/api/v1/slack/*` respondem 503 e o app web esconde o painel do Slack.
+Com elas, cada usuário Pro conecta o próprio workspace em Conta › Slack (OAuth), escolhe o canal das
+atas e pode ligar "publicar sozinho". Perguntas no thread da ata chegam por `/api/v1/slack/events`
+(assinatura conferida) e são respondidas pela IA com 1 crédito.
+
 ## Desenvolvimento e testes
 
 ```bash

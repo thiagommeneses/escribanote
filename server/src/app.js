@@ -9,10 +9,11 @@ import { HttpError } from "./http.js";
 import { registerMeetings } from "./meetings.js";
 import { createLimiter } from "./ratelimit.js";
 import { registerShares } from "./shares.js";
+import { registerSlack } from "./slack.js";
 
 export const VERSION = "1.0.0";
 
-export async function buildApp({ config, db, mailer, anthropic = null, stripe = null, logger = false }) {
+export async function buildApp({ config, db, mailer, anthropic = null, stripe = null, logger = false, fetchImpl = globalThis.fetch }) {
   const app = Fastify({
     logger: logger && {
       level: "info",
@@ -74,5 +75,6 @@ export async function buildApp({ config, db, mailer, anthropic = null, stripe = 
   registerAi(app, deps);
   registerBilling(app, deps);
   registerShares(app, deps);
+  registerSlack(app, { ...deps, fetchImpl });
   return app;
 }
