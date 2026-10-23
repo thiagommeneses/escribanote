@@ -88,7 +88,12 @@
     .body { flex: 1; overflow-y: auto; padding: 6px 4px 6px 14px; scrollbar-width: thin; scrollbar-color: #5f6368 transparent; }
     .blk { position: relative; padding: 7px 10px 7px 0; border-radius: 8px; }
     .blk .who { display: flex; align-items: baseline; gap: 6px; font-size: 12px; }
-    .blk .who b { font-weight: 600; }
+    .blk .who b { font-weight: 600; cursor: pointer; border-bottom: 1px dotted transparent; }
+    .blk .who b:hover { border-bottom-color: currentColor; }
+    .rn { display: inline-flex; gap: 4px; align-items: center; }
+    .rn input { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; color: #e8eaed; font: inherit; font-size: 12px; padding: 2px 6px; width: 140px; outline: none; }
+    .rn input:focus { border-color: #8ab4f8; }
+    .rn button { padding: 1px 6px; border-radius: 6px; font-size: 12px; background: rgba(255,255,255,.1); color: #e8eaed; }
     .blk .who time { color: #9aa0a6; font-size: 11px; }
     .blk .tags { margin-left: auto; font-size: 12px; }
     .blk p { margin: 1px 0 0; color: #e8eaed; word-wrap: break-word; }
@@ -172,6 +177,7 @@
   let minimized = false;
   let shown = false;
   let follow = true;
+  let renaming = null; // { speakerId, name } enquanto o usuário edita um nome no bloco
   let chatId = null;
   let aiPort = null;
 
@@ -344,11 +350,13 @@
         ? "As legendas são ligadas automaticamente. Comece a falar para ver a transcrição aqui."
         : "Ative as legendas ao vivo na reunião. A transcrição aparece aqui assim que alguém falar.";
       body.innerHTML = (session ? bannerHtml() : "") + `<div class="center"><h4>${state.paused ? "Transcrição pausada" : "Ouvindo…"}</h4><div>${hint}</div></div>`;
+    } else if (renaming) {
+      // Não redesenha enquanto o nome está sendo editado (a transcrição ao vivo chega a cada segundo).
     } else {
       const t = tags();
       body.innerHTML = bannerHtml() + session.blocks
         .map((b) => `<div class="blk" data-ids="${esc(JSON.stringify(b.ids))}" data-tags="${esc(JSON.stringify(b.tags))}">
-          <div class="who"><b style="color:${colorFor(b.speaker)}">${esc(b.speaker)}</b>
+          <div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${esc(b.speaker)}</b>
             <time>${clock(b.startAt - session.startedAt)}</time>${b.kind === "chat" ? '<span class="muted">chat</span>' : ""}
             ${b.hq ? '<span class="badge" title="Transcrito pelo modo de alta precisão">🎧</span>' : ""}${b.fixed ? `<span class="badge" title="Revisado pela IA. Original: ${esc(b.original)}">✓</span>` : ""}
             <span class="tags">${b.tags.map((id) => (t.find((x) => x.id === id) || {}).emoji || "🏷").join(" ")}</span></div>
@@ -390,6 +398,40 @@
     if (c) {
       const v = c.dataset.consent;
       await bus.decide(v !== "no", v === "always");
+      return;
+    }
+    const who = e.target.closest("[data-speaker]");
+    if (who && session && !renaming) {
+      // Edição inline do nome do falante, direto no bloco (vale ao vivo).
+      const speakerId = who.dataset.speaker;
+      const current = who.textContent;
+      renaming = { speakerId };
+      const form = document.createElement("span");
+      form.className = "rn";
+      form.innerHTML = `<input maxlength="120" aria-label="Nome do participante"><button data-rn-ok>OK</button>`;
+      const input = form.querySelector("input");
+      input.value = current;
+      who.replaceWith(form);
+      const finish = async (save) => {
+        if (!renaming) return;
+        const name = input.value.trim();
+        renaming = null;
+        if (save && name && name !== current) {
+          await send({ type: "update", id: session.id, speakers: { [speakerId]: name.slice(0, 120) } }).catch(() => {});
+        }
+        refresh();
+        render();
+      };
+      form.querySelector("[data-rn-ok]").addEventListener("click", () => finish(true));
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") finish(true);
+        if (ev.key === "Escape") finish(false);
+        ev.stopPropagation();
+      });
+      input.addEventListener("keyup", (ev) => ev.stopPropagation());
+      input.addEventListener("blur", () => setTimeout(() => finish(true), 150));
+      input.focus();
+      input.select();
       return;
     }
     const tagBtn = e.target.closest("[data-tag]");
