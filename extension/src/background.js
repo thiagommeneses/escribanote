@@ -6,7 +6,7 @@ import { mergeSpeakers,
   addAsrSegment, effectiveEntries, toBlocks, speakerName,
 } from "./lib/transcript.js";
 import { getSettings, DEFAULTS, HQ_MODELS, pushSyncedSettings, pullSyncedSettings } from "./lib/settings.js";
-import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, writeSettingsFile } from "./lib/backup.js";
+import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, writeSettingsFile, internalBackupDir, backupFileName, sessionFileText, settingsFileText, SETTINGS_FILE, readBackupFolder } from "./lib/backup.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
 import { streamClaude, ataRequest, chatRequest, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN } from "./lib/ai.js";
@@ -25,8 +25,12 @@ const sessionTab = new Map(); // id -> tabId (reunião em andamento)
 let saveTimer = null;
 const backupQueue = new Set(); // ids de reuniões ("settings" para os ajustes) a gravar na pasta
 let backupTimer = null;
+const autoQueue = new Set(); // backup automático (Downloads ou área interna): grava poucos segundos após cada mudança
+let autoTimer = null;
+const AUTO_BACKUP_DELAY_MS = 3_000;
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason === "install") chrome.tabs.create({ url: chrome.runtime.getURL("src/app/app.html?bemvindo=1") }).catch(() => {});
   await adoptSyncedSettings();
   const { settings } = await chrome.storage.local.get("settings");
   await chrome.storage.local.set({ settings: { ...DEFAULTS, ...settings } });
@@ -55,6 +59,7 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
   const next = changes.settings.newValue;
   if (!next?._at) return; // só mudanças feitas pelo usuário
   queueBackup(["settings"]);
+  queueAutoBackup(["settings"]);
   if (next.syncSettings === false) return;
   const remote = await pullSyncedSettings().catch(() => null);
   if (!remote || next._at > (remote._at || 0)) pushSyncedSettings(next).catch(() => {});
@@ -121,7 +126,76 @@ async function saveDirty() {
   patch.index = index;
   await chrome.storage.local.set(patch);
   queueBackup(ids);
+  queueAutoBackup(ids);
   queueSync(ids);
+}
+
+// ---------------- Backup automático (sem escolher pasta) ----------------
+// "downloads": cada reunião vira um .json em Downloads\Escribanote\backup pela API de downloads
+// (sem diálogo; o registro é apagado do histórico de downloads depois). "opfs": área interna da
+// extensão no perfil do Chrome. A pasta escolhida pelo usuário (acima) continua como segunda cópia.
+function queueAutoBackup(ids, { now = false } = {}) {
+  for (const id of ids) autoQueue.add(id);
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(() => flushAutoBackup().catch(() => {}), now ? 0 : AUTO_BACKUP_DELAY_MS);
+}
+
+async function downloadText(name, text) {
+  let url;
+  if (text.length < 1_500_000) url = "data:application/json;charset=utf-8," + encodeURIComponent(text);
+  else {
+    await ensureOffscreen();
+    url = (await toOffscreen({ type: "object-url", text, mime: "application/json" })).url;
+  }
+  const id = await chrome.downloads.download({ url, filename: `Escribanote/backup/${name}`, conflictAction: "overwrite", saveAs: false });
+  await new Promise((ok, fail) => {
+    const onChange = (d) => {
+      if (d.id !== id || !d.state) return;
+      if (d.state.current === "complete") { chrome.downloads.onChanged.removeListener(onChange); ok(); }
+      if (d.state.current === "interrupted") { chrome.downloads.onChanged.removeListener(onChange); fail(new Error(d.error?.current || "download interrompido")); }
+    };
+    chrome.downloads.onChanged.addListener(onChange);
+    chrome.downloads.search({ id }).then(([d]) => { if (d?.state === "complete") { chrome.downloads.onChanged.removeListener(onChange); ok(); } });
+  });
+  chrome.downloads.erase({ id }).catch(() => {}); // sai do histórico de downloads (o arquivo fica)
+  if (url.startsWith("blob:")) toOffscreen({ type: "revoke-url", url }).catch(() => {});
+}
+
+async function flushAutoBackup() {
+  clearTimeout(autoTimer);
+  autoTimer = null;
+  const settings = await getSettings();
+  const mode = settings.backupAuto || "off";
+  const { autoBackup = {} } = await chrome.storage.local.get("autoBackup");
+  const ids = [...new Set([...(autoBackup.pending || []), ...autoQueue])];
+  autoQueue.clear();
+  const next = { ...autoBackup, mode };
+  if (mode === "off" || !ids.length) {
+    if (mode === "off") Object.assign(next, { pending: [] });
+    await chrome.storage.local.set({ autoBackup: next });
+    return next;
+  }
+  try {
+    const dir = mode === "opfs" ? await internalBackupDir() : null;
+    for (const id of ids) {
+      if (id === "settings") {
+        if (dir) await writeSettingsFile(dir, settings);
+        else await downloadText(SETTINGS_FILE, settingsFileText(settings));
+        continue;
+      }
+      const s = await getSession(id);
+      if (!s) { if (dir) await removeSessionFile(dir, id); continue; }
+      if (dir) await writeSessionFile(dir, s);
+      else await downloadText(backupFileName(s), sessionFileText(s));
+    }
+    const count = (await loadIndex()).length;
+    Object.assign(next, { pending: [], error: null, at: Date.now(), count });
+  } catch (err) {
+    Object.assign(next, { pending: ids, error: err.message || String(err) });
+  }
+  await chrome.storage.local.set({ autoBackup: next });
+  chrome.runtime.sendMessage({ type: "backup-updated" }).catch(() => {});
+  return next;
 }
 
 // ---------------- Backup na pasta do computador ----------------
@@ -249,6 +323,7 @@ async function endSession(tabId) {
   s.endedAt = s.updatedAt;
   await changed(s, { now: true });
   queueBackup([s.id], { now: true }); // reunião terminou: backup já, sem esperar o lote
+  queueAutoBackup([s.id], { now: true });
   await stopHq(tabId);
   const settings = await getSettings();
   // a tela pós-reunião abre já; revisão e ata continuam em segundo plano e aparecem nela
@@ -611,6 +686,7 @@ async function deleteSession(id) {
   await chrome.storage.local.remove(keys);
   await chrome.storage.local.set({ index });
   queueBackup([id]); // apaga também o arquivo da pasta de backup
+  queueAutoBackup([id]);
   chrome.runtime.sendMessage({ type: "index-updated" }).catch(() => {});
 }
 
@@ -884,6 +960,18 @@ async function handle(msg, sender) {
       notifyAccount();
       return { ok: true };
     }
+    case "auto-backup-flush": {
+      if (msg.all) queueAutoBackup(["settings", ...(await loadIndex()).map((m) => m.id)]);
+      return flushAutoBackup();
+    }
+    case "auto-backup-restore": {
+      // Traz de volta o que está na área interna (reuniões que já existem aqui são mantidas).
+      const { sessions } = await readBackupFolder(await internalBackupDir());
+      return { n: sessions.length ? await importSessions(sessions) : 0, total: sessions.length };
+    }
+    case "auto-backup-open":
+      chrome.downloads.showDefaultFolder();
+      return true;
     case "backup-flush": {
       // all: depois de escolher a pasta ou em "Fazer backup agora"
       if (msg.all) queueBackup(["settings", ...(await loadIndex()).map((m) => m.id)]);

@@ -100,3 +100,14 @@ export async function readBackupFolder(dir) {
   }
   return { sessions: [...byId.values()], settings };
 }
+
+// Área interna do Chrome (Origin Private File System): pasta "backup" privada da extensão,
+// gravada no disco dentro do perfil. Não pede permissão nem pasta; some se a extensão for removida.
+export async function internalBackupDir() {
+  const root = await navigator.storage.getDirectory();
+  return root.getDirectoryHandle("backup", { create: true });
+}
+
+// Conteúdo de um arquivo de backup de reunião (mesmo formato do "Exportar backup").
+export const sessionFileText = (s) => JSON.stringify({ app: "escribanote", version: 2, exportedAt: Date.now(), sessions: [s] }, null, 1);
+export const settingsFileText = (settings) => JSON.stringify({ app: "escribanote", version: 2, exportedAt: Date.now(), settings }, null, 1);

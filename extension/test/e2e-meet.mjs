@@ -191,6 +191,18 @@ try {
   await sleep(800);
   const sw = (msg) => evaluate(app, `chrome.runtime.sendMessage(${JSON.stringify(msg)})`);
 
+  // Primeira execução: a janela de boas-vindas abre sozinha; escolhe a área interna para o backup automático
+  assert.equal(await evaluate(app, "document.getElementById('welcome').open"), true, "janela de primeira execução aberta");
+  await screenshot(app, "0-boas-vindas.png");
+  await evaluate(app, `document.querySelector('#welcome [name="w-backup"][value="opfs"]').click(); document.getElementById('w-next').click(); true`);
+  await sleep(100);
+  await evaluate(app, `document.querySelector('#welcome [name="w-mode"][value="always"]').click(); document.getElementById('w-next').click(); true`);
+  await sleep(100);
+  await evaluate(app, `document.getElementById('w-next').click(); true`);
+  await waitFor(async () => (await evaluate(app, `(async () => (await chrome.storage.local.get(["welcomeDone", "settings"])))()`)).settings.backupAuto === "opfs", "escolhas da primeira execução salvas");
+  assert.equal(await evaluate(app, "document.getElementById('welcome').open"), false);
+  step("primeira execução: janela de boas-vindas salva backup automático (área interna) e modo de gravação");
+
   // 2) Reunião com legendas e nomes
   const meet = await openMeet("abc-defg-hij", "Planejamento Q4");
   await evaluate(meet, `(async () => {
@@ -548,6 +560,20 @@ try {
   await screenshot(meet3, "11-aviso-idioma.png");
   step("widget avisa quando as legendas estão no idioma errado");
 
+  // Backup automático: a reunião está na área interna; no modo Downloads, o arquivo é gravado sem diálogo
+  {
+    const r = await sw({ type: "auto-backup-flush", all: true });
+    assert.equal(r.error, null, "backup interno sem erro");
+    const rest = await sw({ type: "auto-backup-restore" });
+    assert.ok(rest.total >= 1, "a área interna tem a reunião");
+    await evaluate(app, `(async () => { const { settings } = await chrome.storage.local.get("settings"); await chrome.storage.local.set({ settings: { ...settings, backupAuto: "downloads", _at: Date.now() } }); })()`);
+    const d = await sw({ type: "auto-backup-flush", all: true });
+    assert.equal(d.mode, "downloads");
+    assert.equal(d.error, null, "download sem erro: " + d.error);
+    assert.ok(d.at, "backup em Downloads feito");
+    step("backup automático: área interna e pasta Downloads, sem escolher pasta");
+  }
+
   // 9) Layout estreito (largura do painel lateral) e Ajustes
   await send("Emulation.setDeviceMetricsOverride", { width: 400, height: 820, deviceScaleFactor: 1, mobile: false }, app);
   await send("Page.navigate", { url: `chrome-extension://${extId}/src/app/app.html?id=${id}` }, app);
@@ -557,6 +583,7 @@ try {
   await evaluate(app, `document.querySelector('[data-nav="settings"]').click()`);
   await sleep(600);
   assert.match(await evaluate(app, "document.getElementById('view-settings').innerText"), /Tags de destaque[\s\S]*Inteligência artificial/);
+  assert.match(await evaluate(app, "document.getElementById('bk-auto-status').innerText"), /Ligado em Downloads/);
   await screenshot(app, "9-ajustes.png");
   step("layout de painel lateral e Ajustes");
 

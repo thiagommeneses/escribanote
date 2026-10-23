@@ -1585,6 +1585,7 @@ async function renderSettings() {
     .map((c) => `<li>${esc(NAMES[c.name] || c.description || c.name)}: ${c.shortcut ? c.shortcut.split("+").map((k) => `<kbd>${esc(k)}</kbd>`).join("+") : '<span class="muted">sem atalho</span>'}</li>`)
     .join("");
   renderBackup();
+  renderAutoBackup();
   renderAccount();
   const bytes = await chrome.storage.local.getBytesInUse(null);
   const index = await send({ type: "list" });
@@ -1742,9 +1743,90 @@ async function renderBackupBanner() {
   $("bk-banner").hidden = !dir || perm === "granted";
 }
 
+// Backup automático (Downloads ou área interna)
+const fmtAt = (t) => new Date(t).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+async function renderAutoBackup() {
+  const { autoBackup = {} } = await chrome.storage.local.get("autoBackup");
+  const mode = state.settings?.backupAuto || "off";
+  const st = $("bk-auto-status");
+  const where = mode === "downloads" ? "Downloads\\Escribanote\\backup" : "área interna do Chrome";
+  if (mode === "off") { st.className = "bk-status muted"; st.textContent = "Desligado."; }
+  else if (autoBackup.error) { st.className = "bk-status warn"; st.textContent = `Falhou ao gravar em ${where}: ${autoBackup.error}`; }
+  else if (autoBackup.at) { st.className = "bk-status ok"; st.textContent = `Ligado em ${where} · ${autoBackup.count ?? "—"} reuniões · último backup ${fmtAt(autoBackup.at)}.`; }
+  else { st.className = "bk-status muted"; st.textContent = `Ligado em ${where}. O primeiro backup acontece na próxima mudança.`; }
+  $("bk-auto-now").hidden = mode === "off";
+  $("bk-auto-open").hidden = mode !== "downloads";
+  $("bk-auto-restore").hidden = mode !== "opfs";
+  $("bk-auto-hint").textContent = mode === "downloads"
+    ? "Um arquivo .json por reunião, gravado poucos segundos depois de cada mudança. O Chrome mostra o balão de download ao gravar; o registro sai do histórico em seguida. Para restaurar noutro computador, use \"Restaurar de uma pasta de backup\" e aponte para Downloads\\Escribanote\\backup."
+    : mode === "opfs" ? "Fica no disco, dentro do perfil do Chrome. Protege contra falhas do armazenamento da extensão, mas não contra remover a extensão ou apagar o perfil."
+    : "";
+}
+$("bk-auto").addEventListener("change", () => setTimeout(async () => { await send({ type: "auto-backup-flush", all: true }); renderAutoBackup(); }, 400));
+$("bk-auto-now").addEventListener("click", async () => {
+  const r = await send({ type: "auto-backup-flush", all: true });
+  toast(r && r.error ? "Falhou: " + r.error : "Backup feito");
+  renderAutoBackup();
+});
+$("bk-auto-open").addEventListener("click", () => send({ type: "auto-backup-open" }));
+$("bk-auto-restore").addEventListener("click", async () => {
+  const { n, total } = await send({ type: "auto-backup-restore" });
+  toast(n ? `${n} reuniões restauradas` : total ? "Todas as reuniões da área interna já estão aqui" : "Nenhuma reunião na área interna");
+  renderList();
+});
+
+// ----- Primeira execução -----
+let wStep = 1;
+function showWelcomeStep(n) {
+  wStep = n;
+  for (const s of document.querySelectorAll(".w-step")) s.hidden = Number(s.dataset.step) !== n;
+  [...$("w-steps").children].forEach((li, i) => { li.classList.toggle("on", i + 1 === n); li.classList.toggle("done", i + 1 < n); });
+  $("w-back").hidden = n === 1;
+  $("w-next").textContent = n === 3 ? "Concluir" : "Continuar";
+}
+async function openWelcome() {
+  const f = $("welcome-form");
+  f.elements["w-backup"].value = state.settings.backupAuto || "downloads";
+  f.elements["w-mode"].value = state.settings.mode === "ask" ? "ask" : "always";
+  f.elements["w-after"].value = state.settings.afterCall === "app" ? "app" : "off";
+  const dir = await getBackupDir();
+  $("w-pick-status").textContent = dir ? `Pasta "${dir.name}" escolhida.` : "";
+  showWelcomeStep(1);
+  $("welcome").showModal();
+}
+async function finishWelcome(skipped) {
+  const f = $("welcome-form");
+  if (!skipped) {
+    const patch = { backupAuto: f.elements["w-backup"].value, mode: f.elements["w-mode"].value, afterCall: f.elements["w-after"].value };
+    state.settings = await setSettings(patch);
+    const ai = f.elements["w-ai"].value;
+    const key = $("w-key").value.trim();
+    if (ai === "key" && key) {
+      if (await chrome.permissions.request({ origins: [API_ORIGIN] })) await chrome.storage.local.set({ apiKey: key });
+      else toast("Permissão para a API negada. Dá para cadastrar a chave em Ajustes.");
+    }
+    if (ai === "pro") openAccountWeb("#/conectar");
+    send({ type: "auto-backup-flush", all: true }).catch(() => {});
+  }
+  await chrome.storage.local.set({ welcomeDone: Date.now() });
+  $("welcome").close();
+  if (state.view === "settings") render();
+  if (!skipped) toast("Pronto! Dá para rever tudo em Ajustes.");
+}
+$("w-next").addEventListener("click", () => (wStep < 3 ? showWelcomeStep(wStep + 1) : finishWelcome(false)));
+$("w-back").addEventListener("click", () => showWelcomeStep(Math.max(1, wStep - 1)));
+$("w-skip").addEventListener("click", () => finishWelcome(true));
+$("welcome").addEventListener("cancel", (e) => { e.preventDefault(); finishWelcome(true); });
+$("w-pick").addEventListener("click", async () => {
+  await pickBackupFolder();
+  const dir = await getBackupDir();
+  $("w-pick-status").textContent = dir ? `Pasta "${dir.name}" escolhida.` : "";
+});
+$("welcome-again").addEventListener("click", openWelcome);
+
 function refreshBackupUi() {
   renderBackupBanner();
-  if (state.view === "settings") renderBackup();
+  if (state.view === "settings") { renderBackup(); renderAutoBackup(); }
 }
 
 // Importa o que estiver na pasta (reuniões que já existem aqui são mantidas).
@@ -1791,6 +1873,7 @@ $("bk-now").addEventListener("click", async () => {
   const r = await send({ type: "backup-flush", all: true });
   toast(r && r.error ? "Falhou: " + r.error : "Backup feito");
   renderBackup();
+  renderAutoBackup();
 });
 $("bk-restore").addEventListener("click", async () => {
   const dir = await getBackupDir();
@@ -1884,4 +1967,6 @@ if (params.get("perm") === "mic") {
     state.view = "settings";
     render();
   }
+  const { welcomeDone } = await chrome.storage.local.get("welcomeDone");
+  if (params.get("bemvindo") || !welcomeDone) openWelcome();
 })();
