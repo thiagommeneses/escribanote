@@ -240,6 +240,20 @@ try {
   await waitFor(async () => /Bruno Teste/.test(await widgetCall(meet, "#body")), "widget redesenhado com o novo nome");
   step("nome do falante alterado ao vivo pelo widget");
 
+  // Nome igual ao de outro participante: o widget pergunta antes de mesclar ("Manter separados" só renomeia)
+  const nameAt2 = await rectOf(meet, `.blk .who b[data-speaker="${BRUNO}"]`);
+  await mouseClick(meet, nameAt2.x, nameAt2.y);
+  await waitFor(() => widgetCall(meet, ".rn input", "function(){ return true }"), "campo inline no widget (2)");
+  await widgetCall(meet, ".rn input", "function(){ this.select(); return true }");
+  await typeText(meet, "ana teste");
+  await pressKey(meet, "Enter");
+  await waitFor(() => widgetCall(meet, "[data-rn-merge]", "function(){ return true }"), "pergunta de mesclagem no widget");
+  assert.match(await widgetCall(meet, ".rn"), /Mesclar Bruno Teste em Ana Teste\?/);
+  await click(meet, "[data-rn-keep]");
+  await waitFor(async () => (await sw({ type: "get", id })).speakers[BRUNO] === "ana teste", "manter separados só renomeia");
+  await sw({ type: "update", id, speakers: { [BRUNO]: "Bruno Teste" } });
+  step("widget pergunta antes de mesclar dois participantes com o mesmo nome");
+
   await click(meet, "#hl");
   await waitFor(async () => Object.values((await sw({ type: "get", id })).highlights).flat().includes("importante"), "destaque salvo");
   step("botão ⭐ do widget destaca o último bloco");
@@ -276,6 +290,30 @@ try {
   await waitFor(async () => (await sw({ type: "get", id })).speakers[BRUNO] === "Bruno Lima", "nome alterado pelo app");
   await sleep(300);
   step("nome do falante alterado pelo editor do app");
+
+  // Mesclagem pelo app: um terceiro falante sem nome vira "Ana Teste" → confirma → vira a Ana
+  const TERCEIRO = "spaces/e2e/devices/10";
+  await evaluate(meet, `__say(601, 1, "Eu concordo com a Ana sobre o orçamento.", ${JSON.stringify(TERCEIRO)})`);
+  await waitFor(async () => (await sw({ type: "get", id })).entries.some((e) => e.speakerId === TERCEIRO), "fala do terceiro falante");
+  await waitFor(() => evaluate(app, `!!document.querySelector('#timeline .who b[data-speaker="${TERCEIRO}"]')`), "app mostra o terceiro falante");
+  const who9 = await evaluate(app, `(() => { const el = document.querySelector('#timeline .who b[data-speaker="${TERCEIRO}"]'); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, name: el.textContent } })()`);
+  assert.ok(who9 && who9.name.startsWith("Participante"), "terceiro falante sem nome: " + JSON.stringify(who9));
+  await mouseClick(app, who9.x, who9.y);
+  await waitFor(() => evaluate(app, "document.activeElement === document.querySelector('.ask input')"), "editor para o terceiro falante");
+  await typeText(app, "Ana Teste");
+  await pressKey(app, "Enter");
+  await waitFor(() => evaluate(app, "!!document.querySelector('.ask [data-choice=\"merge\"]')"), "pergunta de mesclagem no app");
+  assert.match(await evaluate(app, "document.querySelector('.ask').innerText"), /Mesclar com Ana Teste\?/);
+  const mergeAt = await evaluate(app, `(() => { const r = document.querySelector('.ask [data-choice="merge"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()`);
+  await mouseClick(app, mergeAt.x, mergeAt.y);
+  const mergedS = await waitFor(async () => { const x = await sw({ type: "get", id }); return x.merged[TERCEIRO] === ANA ? x : null; }, "mesclagem salva");
+  assert.ok(mergedS.entries.every((e) => e.speakerId !== TERCEIRO), "falas do terceiro passaram para a Ana");
+  assert.ok(!(TERCEIRO in mergedS.speakers));
+  await waitFor(() => evaluate(app, `!document.querySelector('#timeline .who b[data-speaker="${TERCEIRO}"]')`), "app sem o terceiro falante");
+  // fala nova com o id antigo já cai na Ana
+  await evaluate(meet, `__say(602, 1, "E fecho com isso.", ${JSON.stringify(TERCEIRO)})`);
+  await waitFor(async () => (await sw({ type: "get", id })).entries.find((e) => e.id.includes("602"))?.speakerId === ANA, "fala nova do id mesclado vai para a Ana");
+  step("app pergunta e mescla dois participantes; falas novas do id antigo seguem para o destino");
   const tl = await evaluate(app, "document.getElementById('timeline').innerText");
   assert.match(tl, /Ana Teste/);
   assert.match(tl, /Bruno Lima/);
@@ -377,7 +415,7 @@ try {
       await chrome.storage.local.set({ apiKey: "sk-ant-teste", settings: { ...settings, mode: "always", glossary: "Q4\\nOKR" } });
     })()`);
     await evaluate(meet, `__say(505, 1, "Então fechamos o orçamento do quiu quatro hoje.", ${JSON.stringify(ANA)})`);
-    await waitFor(async () => (await sw({ type: "get", id })).entries.length === 5, "nova fala");
+    await waitFor(async () => (await sw({ type: "get", id })).entries.length === 7, "nova fala");
     await evaluate(app, `document.querySelector('[data-tab="ai"]').click()`);
     await sleep(400);
     await evaluate(app, `document.getElementById("review-run").click()`);

@@ -428,6 +428,47 @@ function askInline(anchor, { label, value = "", placeholder = "", suggestions = 
 function closeInline() {
   if (closeInline.current) closeInline.current();
 }
+// Pergunta com até três respostas; resolve com a chave da escolhida (ou null).
+function askChoice(anchor, { title, text, choices }) {
+  closeInline();
+  return new Promise((resolve) => {
+    const pop = document.createElement("div");
+    pop.className = "ask";
+    pop.innerHTML = `<b>${esc(title)}</b><p class="muted tiny" style="margin:0">${esc(text)}</p>
+      <div class="ask-acts">${choices.map((c) => `<button class="btn sm${c.primary ? " primary" : ""}" data-choice="${esc(c.key)}">${esc(c.label)}</button>`).join("")}</div>`;
+    document.body.appendChild(pop);
+    const r = anchor.getBoundingClientRect();
+    const w = Math.min(320, document.documentElement.clientWidth - 24);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(12, Math.min(r.left, document.documentElement.clientWidth - w - 12)) + "px";
+    pop.style.top = (r.bottom + 8 + 150 > innerHeight ? Math.max(12, r.top - 150) : r.bottom + 8) + "px";
+    const done = (v) => {
+      pop.remove();
+      document.removeEventListener("mousedown", outside, true);
+      document.removeEventListener("keydown", onKey, true);
+      closeInline.current = null;
+      resolve(v);
+    };
+    const outside = (ev) => !pop.contains(ev.target) && done(null);
+    const onKey = (ev) => ev.key === "Escape" && done(null);
+    pop.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-choice]");
+      if (b) done(b.dataset.choice);
+    });
+    setTimeout(() => {
+      document.addEventListener("mousedown", outside, true);
+      document.addEventListener("keydown", onKey, true);
+    }, 0);
+    closeInline.current = () => done(null);
+    (pop.querySelector(".primary") || pop.querySelector("button")).focus();
+  });
+}
+// Outro falante que já usa esse nome (ignorando maiúsculas e espaços)?
+function speakerWithName(s, name, exceptId) {
+  const key = name.trim().toLowerCase();
+  const ids = [...new Set([...Object.keys(s.speakers), ...s.entries.map((e) => e.speakerId), ...s.asr.map((a) => a.speakerId)])];
+  return ids.find((id) => id && id !== exceptId && !s.merged?.[id] && speakerName(s, id).trim().toLowerCase() === key) || null;
+}
 
 // Renomeia um falante (vale para a reunião ao vivo e para as já encerradas).
 async function renameSpeaker(id, anchor) {
@@ -437,6 +478,24 @@ async function renameSpeaker(id, anchor) {
   const others = [...new Set(Object.values(s.speakers))].filter((n) => n && n !== current);
   const name = await askInline(anchor, { label: "Nome do participante", value: current, placeholder: "Como aparece na ata", suggestions: others });
   if (!name || name === current) return;
+  const other = speakerWithName(s, name, id);
+  if (other) {
+    // Já existe alguém com esse nome: oferece juntar os dois num só participante.
+    const choice = await askChoice(anchor, {
+      title: `Mesclar com ${speakerName(s, other)}?`,
+      text: `As falas de ${current} passam a ser de ${speakerName(s, other)}, e os dois viram um único participante. Isso não pode ser desfeito.`,
+      choices: [{ key: "merge", label: "Mesclar", primary: true }, { key: "rename", label: "Manter separados" }, { key: "cancel", label: "Cancelar" }],
+    });
+    if (!choice || choice === "cancel") return;
+    if (choice === "merge") {
+      const r = await send({ type: "merge-speakers", id: s.id, from: id, to: other });
+      state.session = normalize(r);
+      state.hidden.delete(id);
+      renderMeeting();
+      toast(`${current} mesclado em ${speakerName(state.session, other)}`);
+      return;
+    }
+  }
   state.session = normalize(await send({ type: "update", id: s.id, speakers: { [id]: name.slice(0, 120) } }));
   renderMeeting();
   toast(`${current} agora é ${name}`);

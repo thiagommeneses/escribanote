@@ -38,7 +38,7 @@ export function mergeDocs(local, remote) {
     text: newer.notes?.text || older.notes?.text || "",
     items: unionById(older.notes?.items, newer.notes?.items),
   };
-  for (const k of ["speakers", "aliases", "fixes", "reviewed", "highlights", "voices"]) out[k] = { ...(older[k] || {}), ...(newer[k] || {}) };
+  for (const k of ["speakers", "aliases", "merged", "fixes", "reviewed", "highlights", "voices"]) out[k] = { ...(older[k] || {}), ...(newer[k] || {}) };
   out.langs = { ...(older.langs || {}) };
   for (const [k, v] of Object.entries(newer.langs || {})) out.langs[k] = Math.max(out.langs[k] || 0, v);
   out.summary = newer.summary ?? older.summary ?? null;

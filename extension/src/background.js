@@ -1,6 +1,6 @@
 // Service worker: mantém as sessões de reunião e as salva localmente
 // (chrome.storage.local). Só fala com a rede quando o usuário usa a IA.
-import {
+import { mergeSpeakers,
   createSession, applyEvent, normalize, setBlockTags, toggleLastBlockTag, participantNames,
   addAsrSegment, effectiveEntries, toBlocks, speakerName,
 } from "./lib/transcript.js";
@@ -512,6 +512,11 @@ async function widgetView(s) {
     paused: s.paused,
     count: s.entries.length + s.asr.length,
     blocks,
+    names: Object.fromEntries(
+      [...new Set([...Object.keys(s.speakers), ...s.entries.map((e) => e.speakerId), ...s.asr.map((a) => a.speakerId)])]
+        .filter((id) => id && !s.merged[id])
+        .map((id) => [id, speakerName(s, id)]),
+    ),
     share: st.speakers.length && st.totalWords >= 20 ? (me ? { me: true, name: me.name, pct: Math.round(me.share * 100) } : { me: false, name: top.name, pct: Math.round(top.share * 100) }) : null,
     langIssue: captionLanguageIssue(s, settings.captionLang),
     hq: tabId != null ? hqStatus.get(tabId) || { state: "idle" } : { state: "idle" },
@@ -697,6 +702,12 @@ async function handle(msg, sender) {
       if (typeof msg.notesText === "string") s.notes.text = msg.notesText;
       await changed(s, { now: true });
       return s;
+    }
+    case "merge-speakers": {
+      if (!s) return null;
+      const moved = mergeSpeakers(s, msg.from, msg.to);
+      await changed(s, { now: true });
+      return { ...s, moved };
     }
     case "pause": {
       if (!s) return null;

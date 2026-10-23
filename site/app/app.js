@@ -5,7 +5,7 @@ import { QUICK_PROMPTS } from "./lib/ai.js";
 import { clock, FORMATS, fileName, mdToHtml, PLATFORM, toHtml } from "./lib/format.js";
 import { DEFAULT_TAGS } from "./lib/settings.js";
 import { computeStats, fmtDuration } from "./lib/stats.js";
-import { normalize, toBlocks } from "./lib/transcript.js";
+import { normalize, toBlocks, mergeSpeakers, speakerName } from "./lib/transcript.js";
 
 const EXTENSION_ID = "ohbnmfogdcbgegnpcaphidkjinplednd";
 const PALETTE = ["#c2410c", "#0f766e", "#7c3aed", "#b45309", "#be185d", "#1d4ed8", "#4d7c0f", "#9f1239"];
@@ -601,6 +601,41 @@ function askInline(anchor, { label, value = "", placeholder = "", suggestions = 
   });
 }
 
+function askChoice(anchor, { title, text, choices }) {
+  if (askInline.close) askInline.close();
+  return new Promise((resolve) => {
+    const pop = document.createElement("div");
+    pop.className = "ask";
+    pop.innerHTML = `<b>${esc(title)}</b><p class="small muted" style="margin:0">${esc(text)}</p>
+      <div class="ask-acts">${choices.map((c) => `<button class="btn sm${c.primary ? " primary" : ""}" data-choice="${esc(c.key)}">${esc(c.label)}</button>`).join("")}</div>`;
+    document.body.appendChild(pop);
+    const r = anchor.getBoundingClientRect();
+    const w = Math.min(340, document.documentElement.clientWidth - 24);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(12, Math.min(r.left, document.documentElement.clientWidth - w - 12)) + "px";
+    pop.style.top = (r.bottom + 8 + 150 > innerHeight ? Math.max(12, r.top - 150) : r.bottom + 8) + "px";
+    const done = (v) => {
+      pop.remove();
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", onKey, true);
+      askInline.close = null;
+      resolve(v);
+    };
+    const outside = (ev) => !pop.contains(ev.target) && done(null);
+    const onKey = (ev) => ev.key === "Escape" && done(null);
+    pop.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-choice]");
+      if (b) done(b.dataset.choice);
+    });
+    setTimeout(() => {
+      document.addEventListener("pointerdown", outside, true);
+      document.addEventListener("keydown", onKey, true);
+    }, 0);
+    askInline.close = () => done(null);
+    (pop.querySelector(".primary") || pop.querySelector("button")).focus();
+  });
+}
+
 async function renameSpeaker(id, anchor) {
   if (!isPro()) return toast("Renomear participantes faz parte do Escribanote Pro.");
   const doc = state.meeting.doc;
@@ -608,6 +643,20 @@ async function renameSpeaker(id, anchor) {
   const others = [...new Set(speakersOf(doc).map(([, n]) => n))].filter((n) => n && n !== current);
   const name = await askInline(anchor || document.body, { label: "Nome do participante", value: current, placeholder: "Como aparece na ata", suggestions: others });
   if (!name || name === current) return;
+  const other = speakersOf(doc).find(([s, n]) => s !== id && n.trim().toLowerCase() === name.toLowerCase());
+  if (other) {
+    const choice = await askChoice(anchor || document.body, {
+      title: `Mesclar com ${other[1]}?`,
+      text: `As falas de ${current} passam a ser de ${other[1]}, e os dois viram um único participante. Isso não pode ser desfeito.`,
+      choices: [{ key: "merge", label: "Mesclar", primary: true }, { key: "rename", label: "Manter separados" }, { key: "cancel", label: "Cancelar" }],
+    });
+    if (!choice || choice === "cancel") return;
+    if (choice === "merge") {
+      if (await saveDoc((d) => mergeSpeakers(d, id, other[0]))) toast(`${current} mesclado em ${speakerName(doc, other[0])}`);
+      renderTranscript();
+      return;
+    }
+  }
   if (await saveDoc((d) => (d.speakers[id] = name.slice(0, 120)))) toast(`${current} agora é ${name}`);
   renderTranscript();
 }

@@ -6,7 +6,7 @@ import "../src/main/proto.js";
 import "../src/main/meet.js";
 import "../src/main/teams.js";
 import "../src/main/zoom.js";
-import { createSession, applyEvent, toBlocks, speakerName } from "../src/lib/transcript.js";
+import { mergeSpeakers, canonicalSpeaker, participantNames, createSession, applyEvent, toBlocks, speakerName } from "../src/lib/transcript.js";
 import { toSrt, toVtt, toMarkdown, toText, fileName } from "../src/lib/format.js";
 
 const { encode } = globalThis.EscribanoteProto;
@@ -513,4 +513,27 @@ test("Sincronização: título e ata vêm do lado alterado por último; nomes, n
 test("Sincronização: sameContent ignora capturas e carimbo de tempo", () => {
   assert.ok(sameContent(doc({ updatedAt: 1, shots: [{ id: "x" }] }), doc({ updatedAt: 9 })));
   assert.ok(!sameContent(doc(), doc({ title: "Outro" })));
+});
+
+test("mesclar falantes: falas, votos e eventos novos vão para o destino; nome do destino prevalece", () => {
+  const s = normalize({ id: "m1", startedAt: 0, speakers: { "dev/428": "Participante 428", "dev/434": "Thiago" } });
+  applyEvent(s, { kind: "caption", id: "c1", speakerId: "dev/428", text: "Bom dia a todos, vamos começar a reunião", version: 1 }, 1000);
+  applyEvent(s, { kind: "caption", id: "c2", speakerId: "dev/434", text: "Vamos sim, pode começar pelo orçamento", version: 1 }, 2000);
+  s.voices["voz:1"] = { "dev/428": 2 };
+  assert.equal(mergeSpeakers(s, "dev/428", "dev/434"), 1);
+  assert.equal(canonicalSpeaker(s, "dev/428"), "dev/434");
+  assert.equal(speakerName(s, "dev/428"), "Thiago");
+  assert.ok(!("dev/428" in s.speakers));
+  assert.deepEqual(s.voices["voz:1"], { "dev/434": 2 });
+  assert.ok(s.entries.every((e) => e.speakerId === "dev/434"));
+  // fala nova com o id antigo cai no destino; nome novo para o id antigo é ignorado
+  applyEvent(s, { kind: "caption", id: "c3", speakerId: "dev/428", text: "Então vamos aos números do trimestre", version: 1 }, 3000);
+  assert.equal(s.entries.find((e) => e.id === "c3").speakerId, "dev/434");
+  assert.equal(applyEvent(s, { kind: "speaker", speakerId: "dev/428", name: "Outro" }), false);
+  assert.deepEqual(participantNames(s), ["Thiago"]);
+  // cadeia: mesclar o destino em um terceiro leva o antigo junto
+  s.speakers["dev/500"] = "Thiago Meneses";
+  mergeSpeakers(s, "dev/434", "dev/500");
+  assert.equal(canonicalSpeaker(s, "dev/428"), "dev/500");
+  assert.equal(speakerName(s, "dev/428"), "Thiago Meneses");
 });
