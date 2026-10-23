@@ -11,7 +11,9 @@ if (!CHROME) { console.error("Defina CHROME."); process.exit(2); }
 const EXT = resolve(import.meta.dirname, "../../extension");
 const OUT = resolve(import.meta.dirname, "public/capturas");
 mkdirSync(OUT, { recursive: true });
-const W = 1600, H = 1000;
+const NARROW = process.env.NARROW === "1"; // painel lateral (vertical)
+const W = NARROW ? 420 : 1600, H = NARROW ? 900 : 1000;
+const DSF = NARROW ? 3 : 2;
 
 // ---------- reunião fictícia ----------
 const t0 = new Date(); t0.setHours(14, 2, 0, 0);
@@ -70,7 +72,7 @@ let extId; for (let i = 0; i < 50 && !extId; i++) { const { targetInfos } = awai
 const { targetId } = await send("Target.createTarget", { url: `chrome-extension://${extId}/src/app/app.html?tab=1` });
 const { sessionId: sid } = await send("Target.attachToTarget", { targetId, flatten: true });
 await send("Page.enable", {}, sid); await send("Runtime.enable", {}, sid);
-await send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceScaleFactor: 2, mobile: false }, sid);
+await send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceScaleFactor: DSF, mobile: false }, sid);
 const evaluate = async (expression) => { const r = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }, sid); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
 for (let i = 0; i < 30; i++) { const ok = await evaluate("location.href.includes('app.html') && typeof chrome?.storage === 'object'"); if (ok) break; await sleep(300); }
 const shot = async (name) => { await sleep(350); const { data } = await send("Page.captureScreenshot", { format: "png" }, sid); writeFileSync(join(OUT, name + ".png"), Buffer.from(data, "base64")); console.log("✓", name); };
@@ -81,6 +83,21 @@ await evaluate(`(async () => { const { settings = {} } = await chrome.storage.lo
 
 const rects = {};
 const rect = async (key, sel) => { rects[key] = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })()`); };
+if (NARROW) {
+  await go("");
+  await sleep(600);
+  await shot("10-painel-lista");
+  await go(`?id=${sessao.id}`);
+  await evaluate(`history.replaceState(null, "", location.pathname); true`);
+  await sleep(300);
+  await shot("11-painel-transcricao");
+  await evaluate(`document.querySelector('.subtabs [data-tab="ai"]').click(); true`); await sleep(400);
+  await evaluate(`(() => { const s = document.getElementById('chat-select'); if (s) { s.value = "ch1"; s.dispatchEvent(new Event("change")); } return true })()`); await sleep(300);
+  await shot("12-painel-ia");
+  await evaluate(`document.querySelector('.subtabs [data-tab="stats"]').click(); true`); await sleep(400);
+  await shot("13-painel-analise");
+  chrome.kill(); process.exit(0);
+}
 await go("?tab=1");
 await shot("01-lista");
 await rect("cardHoje", "#recent a, #recent .card, .recent [data-id], [data-id='demo-q4']");

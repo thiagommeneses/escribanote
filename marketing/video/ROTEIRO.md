@@ -134,3 +134,22 @@ npx remotion render src/index.ts Lancamento out/_render.mp4 --browser-executable
 ffmpeg -i out/_render.mp4 -c:v copy -af loudnorm=I=-14:TP=-1:LRA=11 -c:a aac out/escribanote-lancamento-saas.mp4
 npx remotion studio src/index.ts                 # pré-visualização interativa
 ```
+
+## Versão 15 s editorial (`out/escribanote-15s-editorial.mp4`) — substitui a do caderno
+
+Refeita do zero depois do feedback (visual genérico, movimento lento, cores feias). Nova direção: tipografia
+editorial em cortes na batida, alternando preto e papel, com o **painel lateral real** do app como herói e os nomes
+dos participantes saltando da tela. Fonte: `editorial15.html`; render `node render.mjs editorial out/_editorial15-mudo.mp4 --file=editorial15.html`; mix `node mix15b.mjs`.
+
+| Tempo | Imagem | Narração (Bia, voz da biblioteca) |
+|---|---|---|
+| 0–2,0 | Preto. "UMA HORA" e "de reunião." batem na tela com tremor | Uma hora de reunião. |
+| 2,0–3,55 | Papel. "E ninguém / anotou / nada." palavra a palavra; risco laranja | E ninguém anotou nada. |
+| 3,55–7,25 | Chicote laranja; painel real da transcrição com zoom; chips destacados; etiquetas Ana / Bruno / Paula saltam | O Escribanote transcreve ao vivo… com o nome de quem falou. |
+| 7,25–10,8 | Painel da ata; "ATA PRONTA." em itálico laranja bate com tremor | Acabou a chamada? A ata já está pronta. |
+| 10,8–12,25 | Papel. Ícone e marca com mola | Escribanote. |
+| 12,25–15,1 | Preto. "Grátis." · Chrome · Edge · URL · "Tudo fica no seu computador." | Grátis para instalar no Chrome e no Edge. |
+
+Áudio: narração montada a partir das falas da Bia já gravadas (`audio/v15b/narracao.mp3`), porque a cota da
+ElevenLabs zerou (renova em 17/11/2026); trilha "Bossa Antigua" (Kevin MacLeod, CC BY); efeitos de baque, pop,
+whoosh, carimbo e chime nos cortes.
