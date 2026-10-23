@@ -143,7 +143,9 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
     const credits = toText(doc, { tags }).length > LONG_MEETING_CHARS ? 2 : 1;
     // Modelo de ata do usuário (texto em Markdown, opcional): a ata sai no formato da equipe.
     const template = typeof req.body?.template === "string" ? req.body.template.slice(0, 24000) : "";
-    const r = ataRequest(doc, tags, glossaryFrom(req.body), template);
+    // Instruções extras do usuário (opcional): prevalecem sobre o formato e o modelo.
+    const instructions = typeof req.body?.instructions === "string" ? req.body.instructions.slice(0, 4000) : "";
+    const r = ataRequest(doc, tags, glossaryFrom(req.body), template, instructions);
     await streamAnswer(req, reply, {
       kind: "summary",
       model: config.models.strong,

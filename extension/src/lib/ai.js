@@ -49,21 +49,31 @@ Regras do modelo (<modelo>):
 - Blocos de assinatura, fechos e textos fixos do modelo devem ser mantidos como estão; não invente nomes de signatários: se o modelo tiver um nome próprio no bloco de assinatura, mantenha-o.
 - Responda apenas com a ata preenchida, em Markdown simples (títulos com #, negrito com **, listas com -), sem comentários antes ou depois.`;
 
-export function ataRequest(session, tags, glossary, template) {
+// Instruções extras do usuário: entram no fim do system prompt e prevalecem sobre tudo o que veio antes
+// (formato padrão, regras do modelo, glossário). Só o GUARD (fidelidade à transcrição) continua valendo.
+function instructionsNote(instructions) {
+  const t = (instructions || "").trim().replace(/<\/?instrucoes>/g, "").slice(0, 4000);
+  if (!t) return "";
+  return `\n\nINSTRUÇÕES EXTRAS DO USUÁRIO — têm prioridade sobre todas as regras acima (formato, seções, estilo, modelo e glossário). Quando conflitarem com algo acima, siga as instruções extras. Elas não autorizam inventar conteúdo que não esteja na transcrição.\n<instrucoes>\n${t}\n</instrucoes>`;
+}
+
+export function ataRequest(session, tags, glossary, template, instructions) {
   const terms = (glossary || "").split(/[\n,;]+/).map((t) => t.trim()).filter(Boolean);
   const glossaryNote = terms.length ? `\n\nGrafia correta de nomes e termos desta equipe: ${terms.join(", ")}.` : "";
+  const extra = instructionsNote(instructions);
+  const ask = extra ? " Siga as instruções extras do usuário." : "";
   const tpl = (template || "").trim();
   if (tpl) {
     return {
-      system: ATA_TEMPLATE_SYSTEM + glossaryNote,
+      system: ATA_TEMPLATE_SYSTEM + glossaryNote + extra,
       effort: "medium",
-      messages: [{ role: "user", content: `<modelo>\n${tpl.replace(/<\/?modelo>/g, "")}\n</modelo>\n\n${context(session, tags)}\n\nPreencha o modelo com o conteúdo desta reunião.` }],
+      messages: [{ role: "user", content: `<modelo>\n${tpl.replace(/<\/?modelo>/g, "")}\n</modelo>\n\n${context(session, tags)}\n\nPreencha o modelo com o conteúdo desta reunião.${ask}` }],
     };
   }
   return {
-    system: ATA_SYSTEM + glossaryNote,
+    system: ATA_SYSTEM + glossaryNote + extra,
     effort: "medium",
-    messages: [{ role: "user", content: `${context(session, tags)}\n\nGere a ata desta reunião.` }],
+    messages: [{ role: "user", content: `${context(session, tags)}\n\nGere a ata desta reunião.${ask}` }],
   };
 }
 

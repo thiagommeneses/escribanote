@@ -39,6 +39,7 @@ export function normalize(s) {
   s.turns ||= []; // quem estava falando (indicador da plataforma, ex.: Slack): {id, speakerId, start, end}
   s.summaryHistory ||= []; // versões da ata, em ordem: {id, n, text, createdAt, source, label, model, templateId, parentId}
   s.ataTemplateId ??= null; // modelo de ata escolhido para esta reunião (null = padrão dos Ajustes)
+  s.ataPrompt ??= ""; // instruções extras do usuário para a IA ao gerar a ata (prevalecem sobre as regras e o modelo)
   s.paused ??= false;
   s.endedAt ??= null;
   s.summary ??= null;

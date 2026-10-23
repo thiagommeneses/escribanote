@@ -105,11 +105,21 @@
 
           <section class="pane" id="pane-ata" hidden>
             <div class="ata-bar">
-              <label class="ata-model"><span>Modelo</span><select class="sm" id="ata-template" title="Modelo usado para gerar a ata"></select></label>
+              <label class="ata-model"><span>Modelo</span><select class="sm" id="ata-template" title="Modelo usado para gerar a ata"></select>
+                <button type="button" class="star" id="ata-default" title="Tornar este modelo o padrão para novas reuniões" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.9 6.4.8-4.7 4.5 1.2 6.4L12 17.5l-5.7 3.1 1.2-6.4L2.8 9.7l6.4-.8z"/></svg></button></label>
               <button class="btn sm primary" id="ata-gen">Gerar ata</button>
             </div>
+            <details class="ata-prompt" id="ata-prompt-box">
+              <summary><svg viewBox="0 0 24 24"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="m13 7 3 3"/></svg><span>Instruções extras para a IA</span><i class="pill" id="ata-prompt-on" hidden>ativas</i></summary>
+              <textarea id="ata-prompt" rows="3" maxlength="4000" placeholder="Ex.: escreva a conclusão em um parágrafo só; não cite valores em reais; trate o Dr. Rafael como 'o Promotor'; inclua uma seção de riscos."></textarea>
+              <p class="tiny muted">Valem só para esta reunião e prevalecem sobre o formato e o modelo escolhido. Salvas automaticamente; gere a ata de novo para aplicar. Para instruções fixas em todas as atas, use os Ajustes.</p>
+            </details>
             <div class="ata-doc" id="ata-doc">
               <div class="ata-meta" id="ata-meta" hidden></div>
+              <div class="ata-tools" id="ata-tools" hidden>
+                <nav class="ata-outline" id="ata-outline" aria-label="Seções da ata"></nav>
+                <div class="ata-tools-r"><button type="button" class="linkish" id="ata-fold">Recolher tudo</button><button type="button" class="linkish" id="ata-font" title="Tamanho do texto">A<small>A</small></button></div>
+              </div>
               <div class="ata-viewing" id="ata-viewing" hidden></div>
               <div class="md ata-text" id="ata-body"></div>
               <div id="ata-editor" class="ata-editor" hidden>
@@ -208,6 +218,8 @@
             <p class="muted tiny">Sua equipe tem um formato próprio de ata? Importe um PDF ou texto de uma ata já feita: o Escribanote extrai a estrutura (títulos, campos, lista de participantes, assinatura) e passa a gerar as atas nesse formato, prontas para colar no seu sistema. Logotipos, QR codes e assinaturas eletrônicas são ignorados.</p>
             <label class="field"><span>Modelo padrão para novas atas</span>
               <select name="ataTemplate" id="tpl-default"><option value="">Formato do Escribanote (resumo, decisões, ações)</option></select></label>
+            <label class="field"><span>Instruções extras padrão para todas as atas (opcional; cada reunião pode ter as suas na aba Ata, que substituem estas)</span>
+              <textarea name="ataInstructions" rows="3" maxlength="4000" placeholder="Ex.: conclusão em um parágrafo só; nunca abreviar nomes; chamar a equipe de 'Assessoria 2'."></textarea></label>
             <div id="tpl-list" class="tpl-list"></div>
             <div class="row"><button type="button" class="btn sm" id="tpl-import">Importar de PDF ou texto</button><button type="button" class="btn sm ghost" id="tpl-new">Escrever um modelo</button><input type="file" id="tpl-file" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden><span class="muted tiny" id="tpl-status"></span></div>
             <div id="tpl-editor" class="tpl-editor" hidden>

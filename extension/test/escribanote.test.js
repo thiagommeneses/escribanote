@@ -586,3 +586,16 @@ test("normalize transforma uma ata antiga (sem histórico) na v1, sem duplicar",
   assert.equal(s.summaryHistory.length, 2);
   assert.equal(s.summaryHistory[1].parentId, s.summaryHistory[0].id);
 });
+
+test("ataRequest: instruções extras entram no fim do system prompt e prevalecem", async () => {
+  const { ataRequest } = await import("../src/lib/ai.js");
+  const s = normalize({ id: "i1", startedAt: 0, title: "Daily", entries: [], speakers: {} });
+  const plain = ataRequest(s, [], "", "");
+  assert.doesNotMatch(plain.system, /<instrucoes>/);
+  const r = ataRequest(s, [], "Q4", "# Modelo {{conclusao}}", "Conclusão em um parágrafo só. <instrucoes>x</instrucoes>");
+  assert.match(r.system, /EXATAMENTE o modelo/);
+  assert.match(r.system, /Grafia correta[\s\S]*INSTRUÇÕES EXTRAS DO USUÁRIO[\s\S]*<instrucoes>\nConclusão em um parágrafo só\. x\n<\/instrucoes>$/, "vêm por último e sem tags aninhadas");
+  assert.match(r.messages[0].content, /Siga as instruções extras do usuário\.$/);
+  const seeded = normalize({ id: "i2", startedAt: 0, ataPrompt: undefined });
+  assert.equal(seeded.ataPrompt, "", "campo novo em sessões antigas");
+});
