@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Escribanote — vídeo de lançamento (9:16)</title>
+<link rel="stylesheet" href="../../site/fonts.css">
+<style>
+  :root {
+    --paper: oklch(19% 0.014 52);
+    --paper-2: oklch(23% 0.016 52);
+    --paper-3: oklch(28% 0.018 52);
+    --card: oklch(21.5% 0.015 52);
+    --rule: oklch(33% 0.018 55);
+    --ink: oklch(93% 0.014 84);
+    --ink-2: oklch(80% 0.016 80);
+    --ink-3: oklch(66% 0.018 75);
+    --rec: oklch(67% 0.17 34);
+    --rec-soft: oklch(30% 0.06 34);
+    --marker: oklch(78% 0.14 98);
+    --ok: oklch(75% 0.16 150);
+    --serif: "Fraunces", Georgia, serif;
+    --sans: "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: var(--paper); color: var(--ink); font: 40px/1.4 var(--sans); -webkit-font-smoothing: antialiased; }
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  .scene.on { opacity: 1; }
+  .grain { position: absolute; inset: 0; pointer-events: none; opacity: .5;
+    background: radial-gradient(120% 80% at 50% 0%, oklch(26% 0.03 52) 0%, transparent 60%), radial-gradient(80% 60% at 50% 110%, oklch(24% 0.04 34) 0%, transparent 60%); }
+  .h { font-family: var(--serif); font-weight: 500; letter-spacing: -0.02em; line-height: 1.02; }
+  .h em { font-style: italic; color: var(--marker); }
+  .cap { position: absolute; left: 90px; right: 90px; top: 300px; font-family: var(--serif); font-size: 84px; line-height: 1.05; letter-spacing: -0.02em; font-weight: 500; }
+  .cap em { font-style: italic; color: var(--marker); }
+  .sub { position: absolute; left: 90px; right: 90px; top: 1560px; color: var(--ink-2); font-size: 42px; line-height: 1.3; }
+  .fx { will-change: transform, opacity; }
+
+  /* Cena 1: enxurrada de legendas */
+  .flood { position: absolute; left: 0; right: 0; top: 0; height: 2400px; padding: 0 120px; color: var(--ink-3); font-size: 44px; line-height: 1.35; filter: blur(1.5px); opacity: .55; }
+  .flood p { margin: 0 0 26px; white-space: nowrap; overflow: hidden; }
+  .flood b { color: var(--ink-2); font-weight: 600; }
+  .hook { position: absolute; left: 90px; right: 90px; top: 760px; font-size: 128px; }
+  .hookbg { position: absolute; left: 0; right: 0; top: 560px; height: 900px; background: radial-gradient(60% 50% at 50% 50%, oklch(19% 0.014 52) 35%, transparent 100%); opacity: 0; }
+  .hook span { display: block; }
+
+  /* Janela de reunião + widget */
+  .meet { position: absolute; left: 60px; right: 60px; top: 520px; height: 1040px; border-radius: 36px; background: #202124; box-shadow: 0 40px 120px rgba(0,0,0,.5); overflow: hidden; }
+  .tiles { position: absolute; inset: 40px 40px auto; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .tile { height: 300px; border-radius: 24px; background: #2c2d31; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .tile .av { width: 150px; height: 150px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 60px; color: #0b1530; }
+  .tile .nm { position: absolute; left: 20px; bottom: 16px; font-size: 30px; color: #e8eaed; background: rgba(0,0,0,.35); padding: 4px 14px; border-radius: 999px; }
+  .tile.speaking { outline: 6px solid #8ab4f8; outline-offset: -6px; }
+  .widget { position: absolute; left: 40px; right: 40px; bottom: 40px; border-radius: 28px; background: rgba(32,33,36,.96); border: 2px solid rgba(255,255,255,.12); box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; color: #e8eaed; }
+  .widget .hd { display: flex; align-items: center; gap: 16px; padding: 22px 30px; border-bottom: 1px solid rgba(255,255,255,.1); font-size: 32px; }
+  .widget .hd .logo { width: 44px; height: 44px; border-radius: 12px; }
+  .widget .hd .dot { width: 18px; height: 18px; border-radius: 50%; background: var(--rec); box-shadow: 0 0 0 0 var(--rec); }
+  .widget .hd .t { margin-left: auto; color: #9aa0a6; font-variant-numeric: tabular-nums; }
+  .widget .bd { padding: 14px 30px 26px; min-height: 420px; }
+  .blk { display: grid; grid-template-columns: 60px 1fr; gap: 18px; padding: 14px 0; }
+  .blk .av { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 26px; color: #0b1530; }
+  .blk .who { font-size: 30px; font-weight: 700; display: flex; gap: 14px; align-items: baseline; }
+  .blk .who time { color: #9aa0a6; font-weight: 400; font-size: 26px; }
+  .blk p { margin: 4px 0 0; font-size: 34px; line-height: 1.3; }
+  .blk .cur { display: inline-block; width: 4px; height: 36px; background: #e8eaed; vertical-align: -6px; margin-left: 4px; }
+
+  /* Cena 3: chips e mesclagem */
+  .chips { position: absolute; left: 90px; right: 90px; top: 640px; display: flex; flex-wrap: wrap; gap: 22px; }
+  .chip { display: inline-flex; align-items: center; gap: 16px; border: 2px solid var(--rule); border-radius: 999px; padding: 10px 34px 10px 12px; font-size: 40px; background: var(--card); position: relative; }
+  .chip .av { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 28px; color: #0b1530; }
+  .ask { position: absolute; left: 90px; width: 900px; top: 900px; background: var(--card); border: 2px solid var(--rule); border-radius: 28px; padding: 34px 40px; box-shadow: 0 30px 90px rgba(0,0,0,.5); font-size: 40px; }
+  .ask label { display: block; color: var(--ink-3); font-size: 32px; margin-bottom: 14px; }
+  .ask .in { border: 3px solid var(--marker); border-radius: 18px; padding: 18px 26px; background: var(--paper-2); min-height: 94px; font-size: 44px; }
+  .ask .in .cur { display: inline-block; width: 4px; height: 46px; background: var(--ink); vertical-align: -8px; margin-left: 2px; }
+  .ask .acts { display: flex; justify-content: flex-end; gap: 16px; margin-top: 26px; }
+  .btn { border: 2px solid var(--rule); border-radius: 18px; padding: 16px 32px; font-size: 36px; background: var(--paper-2); color: var(--ink); font-weight: 600; }
+  .btn.primary { background: var(--rec); border-color: var(--rec); color: #fff; }
+  .btn.pressed { transform: scale(.96); filter: brightness(1.15); }
+  .ask b { display: block; font-size: 44px; margin-bottom: 8px; }
+  .ask p { margin: 0; color: var(--ink-2); font-size: 34px; line-height: 1.3; }
+
+  /* Cena 4: encerrar + ata */
+  .endbtn { position: absolute; left: 50%; top: 640px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 20px; border-radius: 999px; padding: 26px 56px; font-size: 44px; font-weight: 600; background: #2c2d31; color: #e8eaed; border: 2px solid rgba(255,255,255,.14); }
+  .endbtn .sq { width: 30px; height: 30px; border-radius: 8px; background: var(--rec); }
+  .ring { position: absolute; left: 50%; top: 700px; width: 40px; height: 40px; border-radius: 50%; border: 6px solid var(--rec); transform: translate(-50%, -50%); opacity: 0; }
+  .ata { position: absolute; left: 70px; right: 70px; top: 820px; background: oklch(97.4% 0.01 84); color: oklch(24% 0.022 55); border-radius: 32px; padding: 54px 60px; box-shadow: 0 40px 120px rgba(0,0,0,.55); min-height: 760px; font-size: 38px; line-height: 1.35; }
+  .ata h3 { font-family: var(--serif); font-weight: 500; font-size: 52px; margin: 0 0 24px; letter-spacing: -0.02em; }
+  .ata h4 { margin: 28px 0 10px; font-size: 32px; letter-spacing: .08em; text-transform: uppercase; color: oklch(55% 0.02 60); font-weight: 700; }
+  .ata li { margin: 0 0 8px; }
+  .ata ul { margin: 0; padding-left: 40px; }
+  .ata .tag { display: inline-block; font-size: 28px; padding: 4px 18px; border-radius: 999px; background: oklch(94% 0.04 40); color: oklch(56% 0.19 32); font-weight: 700; margin-left: 12px; vertical-align: 4px; }
+  .ata .cur { display: inline-block; width: 4px; height: 38px; background: oklch(24% 0.022 55); vertical-align: -7px; margin-left: 3px; }
+
+  /* Cena 5: Slack */
+  .slack { position: absolute; left: 60px; right: 60px; top: 560px; height: 1000px; border-radius: 36px; background: #1a1d21; color: #d1d2d3; box-shadow: 0 40px 120px rgba(0,0,0,.5); overflow: hidden; font-size: 34px; }
+  .slack .top { padding: 26px 40px; border-bottom: 1px solid #35373b; font-weight: 700; font-size: 38px; color: #fff; }
+  .msg { display: grid; grid-template-columns: 84px 1fr; gap: 22px; padding: 26px 40px; }
+  .msg .av { width: 84px; height: 84px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 34px; color: #fff; }
+  .msg .nm { font-weight: 800; color: #fff; }
+  .msg .nm .app { font-size: 22px; background: #35373b; color: #d1d2d3; border-radius: 6px; padding: 2px 10px; margin-left: 10px; vertical-align: 3px; font-weight: 600; }
+  .msg .nm time { color: #9b9c9e; font-weight: 400; font-size: 26px; margin-left: 10px; }
+  .msg p { margin: 8px 0 0; line-height: 1.35; }
+  .msg .thread { margin-top: 14px; color: #1d9bd1; font-size: 28px; font-weight: 600; }
+  .reply { margin: 0 40px 0 146px; border-left: 4px solid #35373b; padding-left: 30px; }
+
+  /* Cena 6: privacidade */
+  .lock { position: absolute; left: 50%; top: 560px; transform: translateX(-50%); width: 300px; height: 300px; }
+  .lock svg { width: 100%; height: 100%; }
+  .pill { position: absolute; left: 90px; right: 90px; display: flex; align-items: center; gap: 22px; font-size: 40px; color: var(--ink-2); }
+  .pill .ok { width: 52px; height: 52px; border-radius: 50%; background: var(--ok); display: inline-flex; align-items: center; justify-content: center; color: #0b1530; font-weight: 800; font-size: 32px; flex: none; }
+
+  /* Cena 7: CTA */
+  .brand { position: absolute; left: 0; right: 0; top: 640px; text-align: center; }
+  .brand img { width: 220px; height: 220px; border-radius: 56px; box-shadow: 0 30px 90px rgba(0,0,0,.5); }
+  .brand .nm { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 120px; letter-spacing: -0.02em; margin-top: 30px; }
+  .brand .tg { color: var(--ink-2); font-size: 44px; margin-top: 10px; }
+  .url { position: absolute; left: 50%; top: 1230px; transform: translateX(-50%); border-radius: 999px; padding: 26px 50px; background: var(--rec); color: #fff; font-size: 44px; font-weight: 700; white-space: nowrap; }
+  .fine { position: absolute; left: 90px; right: 90px; top: 1380px; text-align: center; color: var(--ink-3); font-size: 34px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="grain"></div>
+
+  <!-- 1 · gancho -->
+  <section class="scene" id="s1">
+    <div class="flood" id="flood"></div>
+    <div class="hookbg" id="hookbg"></div>
+    <div class="hook h"><span id="h1a" class="fx">Uma hora<br>de reunião.</span><span id="h1b" class="fx" style="margin-top:40px">Zero<br><em>anotações.</em></span></div>
+  </section>
+
+  <!-- 2 · transcrição ao vivo -->
+  <section class="scene" id="s2">
+    <div class="cap fx" id="c2">Transcreve ao vivo.<br><em>Com quem disse o quê.</em></div>
+    <div class="meet fx" id="meet">
+      <div class="tiles">
+        <div class="tile" id="t-ana"><div class="av" style="background:#a3e635">AT</div><div class="nm">Ana Teixeira</div></div>
+        <div class="tile" id="t-bruno"><div class="av" style="background:#60a5fa">BL</div><div class="nm">Bruno Lima</div></div>
+        <div class="tile" id="t-thiago"><div class="av" style="background:#f472b6">T</div><div class="nm">Você</div></div>
+        <div class="tile" id="t-paula"><div class="av" style="background:#fbbf24">PF</div><div class="nm">Paula Franco</div></div>
+      </div>
+      <div class="widget">
+        <div class="hd"><img class="logo" src="../../site/img/icon.png" alt=""><span class="dot" id="dot"></span><span>Escribanote</span><span class="t" id="clock">00:00</span></div>
+        <div class="bd" id="wbody"></div>
+      </div>
+    </div>
+    <div class="sub fx" id="sub2">Legendas do Meet viram transcrição com nome e horário. Teams, Zoom e Slack também.</div>
+  </section>
+
+  <!-- 3 · nomes e mesclagem -->
+  <section class="scene" id="s3">
+    <div class="cap fx" id="c3">Nomes certos.<br><em>E se repetir, você mescla.</em></div>
+    <div class="chips" id="chips">
+      <span class="chip fx" id="ch-ana"><span class="av" style="background:#a3e635">AT</span>Ana Teixeira</span>
+      <span class="chip fx" id="ch-bruno"><span class="av" style="background:#60a5fa">BL</span>Bruno Lima</span>
+      <span class="chip fx" id="ch-thiago"><span class="av" style="background:#f472b6">T</span>Thiago</span>
+      <span class="chip fx" id="ch-428"><span class="av" style="background:#9aa0a6">#</span><span id="ch-428-txt">Participante 428</span></span>
+    </div>
+    <div class="ask fx" id="ask1"><label>Nome do participante</label><div class="in"><span id="ask1-txt"></span><span class="cur"></span></div>
+      <div class="acts"><span class="btn">Cancelar</span><span class="btn primary" id="ask1-ok">Salvar</span></div></div>
+    <div class="ask fx" id="ask2"><b>Mesclar com Thiago?</b><p>As falas de Participante 428 passam a ser de Thiago, e os dois viram um único participante.</p>
+      <div class="acts"><span class="btn">Manter separados</span><span class="btn primary" id="ask2-ok">Mesclar</span></div></div>
+    <div class="sub fx" id="sub3">Clique no nome, digite o certo. Dois chips com a mesma pessoa? Ele pergunta e junta.</div>
+  </section>
+
+  <!-- 4 · encerrar → ata -->
+  <section class="scene" id="s4">
+    <div class="cap fx" id="c4">Acabou a chamada?<br><em>A ata já está pronta.</em></div>
+    <div class="ring" id="ring"></div>
+    <div class="endbtn fx" id="endbtn"><span class="sq"></span>Encerrar transcrição</div>
+    <div class="ata fx" id="ata"><h3>Planejamento do Q4 <span class="tag">ata</span></h3><div id="ata-body"></div></div>
+    <div class="sub fx" id="sub4">Resumo, decisões e pendências escritos pela IA, com o texto original guardado.</div>
+  </section>
+
+  <!-- 5 · Slack -->
+  <section class="scene" id="s5">
+    <div class="cap fx" id="c5">Publica no Slack.<br><em>E responde no thread.</em></div>
+    <div class="slack fx" id="slack">
+      <div class="top"># projeto-q4</div>
+      <div class="msg fx" id="m1"><div class="av" style="background:oklch(56% 0.19 32)">E</div><div><div class="nm">Escribanote <span class="app">APP</span><time>14:02</time></div>
+        <p><b>Ata · Planejamento do Q4</b><br>✅ Orçamento aprovado: R$ 180 mil<br>📌 Paula envia o cronograma até sexta<br>📌 Bruno confirma a verba com o financeiro</p><div class="thread">2 respostas</div></div></div>
+      <div class="reply fx" id="m2"><div class="msg" style="padding-left:0"><div class="av" style="background:#60a5fa">BL</div><div><div class="nm">Bruno Lima<time>14:05</time></div><p>Quem ficou com a verba extra de mídia?</p></div></div></div>
+      <div class="reply fx" id="m3"><div class="msg" style="padding-left:0"><div class="av" style="background:oklch(56% 0.19 32)">E</div><div><div class="nm">Escribanote <span class="app">APP</span><time>14:05</time></div><p>Ficou com a Ana. Ela assumiu aos 00:34: "eu cuido da mídia, o Bruno fica com o financeiro".</p></div></div></div>
+    </div>
+    <div class="sub fx" id="sub5">A ata vai para o canal. Perguntas no thread são respondidas com base na transcrição.</div>
+  </section>
+
+  <!-- 6 · privacidade -->
+  <section class="scene" id="s6">
+    <div class="lock fx" id="lock"><svg viewBox="0 0 24 24" fill="none" stroke="oklch(78% 0.14 98)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.3" fill="oklch(78% 0.14 98)"/></svg></div>
+    <div class="cap fx" id="c6" style="top:920px;text-align:center">Tudo fica<br><em>no seu computador.</em></div>
+    <div class="pill fx" id="p1" style="top:1200px"><span class="ok">✓</span>Reconhecimento de voz local, com Whisper</div>
+    <div class="pill fx" id="p2" style="top:1290px"><span class="ok">✓</span>Nada sai da máquina sem você mandar</div>
+    <div class="pill fx" id="p3" style="top:1380px"><span class="ok">✓</span>Chrome e Edge · Meet, Teams, Zoom e Slack</div>
+  </section>
+
+  <!-- 7 · CTA -->
+  <section class="scene" id="s7">
+    <div class="brand fx" id="brand"><img src="../../site/img/icon.png" alt=""><div class="nm">Escribanote</div><div class="tg">Cada palavra da reunião, anotada.</div></div>
+    <div class="url fx" id="url">escribanote.meneseslabs.com.br</div>
+    <div class="fine fx" id="fine">Grátis para instalar.<br>Pro: ata com IA, nuvem e Slack.</div>
+  </section>
+</div>
+
+<script>
+// ---------- utilidades de tempo ----------
+const clamp = (x) => Math.max(0, Math.min(1, x));
+const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const outBack = (x) => 1 + 2.3 * Math.pow(x - 1, 3) + 1.3 * Math.pow(x - 1, 2);
+const P = (t, s, d) => clamp((t - s) / d);
+const $ = (id) => document.getElementById(id);
+const rise = (el, p, dy = 60) => { el.style.opacity = p; el.style.transform = `translateY(${(1 - ease(p)) * dy}px)`; };
+const pop = (el, p) => { el.style.opacity = clamp(p * 2); el.style.transform = `scale(${0.85 + 0.15 * outBack(p)})`; };
+const typed = (text, p) => text.slice(0, Math.round(text.length * p));
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+// ---------- cena 1 ----------
+const FLOOD = [
+  ["Ana", "então a gente fecha o orçamento hoje ou deixa pra"], ["Bruno", "eu acho que o financeiro precisa ver antes"], ["Paula", "o cronograma eu mando até sexta sem falta"],
+  ["Thiago", "espera, quem ficou com a mídia mesmo?"], ["Ana", "eu cuido da mídia, o Bruno fica com o financeiro"], ["Bruno", "beleza, então são 180 mil no total"],
+  ["Paula", "e o fornecedor novo entra no segundo mês"], ["Thiago", "anota isso alguém por favor"], ["Ana", "vamos revisar o orçamento do Q4 agora"],
+  ["Bruno", "aprovo a mídia de 180 mil"], ["Paula", "tem o contrato do Q3 pendente ainda"], ["Thiago", "a gente retoma isso na quinta"],
+];
+$("flood").innerHTML = Array.from({ length: 40 }, (_, i) => { const [n, t] = FLOOD[i % FLOOD.length]; return `<p><b>${n}:</b> ${t}</p>`; }).join("");
+function scene1(t) {
+  $("flood").style.transform = `translateY(${-t * 520}px)`;
+  $("flood").style.opacity = 0.45 * (1 - 0.7 * P(t, 0.4, 1.4));
+  $("hookbg").style.opacity = P(t, 0.3, 0.6);
+  rise($("h1a"), P(t, 0.5, 0.7));
+  rise($("h1b"), P(t, 1.3, 0.7));
+}
+
+// ---------- cena 2 ----------
+const LINES = [
+  { id: "ana", av: "AT", c: "#a3e635", who: "Ana Teixeira", at: "00:12", text: "Vamos revisar o orçamento do Q4 agora.", s: 0.9, d: 1.6 },
+  { id: "bruno", av: "BL", c: "#60a5fa", who: "Bruno Lima", at: "00:31", text: "Aprovo a mídia de 180 mil.", s: 2.7, d: 1.2 },
+  { id: "paula", av: "PF", c: "#fbbf24", who: "Paula Franco", at: "00:48", text: "Mando o cronograma até sexta.", s: 4.1, d: 1.3 },
+];
+function scene2(t) {
+  rise($("c2"), P(t, 0.1, 0.6));
+  pop($("meet"), P(t, 0.3, 0.7));
+  rise($("sub2"), P(t, 1.2, 0.6), 30);
+  const secs = 12 + Math.floor(t * 10);
+  $("clock").textContent = `00:${String(Math.min(59, secs)).padStart(2, "0")}`;
+  $("dot").style.boxShadow = `0 0 0 ${8 * Math.abs(Math.sin(t * 3))}px oklch(67% 0.17 34 / .35)`;
+  let html = "";
+  for (const l of LINES) {
+    const p = P(t, l.s, l.d);
+    document.getElementById("t-" + l.id).classList.toggle("speaking", p > 0 && p < 1);
+    if (p <= 0) continue;
+    const done = p >= 1;
+    html += `<div class="blk"><div class="av" style="background:${l.c}">${l.av}</div><div><div class="who" style="color:${l.c}">${l.who}<time>${l.at}</time></div><p>${esc(typed(l.text, p))}${done ? "" : '<span class="cur"></span>'}</p></div></div>`;
+  }
+  $("wbody").innerHTML = html;
+}
+
+// ---------- cena 3 ----------
+function scene3(t) {
+  rise($("c3"), P(t, 0.1, 0.6));
+  for (const [i, id] of ["ch-ana", "ch-bruno", "ch-thiago", "ch-428"].entries()) pop($(id), P(t, 0.3 + i * 0.12, 0.5));
+  // 1.2 s: editor abre; 1.5–2.4 digita "Thiago"; 2.6 clica Salvar; 2.9 pergunta; 3.9 clica Mesclar; 4.2 chips se juntam
+  const a1 = P(t, 1.2, 0.35) * (1 - P(t, 2.85, 0.2));
+  pop($("ask1"), a1);
+  $("ask1-txt").textContent = typed("Thiago", P(t, 1.6, 0.9));
+  $("ask1-ok").classList.toggle("pressed", t > 2.6 && t < 2.85);
+  const a2 = P(t, 2.95, 0.35) * (1 - P(t, 4.15, 0.2));
+  pop($("ask2"), a2);
+  $("ask2-ok").classList.toggle("pressed", t > 3.9 && t < 4.15);
+  const ch = $("ch-428");
+  const m = P(t, 4.2, 0.6);
+  if (t > 4.2) {
+    const e = ease(m);
+    ch.style.opacity = 1 - e;
+    ch.style.transform = `translate(${-e * 240}px, ${-e * 120}px) scale(${1 - 0.5 * e})`;
+    const th = $("ch-thiago");
+    th.style.transform = `scale(${1 + 0.12 * Math.sin(Math.PI * m)})`;
+    th.style.borderColor = m > 0 && m < 1 ? "oklch(78% 0.14 98)" : "";
+  }
+  rise($("sub3"), P(t, 4.6, 0.5), 30);
+}
+
+// ---------- cena 4 ----------
+const ATA = [
+  ["h4", "Resumo"], ["p", "Orçamento do Q4 fechado em 42 minutos, com três responsáveis definidos."],
+  ["h4", "Decisões"], ["li", "Mídia aprovada: R$ 180 mil (Bruno, 00:31)"], ["li", "Ana assume a frente de mídia"],
+  ["h4", "Pendências"], ["li", "Paula envia o cronograma até sexta"], ["li", "Bruno confirma a verba com o financeiro"],
+];
+function scene4(t) {
+  rise($("c4"), P(t, 0.1, 0.6));
+  pop($("endbtn"), P(t, 0.3, 0.5));
+  const press = t > 1.1 && t < 1.35;
+  $("endbtn").style.transform = `translateX(-50%) scale(${press ? 0.94 : 1})`;
+  const r = P(t, 1.2, 0.8);
+  const ring = $("ring");
+  ring.style.opacity = r > 0 && r < 1 ? 1 - r : 0;
+  ring.style.transform = `translate(-50%, -50%) scale(${1 + r * 14})`;
+  const hide = P(t, 1.4, 0.4);
+  $("endbtn").style.opacity = 1 - hide;
+  pop($("ata"), P(t, 1.6, 0.6));
+  // escrita progressiva: 2.1 → 5.2 s
+  const total = ATA.reduce((a, [, s]) => a + s.length, 0);
+  let budget = Math.round(total * P(t, 2.1, 3.1));
+  let html = "";
+  let open = false;
+  for (const [k, s] of ATA) {
+    if (budget <= 0) break;
+    const part = s.slice(0, budget);
+    const done = budget >= s.length;
+    budget -= s.length;
+    if (k === "h4") { if (open) { html += "</ul>"; open = false; } html += `<h4>${esc(part)}</h4>`; }
+    else if (k === "p") html += `<p style="margin:0">${esc(part)}${done ? "" : '<span class="cur"></span>'}</p>`;
+    else { if (!open) { html += "<ul>"; open = true; } html += `<li>${esc(part)}${done ? "" : '<span class="cur"></span>'}</li>`; }
+  }
+  if (open) html += "</ul>";
+  $("ata-body").innerHTML = html;
+  rise($("sub4"), P(t, 4.8, 0.5), 30);
+}
+
+// ---------- cena 5 ----------
+function scene5(t) {
+  rise($("c5"), P(t, 0.1, 0.6));
+  pop($("slack"), P(t, 0.3, 0.6));
+  rise($("m1"), P(t, 0.9, 0.5), 30);
+  rise($("m2"), P(t, 2.0, 0.5), 30);
+  rise($("m3"), P(t, 3.0, 0.5), 30);
+  rise($("sub5"), P(t, 3.6, 0.5), 30);
+}
+
+// ---------- cena 6 ----------
+function scene6(t) {
+  pop($("lock"), P(t, 0.1, 0.7));
+  $("lock").style.transform = `translateX(-50%) scale(${0.85 + 0.15 * outBack(P(t, 0.1, 0.7))}) rotate(${Math.sin(t * 2) * 2}deg)`;
+  rise($("c6"), P(t, 0.5, 0.6));
+  rise($("p1"), P(t, 1.3, 0.45), 30);
+  rise($("p2"), P(t, 1.75, 0.45), 30);
+  rise($("p3"), P(t, 2.2, 0.45), 30);
+}
+
+// ---------- cena 7 ----------
+function scene7(t) {
+  pop($("brand"), P(t, 0.1, 0.7));
+  pop($("url"), P(t, 0.9, 0.5));
+  $("url").style.transform = `translateX(-50%) scale(${0.9 + 0.1 * outBack(P(t, 0.9, 0.5)) + 0.02 * Math.sin(t * 4)})`;
+  rise($("fine"), P(t, 1.5, 0.5), 30);
+}
+
+// ---------- linha do tempo ----------
+const SCENES = { 1: scene1, 2: scene2, 3: scene3, 4: scene4, 5: scene5, 6: scene6, 7: scene7 };
+const TIMELINES = {
+  shorts: [[1, 3.2], [2, 6.0], [3, 5.6], [4, 6.2], [5, 5.0], [6, 4.0], [7, 4.4]],
+  story: [[1, 2.6], [2, 4.6], [4, 4.6], [7, 3.4]],
+};
+const variant = new URLSearchParams(location.search).get("v") || "shorts";
+const TL = TIMELINES[variant];
+window.DURATION = TL.reduce((a, [, d]) => a + d, 0);
+
+window.seek = function (t) {
+  let acc = 0;
+  for (const [n, d] of TL) {
+    const el = $("s" + n);
+    const local = t - acc;
+    const on = local >= 0 && local < d;
+    el.classList.toggle("on", on);
+    if (!on) el.style.opacity = 0;
+    if (on) {
+      // fade de entrada e saída de cada cena
+      el.style.opacity = Math.min(P(local, 0, 0.25), 1 - P(local, d - 0.3, 0.3));
+      SCENES[n](local);
+    }
+    acc += d;
+  }
+  return true;
+};
+// pré-visualização no navegador: roda em tempo real
+if (!navigator.webdriver && !location.search.includes("still")) {
+  const t0 = performance.now();
+  (function loop() { seek(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); })();
+} else seek(Number(new URLSearchParams(location.search).get("t") || 0));
+</script>
+</body>
+</html>
