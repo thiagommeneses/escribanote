@@ -7,7 +7,7 @@
   if (window.__escribanoteBus) return;
 
   const host = location.host;
-  const platform = host === "meet.google.com" ? "meet" : /zoom\.us$/.test(host) ? "zoom" : "teams";
+  const platform = host === "meet.google.com" ? "meet" : host === "app.slack.com" ? "slack" : /zoom\.us$/.test(host) ? "zoom" : "teams";
   const isTop = window.top === window;
   // Só o Zoom roda a reunião dentro de um iframe; nos outros, iframes não interessam.
   if (!isTop && platform !== "zoom") return;
@@ -37,11 +37,13 @@
       const m = location.pathname.match(/\/(?:wc|j)\/(\d{6,})/);
       return m ? `zoom:${m[1]}` : `zoom:${location.pathname}`;
     }
+    if (platform === "slack") return window.__escribanoteSlack?.key || null; // huddle detectado por slack.js
     return `teams:${location.pathname}${location.hash.split("?")[0]}`;
   }
   bus.meetingKey = meetingKey;
 
   function meetingTitle() {
+    if (platform === "slack") return window.__escribanoteSlack?.title || null;
     const t = document.title.replace(/^Meet\s*[-–:]\s*/i, "").replace(/\s*\|\s*Microsoft Teams$/i, "").trim();
     if (!t || /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/.test(t) || /^(Meet|Google Meet|Zoom|Microsoft Teams)$/i.test(t)) return null;
     return t;
@@ -242,6 +244,45 @@
     await chrome.storage.local.set({ settings: { ...settings, hideCaptions: hidden } });
   };
 
+  // Estágio: entrou na chamada / saiu (Meet pelo botão de sair; Slack pelo áudio do huddle). Sair não descarrega a página, então sem isto a
+  // sessão só terminaria 30 min depois. Se a pessoa volta na mesma aba, a reunião continua
+  // (menos de 10 min) ou vira uma nova parte.
+  let leftAt = null;
+  const LEFT_GRACE_MS = 20_000;
+  function trackStage(inCallNow) {
+    const now = Date.now();
+    if (inCallNow) {
+      if (state.stage !== "meeting") {
+        if (state.stage === "left") state.ended = false; // voltou à chamada: transcreve de novo
+        state.stage = "meeting";
+        leftAt = null;
+        autoClicks = 0;
+        emitState();
+      }
+      return;
+    }
+    if (state.stage === "meeting") {
+      leftAt ||= now;
+      if (now - leftAt >= LEFT_GRACE_MS) {
+        state.stage = "left";
+        leftAt = null;
+        state.ended = true;
+        flush();
+        if (isTop) chrome.runtime.sendMessage({ type: "meeting-left" }).catch(() => {});
+        emitState();
+      }
+    } else if (state.stage === "unknown") {
+      state.stage = "prejoin";
+    }
+  }
+
+  if (platform === "slack") {
+    // Huddle do Slack: o detector (slack.js) diz se há áudio ao vivo; não há legendas, só o áudio da aba.
+    bus.inCall = () => !!window.__escribanoteSlack?.active;
+    setInterval(() => trackStage(bus.inCall()), 1500);
+    return;
+  }
+
   if (platform !== "meet") return;
 
   // ---------- Google Meet: rótulos da interface por idioma ----------
@@ -286,38 +327,6 @@
       emitState();
     }
     return { leave, on, off };
-  }
-
-  // Estágio: entrou na chamada / saiu. Sair do Meet não descarrega a página, então sem isto a
-  // sessão só terminaria 30 min depois. Se a pessoa volta na mesma aba, a reunião continua
-  // (menos de 10 min) ou vira uma nova parte.
-  let leftAt = null;
-  const LEFT_GRACE_MS = 20_000;
-  function trackStage(ui) {
-    const now = Date.now();
-    if (ui.leave) {
-      if (state.stage !== "meeting") {
-        if (state.stage === "left") state.ended = false; // voltou à chamada: transcreve de novo
-        state.stage = "meeting";
-        leftAt = null;
-        autoClicks = 0;
-        emitState();
-      }
-      return;
-    }
-    if (state.stage === "meeting") {
-      leftAt ||= now;
-      if (now - leftAt >= LEFT_GRACE_MS) {
-        state.stage = "left";
-        leftAt = null;
-        state.ended = true;
-        flush();
-        if (isTop) chrome.runtime.sendMessage({ type: "meeting-left" }).catch(() => {});
-        emitState();
-      }
-    } else if (state.stage === "unknown") {
-      state.stage = "prejoin";
-    }
   }
 
   // Religa as legendas quando o Meet as perde (canal fechado numa reconexão, alguém desligou).
@@ -378,7 +387,7 @@
   setInterval(() => {
     document.dispatchEvent(new CustomEvent("escribanote:ping"));
     const ui = readMeetUi();
-    trackStage(ui);
+    trackStage(!!ui.leave);
     tryEnableCaptions(ui);
     // Só usa o DOM se o protocolo nunca entregou legendas nesta página (evita duplicatas).
     if (state.consent !== false && state.settings.domFallback && lastProtocolCaption === 0) scrapeDom();

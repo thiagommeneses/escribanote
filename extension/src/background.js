@@ -225,7 +225,7 @@ async function onEvents(msg, tabId) {
   const s = await sessionForTab(tabId, msg.meeting);
   if (s.paused) return;
   if (msg.meeting.title && (!s.title || s.title === "Reunião sem título")) s.title = msg.meeting.title;
-  let didChange = false;
+  let didChange = msg.events.some((ev) => ev.kind === "meeting-start" && !s.entries.length); // huddle detectado: a sessão já existe
   for (const ev of msg.events) didChange = applyEvent(s, ev) || didChange;
   if (!didChange) return;
   setBadge(tabId, s);
@@ -254,6 +254,17 @@ async function endSession(tabId) {
   openAfterCall(s, settings).catch((err) => console.warn("abrir após a chamada:", err));
   if (settings.autoReview) await reviewPending(s).catch(() => {});
   maybeAutoAta(s);
+}
+
+// Slack (Pro): com "publicar sozinho" ligado na conta, a ata automática vai para o canal padrão.
+// A reunião precisa estar na conta antes (a API lê a ata de lá); o servidor ignora o pedido se "auto"
+// estiver desligado ou se a ata já tiver sido publicada.
+async function postAtaToSlack(s) {
+  if (!(await isPro()) || !(await syncActive())) return;
+  queueSync([s.id], { now: true });
+  await flushSync();
+  if (!(await getSyncMeta()).versions[s.id]) return;
+  await accountFetch(`/meetings/${encodeURIComponent(s.id)}/slack`, { method: "POST", body: { ifAuto: true } });
 }
 
 // Ajuste "Ao sair da reunião": abre a tela pós-reunião assim que a chamada termina.
@@ -293,6 +304,7 @@ async function maybeAutoAta(s) {
   try {
     s.summary = await runAta(ai, s, settings);
     await changed(s, { now: true });
+    postAtaToSlack(s).catch(() => {});
   } catch {
     // Sem rede ou chave inválida: o usuário pode gerar a ata manualmente depois.
   }
@@ -434,7 +446,8 @@ function broadcastHq(tabId, status) {
 
 async function startHq(tabId) {
   const settings = await getSettings();
-  const modelKey = settings.hq !== "off" ? settings.hq : "base";
+  // Sem modelo escolhido (ex.: huddle do Slack, que só tem o áudio), usa o do gravador ou o rápido.
+  const modelKey = settings.hq !== "off" ? settings.hq : settings.recorderModel || "base";
   if (!HQ_MODELS[modelKey]) throw new Error("Modelo de reconhecimento inválido.");
   let streamId;
   try {

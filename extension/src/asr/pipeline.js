@@ -57,6 +57,40 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
     state.segmenters.push(seg);
   }
 
+  // Fonte que entrega amostras prontas (mono 16 kHz), como o ajudante nativo do Windows. Devolve
+  // push(Float32Array). O relógio é o de parede: se o ajudante ficou um tempo sem mandar áudio
+  // (o Windows não entrega nada quando o computador está em silêncio), o buraco vira silêncio,
+  // para os horários das falas continuarem certos.
+  function addPushSource(source) {
+    const wall0 = Date.now();
+    let index = 0;
+    const seg = new Segmenter({
+      sampleRate: SR,
+      onSegment: (s) => {
+        state.queue.push({ ...s, source, start: Math.round(wall0 + s.startSample / (SR / 1000)), end: Math.round(wall0 + s.endSample / (SR / 1000)) });
+        if (state.queue.length > 6) coalesceQueue();
+        pump();
+      },
+    });
+    state.segmenters.push(seg);
+    return (samples) => {
+      const expected = Math.round(((Date.now() - wall0) * SR) / 1000) - samples.length;
+      const gap = expected - index;
+      if (gap > SR * 0.15) {
+        const fill = Math.min(gap, SR * 30);
+        seg.push(new Float32Array(fill), index);
+        index += fill;
+      }
+      seg.push(samples, index);
+      index += samples.length;
+      if (onLevel) {
+        let sum = 0;
+        for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+        onLevel(source, Math.sqrt(sum / samples.length));
+      }
+    };
+  }
+
   // Junta pares de segmentos vizinhos da mesma fonte (até 28 s) para reduzir chamadas ao modelo.
   function coalesceQueue() {
     const q = state.queue;
@@ -202,5 +236,5 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
     state.queue = [];
   }
 
-  return { addStream, loadEngine, loadSpeakers, run, stop, stopCapture, drain, reset, pump, get busy() { return state.busy || state.queue.length > 0; }, get speakers() { return state.speakers; } };
+  return { addStream, addPushSource, loadEngine, loadSpeakers, run, stop, stopCapture, drain, reset, pump, get busy() { return state.busy || state.queue.length > 0; }, get speakers() { return state.speakers; } };
 }

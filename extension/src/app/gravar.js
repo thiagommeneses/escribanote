@@ -3,6 +3,7 @@
 // para uma página visível; por isso a captura e o Whisper rodam aqui, e não no offscreen.
 // Esta aba faz o papel da "aba da reunião": fechar a aba encerra a sessão.
 import { createPipeline } from "../asr/pipeline.js";
+import { nativePermission, probeNative, openNative, HELPER_URL } from "../lib/native.js";
 import { hasWebGPU, saveDiag } from "../asr/engine.js";
 import { HQ_MODELS, getSettings, setSettings } from "../lib/settings.js";
 
@@ -67,10 +68,57 @@ async function setup() {
   $("me-name").textContent = settings.myName || "Você";
   $("title").value = defaultTitle($("platform").value);
   $("title").dataset.auto = "1";
+  renderCaptureMode();
   $("title").addEventListener("input", () => delete $("title").dataset.auto);
   $("platform").addEventListener("change", () => {
     if ($("title").dataset.auto) $("title").value = defaultTitle($("platform").value);
   });
+}
+
+// ---------------- Como capturar: ajudante nativo (um clique) ou seletor do Chrome ----------------
+const native = { checked: false, ok: false, info: null, reason: "" };
+async function detectNative({ request = false } = {}) {
+  if (!(await nativePermission({ request }))) {
+    native.checked = true;
+    native.ok = false;
+    native.reason = request ? "A permissão para falar com o ajudante não foi concedida." : "";
+    return false;
+  }
+  const r = await probeNative();
+  native.checked = true;
+  native.ok = r.ok;
+  native.info = r.ok ? r : null;
+  native.reason = r.ok ? "" : r.reason;
+  return r.ok;
+}
+
+function captureMode() {
+  const el = document.querySelector('input[name="capture"]:checked');
+  return el ? el.value : "display";
+}
+
+async function renderCaptureMode() {
+  const box = $("capture-mode");
+  if (!native.checked) await detectNative();
+  if (native.ok) {
+    box.innerHTML = `<label class="check"><input type="radio" name="capture" value="native" checked> <span><b>Ajudante do Escribanote</b> (um clique, sem compartilhar a tela)
+        <span class="muted">Ouve o que sai em "${esc(native.info.device || "saída padrão")}". Versão ${esc(native.info.version || "")}.</span></span></label>
+      <label class="check"><input type="radio" name="capture" value="display"> <span>Compartilhar a tela pelo seletor do Chrome <span class="muted">(como antes)</span></span></label>`;
+    $("how-native").hidden = false;
+    $("how-display").hidden = true;
+  } else {
+    box.innerHTML = `<input type="radio" name="capture" value="display" checked hidden>
+      <p class="muted tiny">Cansou do seletor de tela? Instale o <a href="${HELPER_URL}" target="_blank" rel="noopener">ajudante do Escribanote para Windows</a> (opcional, 2 arquivos, sem administrador)
+        e clique em <button type="button" class="btn sm ghost" id="native-enable">Ativar o ajudante</button><span id="native-msg" class="muted tiny"> ${esc(native.reason)}</span></p>`;
+    $("native-enable").addEventListener("click", async () => {
+      $("native-msg").textContent = " Procurando o ajudante…";
+      const ok = await detectNative({ request: true });
+      if (ok) renderCaptureMode();
+      else $("native-msg").textContent = ` Não encontrei o ajudante (${native.reason || "não instalado"}). Instale pelo link e tente de novo.`;
+    });
+    $("how-native").hidden = true;
+    $("how-display").hidden = false;
+  }
 }
 
 // Confere o modelo antes de gravar: transcreve o trecho de fala de referência embutido
@@ -123,8 +171,19 @@ async function start() {
   const withMic = $("mic").checked;
   setSettings({ recorderModel: modelKey, recorderPlatform: platform, recorderMic: withMic }).catch(() => {});
 
-  let display;
-  try {
+  let display = null;
+  let helper = null;
+  if (captureMode() === "native") {
+    // Ajudante nativo: o áudio chega pronto, sem seletor; qualquer erro cai de volta no seletor.
+    try {
+      helper = await startNativeCapture();
+    } catch (err) {
+      $("start").disabled = false;
+      $("setup-err").textContent = "O ajudante não conseguiu capturar o áudio (" + err.message + "). Tente de novo ou use o seletor do Chrome.";
+      return;
+    }
+  }
+  if (!helper) try {
     // A imagem é exigida pelo Chrome para liberar o som; pedimos o mínimo e não a usamos.
     display = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: 1, width: { max: 640 }, height: { max: 360 } },
@@ -139,7 +198,7 @@ async function start() {
     $("setup-err").textContent = err.name === "NotAllowedError" ? "O compartilhamento foi cancelado." : "Não foi possível capturar a tela: " + err.message;
     return;
   }
-  if (!display.getAudioTracks().length) {
+  if (display && !display.getAudioTracks().length) {
     display.getTracks().forEach((t) => t.stop());
     $("start").disabled = false;
     $("setup-err").innerHTML =
@@ -162,7 +221,10 @@ async function start() {
       if (rms > 0.004) rec.heard[source] = Date.now();
     },
   });
-  await rec.pipe.addStream(new MediaStream(display.getAudioTracks()), "system");
+  if (helper) {
+    rec.helper = helper;
+    helper.feed(rec.pipe.addPushSource("system"));
+  } else await rec.pipe.addStream(new MediaStream(display.getAudioTracks()), "system");
 
   let mic = null;
   let micError = "";
@@ -181,14 +243,15 @@ async function start() {
   } catch (err) {
     await rec.pipe.stopCapture();
     rec.pipe = null;
-    display.getTracks().forEach((t) => t.stop());
+    if (display) display.getTracks().forEach((t) => t.stop());
+    if (helper) helper.close();
     $("start").disabled = false;
     $("setup-err").textContent = err.message;
     return;
   }
 
   // Clicar em "Parar de compartilhar" na barra do Chrome encerra a gravação.
-  for (const t of display.getTracks()) t.addEventListener("ended", () => stop(), { once: true });
+  if (display) for (const t of display.getTracks()) t.addEventListener("ended", () => stop(), { once: true });
 
   $("setup").hidden = true;
   $("live").hidden = false;
@@ -206,6 +269,43 @@ async function start() {
   rec.running = rec.pipe.run(modelKey, settings.captionLang, { diarize }).catch((err) => {
     rec.status = { state: "error", message: err.message };
     renderStatus();
+  });
+}
+
+// Liga o ajudante e espera a confirmação de que a captura começou. Devolve {feed(push), close()}.
+function startNativeCapture() {
+  return new Promise((resolve, reject) => {
+    let push = null;
+    let settled = false;
+    const conn = openNative({
+      onAudio: (samples) => push && push(samples),
+      onStarted: () => {
+        if (settled) return;
+        settled = true;
+        resolve({ feed: (fn) => (push = fn), close: () => (conn.stop(), conn.disconnect()) });
+      },
+      onError: (err) => {
+        if (!settled) {
+          settled = true;
+          conn.disconnect();
+          reject(err);
+        } else showWarn("O ajudante parou de capturar: " + esc(err.message), "native");
+      },
+      onStopped: (reason) => {
+        if (!settled) {
+          settled = true;
+          reject(new Error(reason));
+        } else if (rec.pipe && !rec.stopping) showWarn("O ajudante do Escribanote desconectou (" + esc(reason) + "). Clique em Parar e salvar e comece de novo.", "native");
+      },
+    });
+    conn.start();
+    setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        conn.disconnect();
+        reject(new Error("o ajudante não respondeu"));
+      }
+    }, 5000);
   });
 }
 
@@ -312,7 +412,9 @@ async function stop() {
   for (const b of $("live").querySelectorAll("button")) b.disabled = true;
   renderStatus();
   await rec.pipe.stopCapture(); // fecha os últimos trechos e libera o compartilhamento
-  rec.display.getTracks().forEach((t) => t.stop());
+  if (rec.display) rec.display.getTracks().forEach((t) => t.stop());
+  if (rec.helper) rec.helper.close();
+  rec.helper = null;
   await rec.running; // se o modelo ainda estava baixando, espera para transcrever o que ficou na fila
   await rec.pipe.drain();
   clearInterval(rec.timer);

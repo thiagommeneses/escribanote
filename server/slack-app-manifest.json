@@ -1,0 +1,26 @@
+{
+  "display_information": {
+    "name": "Escribanote",
+    "description": "Atas das suas reuniões no canal, e perguntas respondidas no thread.",
+    "background_color": "#1d4ed8"
+  },
+  "features": {
+    "bot_user": { "display_name": "Escribanote", "always_online": false },
+    "app_home": { "messages_tab_enabled": false, "messages_tab_read_only_enabled": true }
+  },
+  "oauth_config": {
+    "redirect_urls": ["https://escribanote.meneseslabs.com.br/api/v1/slack/oauth"],
+    "scopes": {
+      "bot": ["chat:write", "chat:write.public", "channels:read", "groups:read", "channels:history", "groups:history", "app_mentions:read"]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://escribanote.meneseslabs.com.br/api/v1/slack/events",
+      "bot_events": ["message.channels", "message.groups", "app_mention"]
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

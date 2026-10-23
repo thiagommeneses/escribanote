@@ -9,6 +9,22 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Slack de três jeitos (novo na 2.8)
+
+- **Huddle no Slack do Chrome (`app.slack.com`), sem seletor de tela:** `src/content/slack.js` percebe o
+  huddle pelo áudio ao vivo (`<audio srcObject>`), lê os nomes dos avatares do painel e o indicador
+  "falando" (`session.turns`), e o widget oferece um único toque: "Transcrever este huddle". O áudio vem
+  pela captura da aba (alta precisão), o falante pelo indicador e pela identificação de voz. O Chrome só
+  libera o áudio depois de um clique no ícone da extensão (ou Alt+Shift+E); o widget explica isso.
+- **Ajudante de áudio para o app de desktop (opcional, Windows):** `desktop/windows/` tem um programa
+  de 9 KB (C#, NAudio) que entrega o áudio do computador pela mensageria nativa do Chrome, já em mono
+  16 kHz; o gravador do computador passa a funcionar com um clique, sem "compartilhar tela". Permissão
+  opcional `nativeMessaging`, pedida só quando a pessoa clica em "Ativar o ajudante". Se o ajudante não
+  está instalado, o seletor do Chrome continua funcionando como antes.
+- **Slack como destino (Pro):** a ata vai para o canal escolhido (app web › reunião › Slack, ou sozinha
+  ao terminar, com "publicar sozinho" ligado em Conta › Slack) e quem responder no thread recebe
+  respostas da IA sobre a reunião (1 crédito cada). Servidor: `server/src/slack.js`.
+
 ## Falantes, idioma e partes da reunião (novo na 2.7)
 
 - **Quem está falando, pela voz (Pro):** com a alta precisão ou o gravador do computador ligados, o
@@ -203,6 +219,7 @@ npm test                                                     # 33 testes unitár
 CHROME=/caminho/do/chrome node test/e2e-meet.mjs [pasta]     # ponta a ponta num Chrome real (+ screenshots)
 CHROME=/caminho/do/chrome node test/e2e-asr.mjs audio.f32    # Whisper real na extensão (PCM float32 16 kHz)
 CHROME=/caminho/do/chrome node test/e2e-speakers.mjs          # modelos de voz reais: mesma fala = mesma voz, tom alterado = outra
+CHROME=/caminho/do/chrome node test/e2e-slack.mjs             # huddle simulado em app.slack.com: detecção, nomes, "falando", fim
 CHROME=/caminho/do/chrome node test/e2e-backup.mjs [pasta]    # backup na pasta, restauração e ajustes sincronizados
 CHROME=/caminho/do/chrome node test/e2e-account.mjs [pasta]   # conta Pro: conectar, sincronizar, conflito, IA da conta (precisa do Postgres de teste, ver ../server)
 PULSE_SERVER=unix:/nonexistent CHROME=/caminho/do/chrome node test/e2e-recorder.mjs sistema.wav mic.wav [pasta]  # gravador do computador (no WSL, sem o servidor de som travar o AudioContext)

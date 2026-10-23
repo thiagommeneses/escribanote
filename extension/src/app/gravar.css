@@ -55,3 +55,7 @@ body { background: var(--bg-soft); }
 @media (max-width: 620px) {
   .rec-form .two, .meters { grid-template-columns: 1fr; }
 }
+
+/* Como capturar: ajudante nativo ou seletor do Chrome */
+.capture-mode { display: grid; gap: 6px; }
+.capture-mode .check { margin: 0; }

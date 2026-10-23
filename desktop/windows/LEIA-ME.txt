@@ -1,0 +1,18 @@
+Ajudante de áudio do Escribanote para Windows (opcional)
+=========================================================
+
+Para quê: transcrever huddles do Slack (app de desktop) e qualquer som do computador com um clique,
+sem o seletor "compartilhar tela" do Chrome.
+
+Como instalar: dê dois cliques em Instalar.cmd. Não precisa de administrador; os arquivos vão para
+%LOCALAPPDATA%\Escribanote\Audio e o ajudante é registrado no Chrome, no Edge e no Brave.
+
+Depois: abra a extensão do Escribanote > Gravador do computador > "Ativar o ajudante".
+
+Privacidade: o ajudante só roda quando a extensão pede, só entrega o áudio para a extensão (pela
+mensageria nativa do navegador) e não grava nada em disco. A transcrição acontece no seu computador.
+
+Para remover: Desinstalar.cmd.
+
+Código-fonte: https://github.com/thiagommeneses/escribanote (pasta desktop/windows). Usa a biblioteca
+NAudio (licença MIT, LICENSE-NAudio.txt).

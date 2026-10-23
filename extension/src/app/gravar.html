@@ -21,10 +21,15 @@
       <p class="lead">Funciona com o app do Slack instalado no Windows e qualquer programa que toque som no computador:
         o Escribanote ouve o áudio do sistema e o seu microfone e transcreve tudo aqui, com o Whisper, sem enviar o áudio para lugar nenhum.</p>
 
-      <ol class="how">
+      <ol class="how" id="how-display">
         <li><b>Entre no huddle</b> pelo app do Slack, como sempre.</li>
         <li>Aqui, clique em <b>Começar a gravar</b>. Na janela do Chrome, escolha <b>Tela inteira</b> e ative
           <b>Compartilhar áudio do sistema</b>. A imagem da tela não é gravada; ela só é exigida pelo Chrome para liberar o som.</li>
+        <li><b>Deixe esta aba aberta</b> (pode ir para outra aba ou minimizar). Para terminar, clique em <b>Parar e salvar</b>.</li>
+      </ol>
+      <ol class="how" id="how-native" hidden>
+        <li><b>Entre no huddle</b> pelo app do Slack, como sempre.</li>
+        <li>Aqui, clique em <b>Começar a gravar</b>. Só isso: o ajudante entrega o som do computador direto para a extensão.</li>
         <li><b>Deixe esta aba aberta</b> (pode ir para outra aba ou minimizar). Para terminar, clique em <b>Parar e salvar</b>.</li>
       </ol>
 
@@ -34,6 +39,7 @@
           <label>App<select id="platform"><option value="slack">Slack (huddle)</option><option value="desktop">Outro app ou vídeo</option></select></label>
           <label>Precisão<select id="model"></select></label>
         </div>
+        <div id="capture-mode" class="capture-mode"></div>
         <label class="check"><input type="checkbox" id="mic" checked> <span>Incluir o meu microfone, para a sua fala sair como <b id="me-name">Você</b>.
           <span class="muted">Sem fone de ouvido, o eco da caixa de som é detectado e descartado.</span></span></label>
         <div class="row"><button class="btn primary big" id="start" type="submit"><span class="dot"></span>Começar a gravar</button>
@@ -41,7 +47,7 @@
           <span id="setup-err" class="err" role="alert"></span></div>
         <p id="test-out" class="test-out muted" aria-live="polite" hidden></p>
       </form>
-      <p class="muted tiny">Só funciona no Chrome para Windows ou ChromeOS: no macOS e no Linux o Chrome não captura o áudio do sistema.
+      <p class="muted tiny">Sem o ajudante, só funciona no Chrome para Windows ou ChromeOS: no macOS e no Linux o Chrome não captura o áudio do sistema.
         Os participantes não aparecem com nome (o Slack não informa quem fala); você pode renomear "Participantes" depois.</p>
     </section>
 
