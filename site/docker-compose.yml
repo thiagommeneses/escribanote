@@ -1,5 +1,6 @@
-# Escribanote em escribanote.meneseslabs.com.br, publicado pelo Caddy (stack /opt/caddy).
-# Os endereços antigos (escriba. e reunilo.meneseslabs.com.br) redirecionam para o novo (301).
+# Escribanote em escribanote.com, publicado pelo Caddy (stack /opt/caddy).
+# Os endereços antigos (escribanote., escriba. e reunilo.meneseslabs.com.br) e o www redirecionam para o novo (301).
+# A API e o app web continuam respondendo em escribanote.meneseslabs.com.br, sem redirecionar, para as extensões anteriores à 2.16.0.
 #   ./public   site estático e o app web (/app, com as bibliotecas da extensão em /app/lib)
 #   ./src      código da API (server/) e bibliotecas da extensão, para o build
 #   ./db       dados do Postgres          ./backups  dumps diários criptografados
@@ -11,7 +12,7 @@ services:
     restart: unless-stopped
     command: caddy file-server --root /srv
     labels:
-      caddy_0: escribanote.meneseslabs.com.br
+      caddy_0: escribanote.com
       caddy_0.reverse_proxy: "{{upstreams 80}}"
       caddy_0.encode: zstd gzip
       caddy_0.header.Strict-Transport-Security: "max-age=31536000"
@@ -23,8 +24,16 @@ services:
       caddy_0.header_1.Cache-Control: no-cache
       caddy_0.header_2: /download/latest.json
       caddy_0.header_2.Cache-Control: no-cache
-      caddy_1: escriba.meneseslabs.com.br reunilo.meneseslabs.com.br
-      caddy_1.redir: "https://escribanote.meneseslabs.com.br{uri} permanent"
+      caddy_1: www.escribanote.com escriba.meneseslabs.com.br reunilo.meneseslabs.com.br
+      caddy_1.redir: "https://escribanote.com{uri} permanent"
+      # O domínio antigo: o site redireciona; o app web (/app) segue servido aqui, porque as extensões anteriores à 2.16.0
+      # só aceitam conexão vinda dele; a API e os links /s/ são servidos pelo escribanote-api abaixo.
+      caddy_2: escribanote.meneseslabs.com.br
+      caddy_2.@site.not.path: "/api/v1/* /s/* /app/*"
+      caddy_2.redir: "@site https://escribanote.com{uri} permanent"
+      caddy_2.reverse_proxy: "/app/* {{upstreams 80}}"
+      caddy_2.header: /app/*
+      caddy_2.header.Cache-Control: no-cache
     networks:
       - caddy
     volumes:
@@ -40,7 +49,7 @@ services:
       - path: ./contato.env
         required: false
     labels:
-      caddy: escribanote.meneseslabs.com.br
+      caddy: escribanote.com
       caddy.reverse_proxy: "/api/contato* {{upstreams 8080}}"
     networks:
       - caddy
@@ -62,9 +71,12 @@ services:
         condition: service_healthy
     mem_limit: 384m
     labels:
-      caddy: escribanote.meneseslabs.com.br
-      caddy.reverse_proxy_0: "/api/v1/* {{upstreams 8080}}"
-      caddy.reverse_proxy_1: "/s/* {{upstreams 8080}}"
+      caddy_0: escribanote.com
+      caddy_0.reverse_proxy_0: "/api/v1/* {{upstreams 8080}}"
+      caddy_0.reverse_proxy_1: "/s/* {{upstreams 8080}}"
+      caddy_1: escribanote.meneseslabs.com.br
+      caddy_1.reverse_proxy_0: "/api/v1/* {{upstreams 8080}}"
+      caddy_1.reverse_proxy_1: "/s/* {{upstreams 8080}}"
     networks:
       - caddy
       - interna

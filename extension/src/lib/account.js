@@ -1,6 +1,6 @@
 // Conta Escribanote Pro: token do dispositivo (entregue pelo app web) e chamadas à API.
 // O endereço pode ser trocado em chrome.storage.local "accountApi" (só para testes).
-export const ACCOUNT_URL = "https://escribanote.meneseslabs.com.br";
+export const ACCOUNT_URL = "https://escribanote.com";
 
 export async function accountBase() {
   const { accountApi } = await chrome.storage.local.get("accountApi");

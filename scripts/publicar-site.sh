@@ -16,4 +16,4 @@ grep -q "app.js?v=$VERSION" "$STAGE/app/index.html"
 rsync -az --delete --exclude 'download/*.zip' --exclude 'app/lib/' "$STAGE/" vps:/opt/escribanote/public/
 rsync -az site/download/*.zip vps:/opt/escribanote/public/download/
 rsync -az --delete extension/src/lib/ vps:/opt/escribanote/public/app/lib/
-curl -fsS -o /dev/null https://escribanote.meneseslabs.com.br/app/lib/transcript.js && echo "site publicado (app/lib ok, v=$VERSION)"
+curl -fsS -o /dev/null https://escribanote.com/app/lib/transcript.js && echo "site publicado (app/lib ok, v=$VERSION)"

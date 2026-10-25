@@ -1684,7 +1684,7 @@ async function renderAccount() {
 
 async function openAccountWeb(path) {
   const r = await send({ type: "account-state" }).catch(() => null);
-  const base = r?.account?.web || "https://escribanote.meneseslabs.com.br/app/";
+  const base = r?.account?.web || "https://escribanote.com/app/";
   chrome.tabs.create({ url: base + path });
 }
 

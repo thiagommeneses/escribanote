@@ -203,7 +203,7 @@ const Fim = () => {
       <Img src={staticFile("img/icon.png")} style={{ width: 160, height: 160, borderRadius: 40, transform: `scale(${s})`, boxShadow: "0 30px 80px rgba(0,0,0,.5)" }} />
       <div style={{ fontFamily: C.serif, fontStyle: "italic", fontWeight: 500, fontSize: 104, color: C.ink, marginTop: 18, letterSpacing: -3, opacity: s, transform: `translateY(${(1 - s) * 20}px)` }}>Escribanote</div>
       <div style={{ fontFamily: C.sans, fontSize: 30, color: C.ink2, opacity: s2, transform: `translateY(${(1 - s2) * 20}px)` }}>Grátis para instalar · Chrome e Edge · Tudo fica no seu computador</div>
-      <div style={{ marginTop: 34, fontFamily: C.sans, fontWeight: 800, fontSize: 34, color: "#fff", background: C.accent, padding: "16px 40px", borderRadius: 999, opacity: s3, transform: `scale(${0.8 + 0.2 * s3})` }}>escribanote.meneseslabs.com.br</div>
+      <div style={{ marginTop: 34, fontFamily: C.sans, fontWeight: 800, fontSize: 34, color: "#fff", background: C.accent, padding: "16px 40px", borderRadius: 999, opacity: s3, transform: `scale(${0.8 + 0.2 * s3})` }}>escribanote.com</div>
     </AbsoluteFill>
   );
 };

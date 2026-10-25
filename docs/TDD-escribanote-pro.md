@@ -17,7 +17,7 @@
 
 O **Escribanote** (chamado Escriba até a versão 2.3 e Reunilo nas 2.4 e 2.5) é uma extensão do Chrome que transcreve reuniões do Google Meet, Teams e Zoom e, desde a
 versão 2.2, huddles do Slack e outros apps do computador (Whisper local). Ele foi construído como uma
-alternativa melhor ao Tactiq. A versão 2.4.0 está publicada em escribanote.meneseslabs.com.br. Ela é **100%
+alternativa melhor ao Tactiq. A versão 2.4.0 está publicada em escribanote.com. Ela é **100%
 local**: as transcrições ficam no `chrome.storage` do navegador, com backup opcional numa pasta do
 computador; os ajustes sincronizam pela conta do Chrome, e a IA usa a chave de API do próprio usuário.
 
@@ -193,7 +193,7 @@ sequenceDiagram
 
 ### APIs e endpoints
 
-Todas as rotas ficam em `https://escribanote.meneseslabs.com.br/api/v1/...` (mesmo endereço do site e do app,
+Todas as rotas ficam em `https://escribanote.com/api/v1/...` (mesmo endereço do site e do app,
 sem CORS para o navegador; a extensão é liberada pelo ID fixo).
 
 | Endpoint | Método | Descrição | Autenticação |
@@ -381,7 +381,7 @@ limite global de gasto de IA por dia, com alerta, protege contra surpresas.
 | Área logada | ✅ Pronta, teste em Chrome real (26 verificações, inclui o site e a assinatura) | `site/app/` |
 | Site com o Pro (home redesenhada, `/pro/`, menu "Pro" e "Entrar") | ✅ Publicado; spec em `docs/SPEC-site-e-assinatura.md` | `site/` |
 | Extensão 2.5.0 (conectar, sincronizar, IA da conta) | ✅ Pronta, 33 testes unitários + 16 verificações ponta a ponta | `extension/` |
-| Produção na VPS (banco, API, backups, app) | ✅ No ar em `escribanote.meneseslabs.com.br/app` | `site/docker-compose.yml` |
+| Produção na VPS (banco, API, backups, app) | ✅ No ar em `escribanote.com/app` | `site/docker-compose.yml` |
 | Extensão 2.5.0 no site | ✅ Publicada (zip + `latest.json`) | `site/download/` |
 | Backup | ✅ Diário, criptografado; restauração testada | `server/README.md` |
 | Política de privacidade com o Pro | ✅ Publicada (inclui a transferência internacional: VPS em Boston) | `site/privacidade.html` |

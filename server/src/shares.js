@@ -95,7 +95,7 @@ function renderMeeting(doc, share) {
       .join("")}</section>`;
   }
   const until = new Date(share.expires_at).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-  body += `<footer>Compartilhado pelo <a href="https://escribanote.meneseslabs.com.br">Escribanote</a>. Este link vale até ${esc(until)}.</footer>`;
+  body += `<footer>Compartilhado pelo <a href="https://escribanote.com">Escribanote</a>. Este link vale até ${esc(until)}.</footer>`;
   return page(doc.title, body);
 }
 

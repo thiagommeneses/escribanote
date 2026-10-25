@@ -2,7 +2,7 @@
 // computador está tocando pela mensageria nativa do Chrome, já em mono 16 kHz. Com ele, o gravador do
 // computador funciona com um clique, sem o seletor "compartilhar tela". Fonte em desktop/windows/.
 export const NATIVE_HOST = "com.escribanote.audio";
-export const HELPER_URL = "https://escribanote.meneseslabs.com.br/download/escribanote-audio-windows.zip";
+export const HELPER_URL = "https://escribanote.com/download/escribanote-audio-windows.zip";
 
 export async function nativePermission({ request = false } = {}) {
   if (!chrome.permissions) return false;
