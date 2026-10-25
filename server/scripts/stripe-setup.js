@@ -1,12 +1,12 @@
 // Prepara a conta Stripe para o Escribanote Pro: produto, preços (BRL e USD, mensal e anual), webhook e portal do cliente.
 // Pode rodar mais de uma vez: reaproveita o que já existe (preços pelo lookup_key, webhook pela URL).
 // Imprime as linhas para o pro.env (ou grava direto com --write caminho/pro.env).
-//   STRIPE_SECRET_KEY=sk_... PUBLIC_URL=https://escribanote.meneseslabs.com.br node scripts/stripe-setup.js [--write /caminho/pro.env]
+//   STRIPE_SECRET_KEY=sk_... PUBLIC_URL=https://escribanote.com node scripts/stripe-setup.js [--write /caminho/pro.env]
 import { readFileSync, writeFileSync } from "node:fs";
 import Stripe from "stripe";
 
 const key = process.env.STRIPE_SECRET_KEY;
-const publicUrl = (process.env.PUBLIC_URL || "https://escribanote.meneseslabs.com.br").replace(/\/$/, "");
+const publicUrl = (process.env.PUBLIC_URL || "https://escribanote.com").replace(/\/$/, "");
 if (!key) throw new Error("Defina STRIPE_SECRET_KEY (no pro.env)");
 const stripe = new Stripe(key);
 const mode = key.startsWith("sk_live") ? "produção" : "teste";
@@ -44,7 +44,12 @@ const url = `${publicUrl}/api/v1/billing/webhook`;
 const hooks = await stripe.webhookEndpoints.list({ limit: 100 });
 let secret = null;
 let hook = hooks.data.find((h) => h.url === url);
-if (!hook) {
+// Mudou o domínio? Reaproveita o webhook antigo (mesmo caminho em outro endereço): o segredo do pro.env continua valendo.
+const antigo = !hook && hooks.data.find((h) => h.url.endsWith("/api/v1/billing/webhook") && h.description === "Escribanote Pro");
+if (antigo) {
+  hook = await stripe.webhookEndpoints.update(antigo.id, { url, enabled_events: EVENTS, disabled: false });
+  console.log(`Webhook movido de ${antigo.url} para ${url} (segredo mantido).`);
+} else if (!hook) {
   hook = await stripe.webhookEndpoints.create({ url, enabled_events: EVENTS, description: "Escribanote Pro" });
   secret = hook.secret; // só aparece na criação
 } else {

@@ -73,7 +73,7 @@ tar czf - server/package.json server/package-lock.json server/Dockerfile server/
 (cd site && tar czf - app) | ssh VPS 'rm -rf /opt/escribanote/public/app && tar xzf - -C /opt/escribanote/public'
 tar czf - -C extension/src lib | ssh VPS 'tar xzf - -C /opt/escribanote/public/app'
 ssh VPS 'cd /opt/escribanote && docker compose build escribanote-api && docker compose up -d'
-curl https://escribanote.meneseslabs.com.br/api/v1/health
+curl https://escribanote.com/api/v1/health
 ```
 
 As migrações (`src/migrations/*.sql`) rodam sozinhas quando a API sobe. Antes de uma migração,

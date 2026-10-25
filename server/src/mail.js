@@ -31,14 +31,14 @@ const wrap = (title, preheader, inner) => `<!doctype html>
 <tr><td style="padding:28px 28px 8px"><p style="font-size:20px;font-weight:700;margin:0">Escribanote</p></td></tr>
 <tr><td style="padding:8px 28px 28px">${inner}</td></tr>
 </table>
-<p style="max-width:520px;font-size:12px;line-height:1.5;color:#7a7268;margin:20px auto 0">Escribanote · transcrição de reuniões · escribanote.meneseslabs.com.br<br>Você recebeu este e-mail porque alguém pediu acesso ao Escribanote com este endereço. Se não foi você, pode ignorar: nada acontece sem o clique no link.</p>
+<p style="max-width:520px;font-size:12px;line-height:1.5;color:#7a7268;margin:20px auto 0">Escribanote · transcrição de reuniões · escribanote.com<br>Você recebeu este e-mail porque alguém pediu acesso ao Escribanote com este endereço. Se não foi você, pode ignorar: nada acontece sem o clique no link.</p>
 </td></tr></table></body></html>`;
 
 export function loginEmail(link, minutes) {
   const subject = "Seu link de acesso ao Escribanote";
   return {
     subject,
-    text: `Olá!\n\nRecebemos um pedido para entrar na sua conta do Escribanote. Para continuar, abra este link (vale por ${minutes} minutos e só funciona uma vez):\n\n${link}\n\nSe você não pediu, ignore este e-mail: ninguém entra na sua conta sem este link.\n\nEscribanote · escribanote.meneseslabs.com.br`,
+    text: `Olá!\n\nRecebemos um pedido para entrar na sua conta do Escribanote. Para continuar, abra este link (vale por ${minutes} minutos e só funciona uma vez):\n\n${link}\n\nSe você não pediu, ignore este e-mail: ninguém entra na sua conta sem este link.\n\nEscribanote · escribanote.com`,
     html: wrap(subject, `Entre na sua conta do Escribanote. O link vale por ${minutes} minutos.`, `
 <p style="font-size:15px;line-height:1.55;margin:0 0 12px">Olá!</p>
 <p style="font-size:15px;line-height:1.55;margin:0 0 12px">Recebemos um pedido para entrar na sua conta do Escribanote. Clique no botão abaixo para continuar. O link vale por ${minutes} minutos e só funciona uma vez.</p>

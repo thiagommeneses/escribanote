@@ -69,7 +69,7 @@ export function registerAuth(app, { db, config, mailer, limiter, stripe }) {
     // Escrita pelo cookie exige o cabeçalho próprio do app e a origem certa (proteção contra CSRF).
     if (!bearer && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
       const origin = req.headers.origin;
-      if (req.headers["x-escribanote"] !== "1" || (origin && origin !== config.origin)) fail(403, "csrf", "Requisição recusada.");
+      if (req.headers["x-escribanote"] !== "1" || (origin && !config.origins.has(origin))) fail(403, "csrf", "Requisição recusada.");
     }
     if (bearer && s.kind !== "device") fail(401, "unauthenticated", "Token inválido.");
     if (Date.now() - new Date(s.last_used_at).getTime() > 5 * 60_000) {

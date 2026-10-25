@@ -1,6 +1,6 @@
 # Escribanote 2.5 — Transcrição de Reuniões
 
-Site: https://escribanote.meneseslabs.com.br
+Site: https://escribanote.com
 
 Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, **Microsoft Teams** e
 **Zoom** (pelo navegador) e, com o gravador do computador, **huddles do Slack** e outros apps instalados.
@@ -74,7 +74,7 @@ falando, então as outras pessoas aparecem juntas como "Participantes" (dá para
 
 Opcional. Em **Ajustes › Conta Escribanote Pro › Entrar ou assinar o Pro**, o app web abre, a pessoa entra
 pelo link enviado ao e-mail e clica em **Conectar este navegador**. O app entrega um token de dispositivo
-à extensão por `externally_connectable` (só aceito vindo de `escribanote.meneseslabs.com.br`); o token fica
+à extensão por `externally_connectable` (só aceito vindo de `escribanote.com`); o token fica
 no service worker, e o app da extensão só vê o e-mail, o plano e os créditos.
 
 - **Permissão antes de enviar:** depois de conectar, a lista mostra "Enviar as N reuniões deste computador?"

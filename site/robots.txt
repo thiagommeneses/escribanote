@@ -1,4 +1,4 @@
-# Escribanote — escribanote.meneseslabs.com.br
+# Escribanote — escribanote.com
 # Robôs de coleta para treino de IA: não autorizados.
 User-agent: GPTBot
 User-agent: ClaudeBot

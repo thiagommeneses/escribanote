@@ -6,7 +6,9 @@ const num = (v, d) => (v === undefined || v === "" ? d : Number(v));
 export function loadConfig(overrides = {}) {
   const config = {
     port: num(env.PORT, 8080),
-    publicUrl: (env.PUBLIC_URL || "https://escribanote.meneseslabs.com.br").replace(/\/$/, ""),
+    publicUrl: (env.PUBLIC_URL || "https://escribanote.com").replace(/\/$/, ""),
+    // Endereços antigos onde o app web ainda é servido (vírgulas). O cookie é por domínio, então cada um tem a própria sessão.
+    legacyOrigins: (env.LEGACY_ORIGINS || "https://escribanote.meneseslabs.com.br").split(",").map((s) => s.trim()).filter(Boolean),
     databaseUrl: env.DATABASE_URL || "",
     dataKey: env.DATA_KEY || "", // base64 de 32 bytes (AES-256)
     extensionId: env.EXTENSION_ID || "ohbnmfogdcbgegnpcaphidkjinplednd",
@@ -45,6 +47,7 @@ export function loadConfig(overrides = {}) {
     ...overrides,
   };
   config.origin = new URL(config.publicUrl).origin;
+  config.origins = new Set([config.origin, ...config.legacyOrigins.map((u) => new URL(u).origin)]);
   config.extensionOrigin = `chrome-extension://${config.extensionId}`;
   return config;
 }

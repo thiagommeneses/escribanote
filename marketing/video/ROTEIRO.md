@@ -20,13 +20,13 @@ A versão muda é a recomendada se você for colocar uma música da biblioteca d
 | 15–21 s | Botão "Encerrar transcrição" é pressionado (onda); a ata aparece sendo escrita: resumo, decisões, pendências | **Acabou a chamada? *A ata já está pronta*.** / Resumo, decisões e pendências escritos pela IA, com o texto original guardado. |
 | 21–26 s | Canal do Slack: a ata postada pelo app; pergunta no thread; resposta do Escribanote citando a transcrição | **Publica no Slack. *E responde no thread*.** |
 | 26–30 s | Cadeado; três checks | **Tudo fica *no seu computador*.** / Reconhecimento de voz local, com Whisper · Nada sai da máquina sem você mandar · Chrome e Edge · Meet, Teams, Zoom e Slack |
-| 30–34 s | Ícone, nome, tagline, URL | **Escribanote** — Cada palavra da reunião, anotada. / escribanote.meneseslabs.com.br / Grátis para instalar. Pro: ata com IA, nuvem e Slack. |
+| 30–34 s | Ícone, nome, tagline, URL | **Escribanote** — Cada palavra da reunião, anotada. / escribanote.com / Grátis para instalar. Pro: ata com IA, nuvem e Slack. |
 
 O corte Story usa as cenas 1, 2, 4 e 7 (gancho, transcrição ao vivo, ata, CTA).
 
 ## Legenda sugerida para o post
 
-> Uma hora de reunião e ninguém anotou? O Escribanote transcreve o Meet, o Teams, o Zoom e os huddles do Slack ao vivo, com o nome de quem falou, e entrega a ata quando a chamada acaba. Tudo no seu computador. Grátis para instalar no Chrome e no Edge: escribanote.meneseslabs.com.br
+> Uma hora de reunião e ninguém anotou? O Escribanote transcreve o Meet, o Teams, o Zoom e os huddles do Slack ao vivo, com o nome de quem falou, e entrega a ata quando a chamada acaba. Tudo no seu computador. Grátis para instalar no Chrome e no Edge: escribanote.com
 >
 > #reuniões #produtividade #googlemeet #slack #transcrição #ata #ia
 

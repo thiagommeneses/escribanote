@@ -7,7 +7,7 @@ destaques, notas, análise de fala e ata.
 O Escribanote é uma extensão do Chrome. Na versão grátis, tudo fica no seu computador: sem conta, sem
 servidor, sem telemetria e sem limite de reuniões. Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**.
 
-- **Site:** https://escribanote.meneseslabs.com.br
+- **Site:** https://escribanote.com
 - **Versão atual:** extensão 2.6.0 (com a conta Pro), API 1.0.0
 
 ## O que tem aqui
@@ -62,7 +62,7 @@ que fica apenas no servidor e nunca entra no repositório.
 
 ## Escribanote Pro
 
-A versão paga, opcional, pela Stripe ([página do Pro](https://escribanote.meneseslabs.com.br/pro/)):
+A versão paga, opcional, pela Stripe ([página do Pro](https://escribanote.com/pro/)):
 
 | Plano | Real | Dólar | Pagamento |
 | --- | --- | --- | --- |

@@ -35,7 +35,7 @@ VALIDADE = 30 * 60
 POR_IP_HORA = 5
 
 # Nome com que o servidor se apresenta ao SMTP (o padrão seria o ID do contêiner, que conta como spam).
-HELO = os.environ.get("SMTP_HELO", "escribanote.meneseslabs.com.br")
+HELO = os.environ.get("SMTP_HELO", "escribanote.com")
 
 SMTP = {
     "host": os.environ.get("SMTP_HOST", ""),
@@ -124,7 +124,7 @@ def enviar_email(r):
     msg["Message-ID"] = make_msgid(domain=SMTP["user"].split("@")[-1])
     msg.set_content(
         f"{r['mensagem']}\n\n—\n{r['nome']} <{r['email']}>\n"
-        f"Enviado pelo formulário de escribanote.meneseslabs.com.br em {r['quando']}.\n"
+        f"Enviado pelo formulário de escribanote.com em {r['quando']}.\n"
         "Responda este e-mail para falar direto com a pessoa."
     )
     try:

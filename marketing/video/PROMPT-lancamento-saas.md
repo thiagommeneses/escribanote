@@ -35,7 +35,7 @@ itálico para títulos, Hanken Grotesk para texto), cor de destaque laranja-telh
    Legenda: "A ata pronta quando a chamada acaba."
 7. **Widget na reunião**: captura do widget dentro do Meet, com ângulo diferente (visto de cima, leve dolly);
    legenda: "Dentro do Meet, do Teams, do Zoom e do Slack."
-8. **Fechamento**: ícone e nome, "Grátis para instalar · Chrome e Edge", URL `escribanote.meneseslabs.com.br`,
+8. **Fechamento**: ícone e nome, "Grátis para instalar · Chrome e Edge", URL `escribanote.com`,
    badge "Tudo fica no seu computador".
 
 **Elementos obrigatórios.** Cursor vetorial (seta macOS) com movimento por mola e clique com onda; efeito de
