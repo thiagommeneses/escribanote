@@ -85,6 +85,15 @@
     .ib:hover { background: rgba(255,255,255,.08); color: #fff; }
     .ib.active { color: #8ab4f8; }
     .ib:disabled { opacity: .35; cursor: default; background: none; }
+    .stopb { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px 0 9px; border-radius: 999px; border: 1px solid transparent;
+      background: rgba(217,48,37,.18); color: #f28b82; font: 600 12px/1 system-ui, sans-serif; cursor: pointer; }
+    .stopb:hover { background: rgba(217,48,37,.32); color: #fff; }
+    .stopb:disabled { opacity: .35; cursor: default; }
+    .stopb.resume { background: rgba(129,201,149,.16); color: #81c995; }
+    .stopb.resume:hover { background: rgba(129,201,149,.3); color: #fff; }
+    .pstop { width: 24px; height: 24px; border-radius: 50%; display: inline-grid; place-items: center; background: rgba(217,48,37,.2); color: #f28b82; margin-left: 2px; }
+    .pstop:hover { background: rgba(217,48,37,.4); color: #fff; }
+    .pstop.resume { background: rgba(129,201,149,.16); color: #81c995; }
     .body { flex: 1; overflow-y: auto; padding: 6px 4px 6px 14px; scrollbar-width: thin; scrollbar-color: #5f6368 transparent; }
     .blk { position: relative; padding: 7px 10px 7px 0; border-radius: 8px; }
     .blk .who { display: flex; align-items: baseline; gap: 6px; font-size: 12px; }
@@ -136,7 +145,8 @@
     .banner { margin: 4px 10px 6px 0; padding: 7px 10px; border-radius: 10px; background: rgba(138,180,248,.1); color: #d2e3fc; font-size: 12px; }
     .banner.warn { background: rgba(253,214,99,.12); color: #fde293; }
   </style>
-  <div class="pill" id="pill" hidden><span class="dot" id="pdot"></span><b>Escribanote</b><span class="muted" id="ptime"></span></div>
+  <div class="pill" id="pill" hidden><span class="dot" id="pdot"></span><b>Escribanote</b><span class="muted" id="ptime"></span>
+    <button class="pstop" id="pstop" title="Parar a transcrição">${svg("stop", 11)}</button></div>
   <div class="card" id="card" style="position:relative">
     <header id="drag">
       <span class="dot" id="dot"></span>
@@ -145,7 +155,7 @@
       <span class="hqchip" id="hqchip" hidden title="Alta precisão ativa: Whisper rodando neste computador">🎧 HQ</span>
       <span class="spacer"></span>
       <button class="ib" id="pause" title="Pausar transcrição"></button>
-      <button class="ib" id="end" title="Encerrar transcrição (salva a reunião e abre o pós-reunião, se configurado)">${svg("stop")}</button>
+      <button class="stopb" id="end" title="Parar a transcrição agora. A reunião fica salva e você pode continuar na chamada; dá para retomar quando quiser.">${svg("stop", 13)}<span>Parar</span></button>
       <button class="ib" id="min" title="Minimizar">${svg("min")}</button>
     </header>
     <div class="body" id="body"></div>
@@ -315,7 +325,17 @@
     $("pause").innerHTML = svg(state.paused ? "play" : "pause");
     $("pause").title = state.paused ? "Retomar transcrição (Alt+Shift+P)" : "Pausar transcrição (Alt+Shift+P)";
     $("pause").disabled = !session;
-    $("end").disabled = !session || state.ended;
+    // Parar/Retomar: parar fecha a reunião na hora (dá para continuar na chamada sem transcrever);
+    // retomar volta a captar, na mesma reunião se foi há pouco.
+    const canStop = !!session && !state.ended;
+    $("end").className = "stopb" + (state.ended ? " resume" : "");
+    $("end").innerHTML = state.ended ? `${svg("play", 13)}<span>Retomar</span>` : `${svg("stop", 13)}<span>Parar</span>`;
+    $("end").title = state.ended ? "Voltar a transcrever esta reunião" : "Parar a transcrição agora. A reunião fica salva e você pode continuar na chamada; dá para retomar quando quiser.";
+    $("end").disabled = !state.ended && !canStop;
+    $("pstop").className = "pstop" + (state.ended ? " resume" : "");
+    $("pstop").innerHTML = state.ended ? svg("play", 11) : svg("stop", 11);
+    $("pstop").title = state.ended ? "Voltar a transcrever" : "Parar a transcrição";
+    $("pstop").hidden = !state.ended && !canStop;
     $("hqchip").hidden = !(session && session.hq && session.hq.state === "running");
     const hidden = state.settings.hideCaptions;
     $("caps").innerHTML = svg(hidden ? "eyeOff" : "eye");
@@ -489,12 +509,23 @@
     render();
   });
 
-  $("end").addEventListener("click", async () => {
+  async function stopOrResume() {
+    if (state.ended) {
+      bus.resumeSession();
+      toast("Transcrição retomada");
+      refresh();
+      return;
+    }
     if (!session) return;
     await bus.endSession();
     session = null;
-    toast("Transcrição encerrada");
+    toast("Transcrição encerrada. A reunião ficou salva.");
     render();
+  }
+  $("end").addEventListener("click", stopOrResume);
+  $("pstop").addEventListener("click", (e) => {
+    e.stopPropagation();
+    stopOrResume();
   });
 
   $("hl").addEventListener("click", async () => {

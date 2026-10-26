@@ -644,7 +644,27 @@ try {
   const s4 = await sw({ type: "get", id: id4 });
   assert.equal(s4.entries.length, 1, "nada entra depois de encerrar");
   assert.ok(s4.endedAt, "continua encerrada");
-  step("botão Encerrar do widget fecha a sessão e ignora o que vem depois");
+  step("botão Parar do widget fecha a sessão e ignora o que vem depois");
+
+  // Retomar pelo mesmo botão (agora "Retomar"): a reunião reabre e volta a receber falas
+  assert.match(await widgetCall(meet4, "#end"), /Retomar/, "botão vira Retomar");
+  await click(meet4, "#end");
+  await evaluate(meet4, `__say(803, 1, "retomamos a transcrição", ${JSON.stringify(ANA)})`);
+  await waitFor(async () => {
+    const x = await sw({ type: "get", id: id4 });
+    return x.entries.length === 2 && !x.endedAt;
+  }, "sessão 4 retomada com a fala nova", 8000);
+  assert.match(await widgetCall(meet4, "#end"), /Parar/, "botão volta a ser Parar");
+  // Parar pelo painel (mensagem end-live): a aba fecha a sessão e o widget mostra encerrada
+  const r4 = await sw({ type: "end-live", id: id4 });
+  assert.ok(r4 && r4.endedAt, "end-live encerra a sessão");
+  await waitFor(async () => /Transcrição encerrada/.test((await widgetCall(meet4, "#body")) || ""), "widget encerrada após end-live");
+  // Retomar pelo painel (resume-live) enquanto a aba existe
+  const r4b = await sw({ type: "resume-live", id: id4 });
+  assert.ok(r4b && !r4b.error && !r4b.endedAt, "resume-live reabre a sessão: " + JSON.stringify(r4b && r4b.error));
+  await evaluate(meet4, `__say(804, 1, "de volta pelo painel", ${JSON.stringify(ANA)})`);
+  await waitFor(async () => (await sw({ type: "get", id: id4 })).entries.length === 3, "fala após retomar pelo painel", 8000);
+  step("Retomar no widget e Parar/Retomar pelo painel funcionam na mesma reunião");
 
   // 12) Legendas que não ligam: o Escribanote clica em "Ativar legendas" sozinho (sem depender do botão
   //     de sair); se mesmo assim nada vem, o widget pede para ligar à mão. Depois, a tela

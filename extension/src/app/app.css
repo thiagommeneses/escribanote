@@ -88,6 +88,10 @@ body.wide .meeting-view > * { max-width: 920px; margin-left: auto; margin-right:
 .btn.primary:hover { background: var(--accent-2); }
 @media (prefers-color-scheme: dark) { .btn.primary { color: #0b1530; } }
 .btn.ghost { border-color: transparent; background: none; color: var(--text-2); }
+.btn.danger { border-color: var(--danger); color: var(--danger); }
+.btn.danger:hover { background: var(--danger); color: #fff; }
+.btn.danger.resume { border-color: var(--accent); color: var(--accent); }
+.btn.danger.resume:hover { background: var(--accent); color: #fff; }
 .btn.ghost:hover { background: var(--bg-soft); border-color: transparent; }
 .btn.danger { color: var(--danger); }
 .btn:disabled { opacity: .5; cursor: default; }
