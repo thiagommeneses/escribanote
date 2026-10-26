@@ -232,6 +232,14 @@ function renderMeeting() {
     isLive(s) ? `<span style="color:var(--danger);font-weight:600">● ${s.paused ? "pausado" : "gravando"}</span>` : "",
   ].join("");
   $("m-pause").hidden = !isLive(s);
+  // Parar: fecha a reunião agora, mesmo continuando na chamada. Retomar: só logo depois de parar, com a aba aberta.
+  const resumable = !!s.endedAt && !s.recorder && Date.now() - s.endedAt < 10 * 60 * 1000 && s.id === state.stoppedHere;
+  $("m-stop").hidden = !(isLive(s) || resumable);
+  $("m-stop").className = "btn sm danger" + (resumable ? " resume" : "");
+  $("m-stop").innerHTML = resumable
+    ? '<svg viewBox="0 0 24 24"><path d="m7 4 13 8-13 8z"/></svg>Retomar transcrição'
+    : '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Parar';
+  $("m-stop").title = resumable ? "Voltar a transcrever esta reunião na aba da chamada" : "Parar a transcrição agora. A reunião fica salva e você pode continuar na chamada.";
   renderHqButton();
   renderBanner();
   $("m-pause").innerHTML = s.paused
@@ -338,6 +346,18 @@ document.addEventListener("click", (e) => {
 $("m-title").addEventListener("change", async (e) => {
   if (!state.session) return;
   state.session = normalize(await send({ type: "update", id: state.session.id, title: e.target.value }));
+  renderMeeting();
+});
+
+$("m-stop").addEventListener("click", async () => {
+  const s = state.session;
+  if (!s) return;
+  const stopping = !s.endedAt;
+  const r = await send({ type: stopping ? "end-live" : "resume-live", id: s.id });
+  if (r && r.error) return toast(r.error);
+  if (r && r.id) state.session = normalize(r);
+  state.stoppedHere = stopping ? s.id : null;
+  toast(stopping ? "Transcrição encerrada. A reunião ficou salva." : "Transcrição retomada");
   renderMeeting();
 });
 

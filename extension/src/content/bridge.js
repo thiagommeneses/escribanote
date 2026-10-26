@@ -106,6 +106,9 @@
       state.paused = msg.paused;
       emitState();
     }
+    // Parar/retomar pedidos pelo painel do Escribanote ou pelo atalho de teclado.
+    if (msg.type === "end-session") bus.endSession();
+    if (msg.type === "resume-session") bus.resumeSession();
     bus.dispatchEvent(new CustomEvent("message", { detail: msg }));
   });
 

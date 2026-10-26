@@ -23,6 +23,7 @@ const dirty = new Set();
 const tabLocks = new Map();
 const sessionTab = new Map(); // id -> tabId (reunião em andamento)
 const asrInflight = new Set(); // resultados do Whisper ainda sendo aplicados (o encerramento espera por eles)
+const endedTab = new Map(); // id -> tabId da reunião encerrada (para "Retomar" pelo painel enquanto a aba existir)
 let saveTimer = null;
 const backupQueue = new Set(); // ids de reuniões ("settings" para os ajustes) a gravar na pasta
 let backupTimer = null;
@@ -326,6 +327,7 @@ async function endSession(tabId) {
   }
   await chrome.storage.session.remove(`active:${tabId}`);
   sessionTab.delete(active.id);
+  endedTab.set(active.id, tabId);
   chrome.action.setBadgeText({ tabId, text: "" }).catch(() => {}); // o selo REC some junto com a sessão
   if (!s || s.endedAt) return;
   s.endedAt = s.updatedAt;
@@ -889,6 +891,34 @@ async function handle(msg, sender) {
       await changed(s, { now: true });
       return { ...s, moved };
     }
+    case "end-live": {
+      // "Parar" pelo painel: a aba da reunião fecha a sessão (e para de captar); sem aba, fecha aqui mesmo.
+      if (!s || s.endedAt) return s;
+      const tabId = sessionTab.get(s.id);
+      if (tabId != null) {
+        const viaTab = await chrome.tabs.sendMessage(tabId, { type: "end-session" }).then(() => true, () => false);
+        if (viaTab) await waitUntil(async () => !!(await getSession(s.id))?.endedAt, 4000);
+        if (!(await getSession(s.id))?.endedAt) await endSession(tabId);
+      } else {
+        s.endedAt = s.updatedAt;
+        await changed(s, { now: true });
+      }
+      return getSession(s.id);
+    }
+    case "resume-live": {
+      // "Retomar" pelo painel: só enquanto a aba da reunião existir; a sessão reabre e volta a receber.
+      if (!s) return { error: "Reunião não encontrada." };
+      if (!s.endedAt) return s;
+      const tabId = endedTab.get(s.id);
+      const ok = tabId != null && (await chrome.tabs.sendMessage(tabId, { type: "resume-session" }).then(() => true, () => false));
+      if (!ok) return { error: "A aba da reunião já foi fechada; não dá para retomar." };
+      s.endedAt = null;
+      sessionTab.set(s.id, tabId);
+      await chrome.storage.session.set({ [`active:${tabId}`]: { id: s.id, meetingKey: s.meetingKey } });
+      setBadge(tabId, s);
+      await changed(s, { now: true });
+      return s;
+    }
     case "pause": {
       if (!s) return null;
       s.paused = typeof msg.paused === "boolean" ? msg.paused : !s.paused;
@@ -1317,12 +1347,27 @@ chrome.runtime.onConnect.addListener((port) => {
 });
 
 // ---------------- Atalhos de teclado ----------------
+async function waitUntil(fn, ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (await fn()) return true;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return fn();
+}
+
 chrome.commands.onCommand.addListener(async (command, tab) => {
   if (command === "open-recorder") {
     chrome.tabs.create({ url: chrome.runtime.getURL("src/app/gravar.html") });
     return;
   }
   if (!tab) return;
+  if (command === "end-session") {
+    // Parar (ou retomar) a transcrição da aba atual pelo teclado; o widget mostra o estado.
+    const active = await activeFor(tab.id);
+    chrome.tabs.sendMessage(tab.id, { type: active ? "end-session" : "resume-session" }).catch(() => {});
+    return;
+  }
   const s = await sessionForTab(tab.id);
   if (!s) return;
   try {
