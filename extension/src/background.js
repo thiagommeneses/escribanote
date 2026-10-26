@@ -713,10 +713,17 @@ function meIdFor(s, myName) {
 }
 
 async function onAsrResult(msg) {
-  const active = await activeFor(msg.tabId);
-  if (!active) return;
-  const s = await getSession(active.id);
-  if (!s || s.paused || s.endedAt) return;
+  let s;
+  if (msg.sessionId) {
+    // retranscrição ou arquivo importado: a reunião já terminou, não há aba
+    s = await getSession(msg.sessionId);
+    if (!s) return;
+  } else {
+    const active = await activeFor(msg.tabId);
+    if (!active) return;
+    s = await getSession(active.id);
+    if (!s || s.paused || s.endedAt) return;
+  }
   const settings = await getSettings();
   s.myName = settings.myName || "";
   if (msg.seg && msg.seg.text) msg.seg.text = applyGlossary(msg.seg.text, glossaryRules);
@@ -884,8 +891,51 @@ async function handle(msg, sender) {
       }
       return true;
     }
+    case "retranscribe": {
+      // Transcreve de novo a partir do áudio guardado (ou pela primeira vez, num arquivo importado).
+      if (!s) throw new Error("Reunião não encontrada.");
+      if (!s.audio || !s.audio.tracks || !s.audio.tracks.length) throw new Error("Esta reunião não tem áudio guardado.");
+      if (sessionTab.has(s.id)) throw new Error("A reunião ainda está em andamento.");
+      const st = await getSettings();
+      const modelKey = HQ_MODELS[msg.modelKey] ? msg.modelKey : st.hq !== "off" ? st.hq : "base";
+      const diarize = (msg.diarize ?? st.diarize) && (await isPro());
+      noteEvent(s, "retranscribe-start", { model: modelKey, diarize: !!diarize, tracks: s.audio.tracks });
+      s.asr = [];
+      s.voices = {};
+      s.fixes = {};
+      s.reviewed = {};
+      await changed(s, { now: true });
+      await ensureOffscreen();
+      const r = await toOffscreen({ type: "retranscribe", sessionId: s.id, modelKey, lang: msg.lang || st.captionLang, diarize, startedAt: s.audio.startedAt, tracks: s.audio.tracks });
+      if (r && r.error) { noteEvent(s, "retranscribe-error", { message: r.error }); await changed(s, { now: true }); throw new Error(r.error); }
+      const done = await getSession(s.id);
+      done.audio = { ...(done.audio || {}), model: modelKey, durationMs: done.audio?.durationMs || r.durationMs };
+      if (!done.audio.durationMs && r.durationMs) done.audio.durationMs = r.durationMs;
+      noteEvent(done, "retranscribe-done", { segments: r.segments, model: modelKey });
+      await changed(done, { now: true });
+      if (st.autoReview) reviewPending(done, { force: true }).catch(() => {});
+      return done;
+    }
+    case "import-create": {
+      // Arquivo de áudio/vídeo importado pelo painel: nasce uma reunião já encerrada, sem aba; o painel
+      // grava o arquivo no cofre e pede a transcrição com "retranscribe".
+      const startedAt = Number(msg.startedAt) || Date.now();
+      const rec = createSession({ id: `imp-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 7)}`, platform: "import", url: "", title: String(msg.title || "Arquivo importado").slice(0, 200), startedAt });
+      rec.origin = "import";
+      rec.endedAt = startedAt;
+      rec.speakers.outros = "Gravação";
+      noteEvent(rec, "import", { name: String(msg.name || "").slice(0, 120), bytes: Number(msg.bytes) || 0 });
+      cache.set(rec.id, rec);
+      await changed(rec, { now: true });
+      return rec;
+    }
     case "session-report": {
-      // eventos do offscreen (com tabId), do gravador e da página da reunião (aba remetente)
+      // eventos do offscreen (com tabId ou sessionId), do gravador e da página da reunião (aba remetente)
+      if (msg.sessionId) {
+        const rs2 = await getSession(msg.sessionId);
+        if (rs2) noteEvent(rs2, String(msg.kind || "event").slice(0, 40), msg.detail && typeof msg.detail === "object" ? msg.detail : {});
+        return !!rs2;
+      }
       const tabId = msg.tabId ?? senderTab;
       if (tabId == null) return false;
       const a = await activeFor(tabId);

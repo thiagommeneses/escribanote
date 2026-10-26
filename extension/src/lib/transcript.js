@@ -268,7 +268,7 @@ export function textEchoRatio(micText, otherTexts) {
 // Sem fone de ouvido, o microfone também capta a voz dos outros saindo da caixa de som.
 // Um trecho do microfone que repete, no mesmo momento, o que veio da aba ou do computador é eco.
 const ECHO_TOLERANCE_MS = 2000;
-const OTHERS = new Set(["system", "tab"]);
+const OTHERS = new Set(["system", "tab", "import"]);
 export const isTextEcho = (micText, otherTexts) => textEchoRatio(micText, otherTexts) >= 0.5 || otherTexts.some((o) => wordSimilarity(micText, o) >= 0.7);
 function echoOf(session, seg, text) {
   const near = (a) => overlap(seg.start - ECHO_TOLERANCE_MS, seg.end + ECHO_TOLERANCE_MS, a.start, a.end) > 0;
@@ -293,7 +293,7 @@ export function addAsrSegment(session, seg, meId) {
   let speakerId;
   if (seg.source === "mic") speakerId = meId || "me";
   else {
-    const byCaption = seg.source === "system" ? null : resolveSpeaker(session, seg.start, seg.end);
+    const byCaption = seg.source === "system" || seg.source === "import" ? null : resolveSpeaker(session, seg.start, seg.end);
     if (seg.voice) {
       // Voz identificada pelo Whisper: aprende a quem ela pertence pelas legendas e, quando as
       // legendas faltam (ou no gravador, que não tem legendas), usa a voz como falante.
@@ -301,7 +301,7 @@ export function addAsrSegment(session, seg, meId) {
       if (byCaption) votes[byCaption] = (votes[byCaption] || 0) + 1;
       const learned = Object.entries(votes).sort((a, b) => b[1] - a[1])[0];
       speakerId = byCaption || (learned && learned[1] >= 2 ? learned[0] : seg.voice);
-    } else speakerId = seg.source === "system" ? "outros" : byCaption;
+    } else speakerId = seg.source === "system" || seg.source === "import" ? "outros" : byCaption;
   }
   session.asr.push({ id: `asr/${seg.start}/${seg.source}`, start: seg.start, end: seg.end, text, source: seg.source, speakerId, ...(seg.voice ? { voice: seg.voice } : {}) });
   session.updatedAt = Math.max(session.updatedAt, seg.end);

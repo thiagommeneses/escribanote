@@ -195,6 +195,19 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
           } catch (err) {
             saveDiag({ speakersError: err.message || String(err) });
           }
+          // Eco por voz: no microfone, uma voz cujos quadros coincidem com áudio dos outros (menos de 40%
+          // de energia própria) é a caixa de som, desde que outra voz no mesmo trecho seja claramente própria.
+          if (seg.source === "mic" && state.echo && parts.length > 1 && seg.levels) {
+            const ratios = parts.map((p) => {
+              const a = Math.floor(p.startMs / 30), b = Math.ceil(p.endMs / 30);
+              return ownSpeechRatio({ levels: seg.levels.subarray(a, b), speechMask: seg.speechMask.subarray(a, b) }, seg.start + a * 30, state.others);
+            });
+            if (ratios.some((r) => r >= 0.6)) {
+              const keep = parts.filter((_, i) => ratios[i] >= ECHO_KEEP_RATIO);
+              state.stats.droppedEcho += parts.length - keep.length;
+              parts = keep;
+            }
+          }
         }
         for (const part of parts) {
           // Nivela a fala antes do modelo: trechos baixos e altos chegam com a mesma intensidade.
