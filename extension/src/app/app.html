@@ -75,6 +75,15 @@
               </div>
               <button class="btn sm ghost" id="m-delete" title="Apagar reunião">Apagar</button>
             </div>
+            <div class="player" id="player" hidden>
+              <button type="button" class="pbtn" id="p-play" title="Ouvir (espaço)" aria-label="Ouvir">▶</button>
+              <span class="ptime" id="p-time">00:00</span>
+              <input type="range" id="p-seek" min="0" max="1000" value="0" step="1" aria-label="Posição no áudio">
+              <span class="ptime" id="p-dur">00:00</span>
+              <span class="muted tiny" id="p-info"></span>
+              <button type="button" class="pbtn sm" id="p-keep" title="Manter este áudio fora da limpeza automática">☆</button>
+              <button type="button" class="pbtn sm" id="p-del" title="Apagar o áudio desta reunião (a transcrição fica)">🗑</button>
+            </div>
           </div>
 
           <div class="subtabs" role="tablist">
@@ -345,6 +354,20 @@
             <label class="switch"><input type="checkbox" name="syncSettings"><span></span>Sincronizar os ajustes com a sua conta do Chrome</label>
             <p class="muted tiny"><button type="button" class="linkish" id="welcome-again">Rever a configuração inicial</button></p>
             <p class="muted tiny">Os ajustes voltam ao reinstalar ou em outro computador com a mesma conta do Chrome. A chave de API fica só neste computador.</p>
+          </div>
+
+          <div class="card">
+            <h3>Áudio guardado</h3>
+            <label class="switch"><input type="checkbox" name="audioKeep"><span></span>Guardar o áudio das reuniões em que o Escribanote capta o som (alta precisão e gravador)</label>
+            <p class="muted tiny">Duas faixas separadas, a dos outros e a do seu microfone, ficam na área privada da extensão neste computador. Nunca saem daqui: não vão para o backup em arquivos nem para a conta Pro. Com o áudio guardado, você ouve um trecho clicando no horário da fala e pode transcrever de novo com outro modelo. O widget mostra um indicador enquanto grava.</p>
+            <div class="row">
+              <label class="field"><span>Espaço máximo</span>
+                <select name="audioQuotaMb"><option value="512">500 MB</option><option value="1024">1 GB</option><option value="2048">2 GB</option><option value="5120">5 GB</option><option value="10240">10 GB</option></select></label>
+              <label class="field"><span>Apagar depois de</span>
+                <select name="audioRetentionDays"><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option><option value="0">nunca</option></select></label>
+            </div>
+            <p class="muted tiny" id="audio-usage"></p>
+            <button type="button" class="btn sm ghost" id="audio-wipe">Apagar todo o áudio guardado</button>
           </div>
 
           <div class="card">

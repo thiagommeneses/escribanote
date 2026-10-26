@@ -4,6 +4,7 @@
 // Esta aba faz o papel da "aba da reunião": fechar a aba encerra a sessão.
 import { createPipeline } from "../asr/pipeline.js";
 import { openMic, watchMic } from "../asr/mic.js";
+import { startKeeping } from "../asr/keep.js";
 import { nativePermission, probeNative, openNative, HELPER_URL } from "../lib/native.js";
 import { hasWebGPU, saveDiag } from "../asr/engine.js";
 import { HQ_MODELS, getSettings, setSettings } from "../lib/settings.js";
@@ -256,6 +257,21 @@ async function start() {
     return;
   }
 
+  // Áudio guardado (ajuste): faixas do computador e do microfone no cofre da extensão.
+  // Com o ajudante nativo não há MediaStream do sistema, então só o microfone fica guardado.
+  if (settings.audioKeep) {
+    try {
+      rec.keep = startKeeping({
+        sessionId: rec.id,
+        streams: { system: helper ? null : rec.pipe.recordStream("system"), mic: mic ? rec.pipe.recordStream("mic") : null },
+        onMeta: (meta) => send({ type: "audio-meta", sessionId: rec.id, meta }).catch(() => {}),
+      });
+      if (rec.keep) send({ type: "session-report", kind: "audio-keep-started", detail: { tracks: [helper ? null : "system", mic ? "mic" : null].filter(Boolean) } }).catch(() => {});
+    } catch (err) {
+      send({ type: "session-report", kind: "audio-keep-error", detail: { message: err.message || String(err) } }).catch(() => {});
+    }
+  }
+
   // Clicar em "Parar de compartilhar" na barra do Chrome encerra a gravação.
   if (display) for (const t of display.getTracks()) t.addEventListener("ended", () => stop(), { once: true });
 
@@ -419,6 +435,8 @@ async function stop() {
   renderStatus();
   if (rec.mic) rec.mic.close();
   rec.mic = null;
+  if (rec.keep) await rec.keep.stop().catch(() => {});
+  rec.keep = null;
   await rec.pipe.stopCapture(); // fecha os últimos trechos e libera o compartilhamento
   if (rec.display) rec.display.getTracks().forEach((t) => t.stop());
   if (rec.helper) rec.helper.close();

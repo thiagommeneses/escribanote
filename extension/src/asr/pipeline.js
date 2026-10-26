@@ -71,9 +71,21 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
         onLevel(source, Math.sqrt(sum / e.data.length));
       }
     };
-    state.inputs.push({ source, stream, ctx, node, src });
+    state.inputs.push({ source, stream, ctx, node, src, rec: null });
     state.segmenters.push(seg);
     emit("source-added", { source, label: trackLabel(stream) });
+  }
+
+  // Saída de gravação de uma entrada (para guardar o áudio): um MediaStream que segue a fonte atual,
+  // inclusive depois de replaceStream, no mesmo relógio do reconhecimento.
+  function recordStream(source) {
+    const inp = state.inputs.find((i) => i.source === source);
+    if (!inp) return null;
+    if (!inp.rec) {
+      inp.rec = inp.ctx.createMediaStreamDestination();
+      inp.src.connect(inp.rec);
+    }
+    return inp.rec.stream;
   }
 
   // Troca a fonte de áudio de uma entrada já ligada (ex.: o microfone padrão mudou). O relógio e o
@@ -86,6 +98,7 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
     inp.stream = stream;
     inp.src = inp.ctx.createMediaStreamSource(stream);
     inp.src.connect(inp.node);
+    if (inp.rec) inp.src.connect(inp.rec);
     emit("source-replaced", { source, label: trackLabel(stream) });
     return true;
   }
@@ -308,7 +321,7 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
 
   function setEcho(on) { state.echo = !!on; }
 
-  return { addStream, replaceStream, addOfflineSource, flushSources, addPushSource, loadEngine, loadSpeakers, run, stop, stopCapture, drain, reset, pump, setEcho, get busy() { return state.busy || state.queue.length > 0; }, get speakers() { return state.speakers; }, get stats() { return state.stats; } };
+  return { addStream, replaceStream, recordStream, addOfflineSource, flushSources, addPushSource, loadEngine, loadSpeakers, run, stop, stopCapture, drain, reset, pump, setEcho, get busy() { return state.busy || state.queue.length > 0; }, get speakers() { return state.speakers; }, get stats() { return state.stats; } };
 }
 
 function trackLabel(stream) {

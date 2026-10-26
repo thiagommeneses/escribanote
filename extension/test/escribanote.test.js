@@ -767,3 +767,21 @@ test("addAsrSegment: eco por texto vale para a aba (Meet) e remove o eco que che
     assert.equal(addAsrSegment(s, { start: 1_010_300, end: 1_012_300, text: "eu discordo, o deploy não era prioridade", source: "mic" }, "me"), true, "fala própria diferente entra");
   });
 });
+
+test("cofre de áudio: retenção e cota apagam as mais antigas, poupando 'manter' e reuniões em andamento", async () => {
+  const { planEviction } = await import("../src/lib/audiovault.js");
+  const day = 86_400_000;
+  const now = 100 * day;
+  const items = [
+    { id: "velha", bytes: 10, startedAt: now - 40 * day, keep: false },
+    { id: "mantida", bytes: 50, startedAt: now - 60 * day, keep: true },
+    { id: "a", bytes: 30, startedAt: now - 10 * day, keep: false },
+    { id: "b", bytes: 30, startedAt: now - 5 * day, keep: false },
+    { id: "ativa", bytes: 30, startedAt: now - 1 * day, keep: false },
+  ];
+  // retenção de 30 dias tira "velha"; cota de 100 bytes ainda precisa tirar 30+30+30+50=140 -> 100: sai "a" (mais antiga apagável)
+  assert.deepEqual(planEviction(items, { limitBytes: 100, retentionMs: 30 * day, now, protect: new Set(["ativa"]) }).sort(), ["a", "b", "velha"]);
+  assert.deepEqual(planEviction(items, { limitBytes: 120, retentionMs: 30 * day, now, protect: new Set(["ativa"]) }).sort(), ["a", "velha"], "cota de 120 bytes: só a mais antiga apagável sai");
+  assert.deepEqual(planEviction(items, { limitBytes: 0, retentionMs: 0, now }), [], "sem limites, nada sai");
+  assert.deepEqual(planEviction(items, { limitBytes: 10, retentionMs: 0, now, protect: new Set(["ativa"]) }).sort(), ["a", "b", "velha"], "cota apertada poupa só a mantida e a ativa");
+});
