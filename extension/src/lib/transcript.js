@@ -40,6 +40,7 @@ export function normalize(s) {
   s.summaryHistory ||= []; // versões da ata, em ordem: {id, n, text, createdAt, source, label, model, templateId, parentId}
   s.ataTemplateId ??= null; // modelo de ata escolhido para esta reunião (null = padrão dos Ajustes)
   s.ataPrompt ??= ""; // instruções extras do usuário para a IA ao gerar a ata (prevalecem sobre as regras e o modelo)
+  s.report ||= { events: [] }; // relatório de sessão: {at, kind, detail} (dispositivos, modelo, pausas, encerramento)
   s.paused ??= false;
   s.endedAt ??= null;
   s.summary ??= null;

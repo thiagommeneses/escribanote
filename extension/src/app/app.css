@@ -254,6 +254,9 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; }
 .chat-input textarea { resize: none; max-height: 140px; }
 
 /* análise */
+.diag { width: 100%; border-collapse: collapse; font-size: 13px; }
+.diag td { padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.diag td.t { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; width: 70px; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 12px; }
 .kpi { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--surface); }
 .kpi b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }

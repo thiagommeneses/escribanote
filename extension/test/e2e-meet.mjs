@@ -625,7 +625,13 @@ try {
   assert.equal(sEnd.entries.find((e) => e.id === "777/" + ANA).text, "então ficamos combinados assim e a gente se fala na próxima semana, obrigada", "última fala completada pela tela");
   await waitFor(async () => (await evaluate(app, `chrome.action.getBadgeText({ tabId: ${meetTabId} })`)) === "", "selo REC apagado");
   await waitFor(async () => /Transcrição encerrada/.test((await widgetCall(meet, "#body")) || ""), "widget mostra encerrada ao sair");
-  step(`sair da chamada encerra a sessão em ${(leaveMs / 1000).toFixed(1)} s, completa a última fala e apaga o selo REC`);
+  // relatório de sessão: início, primeira legenda e encerramento com o motivo
+  const rep = (await sw({ type: "get", id })).report.events;
+  assert.ok(rep.some((e) => e.kind === "start"), "relatório tem o início");
+  assert.ok(rep.some((e) => e.kind === "first-caption"), "relatório tem a primeira legenda");
+  const endEv = rep.find((e) => e.kind === "end");
+  assert.equal(endEv && endEv.detail.reason, "connections-closed", "motivo do encerramento: " + JSON.stringify(endEv));
+  step(`sair da chamada encerra a sessão em ${(leaveMs / 1000).toFixed(1)} s, completa a última fala, apaga o selo REC e registra o motivo no diagnóstico`);
   // A aba criada por chrome.tabs.create não aparece no Target.getTargets do Chrome headless;
   // confere pela API de abas e, para o aviso, abre a mesma URL no alvo do app.
   const afterTab = await waitFor(async () => {

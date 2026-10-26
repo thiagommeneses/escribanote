@@ -3,6 +3,7 @@
 // para uma página visível; por isso a captura e o Whisper rodam aqui, e não no offscreen.
 // Esta aba faz o papel da "aba da reunião": fechar a aba encerra a sessão.
 import { createPipeline } from "../asr/pipeline.js";
+import { openMic, watchMic } from "../asr/mic.js";
 import { nativePermission, probeNative, openNative, HELPER_URL } from "../lib/native.js";
 import { hasWebGPU, saveDiag } from "../asr/engine.js";
 import { HQ_MODELS, getSettings, setSettings } from "../lib/settings.js";
@@ -212,6 +213,7 @@ async function start() {
   rec.heard = { system: 0, mic: 0 };
   rec.pipe = createPipeline({
     onResult: (seg) => send({ type: "asr-result", seg }).catch(() => {}),
+    onEvent: (kind, detail) => send({ type: "session-report", kind, detail }).catch(() => {}),
     onStatus: (s) => {
       rec.status = { ...rec.status, ...s };
       renderStatus();
@@ -230,13 +232,16 @@ async function start() {
   let micError = "";
   if (withMic) {
     try {
-      mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      mic = await openMic();
     } catch (err) {
       micError = err.name === "NotAllowedError" ? "o Chrome bloqueou o microfone" : err.message;
     }
   }
 
-  if (mic) await rec.pipe.addStream(mic, "mic");
+  if (mic) {
+    await rec.pipe.addStream(mic, "mic");
+    rec.mic = watchMic(mic, { onStream: (s) => rec.pipe.replaceStream("mic", s), onEvent: (kind, detail) => send({ type: "session-report", kind, detail }).catch(() => {}) });
+  }
 
   try {
     rec.id = await send({ type: "recorder-start", title: $("title").value.trim() || defaultTitle(platform), platform });
@@ -411,6 +416,8 @@ async function stop() {
   rec.stopping = true;
   for (const b of $("live").querySelectorAll("button")) b.disabled = true;
   renderStatus();
+  if (rec.mic) rec.mic.close();
+  rec.mic = null;
   await rec.pipe.stopCapture(); // fecha os últimos trechos e libera o compartilhamento
   if (rec.display) rec.display.getTracks().forEach((t) => t.stop());
   if (rec.helper) rec.helper.close();
