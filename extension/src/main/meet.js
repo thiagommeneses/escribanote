@@ -118,10 +118,23 @@
     captions: (b) => decodeLegacyCaption(b),
   };
 
+  // Diagnóstico: todos os canais de dados vistos (rótulo → mensagens, bytes), mesmo os que não usamos.
+  // Se o Meet trocar o nome do canal de legendas, é aqui que isso aparece.
+  const channelStats = {};
+  function noteChannel(channel) {
+    const st = (channelStats[channel.label] ||= { msgs: 0, bytes: 0, decoded: 0, lastAt: 0 });
+    channel.addEventListener("message", safe((ev) => {
+      st.msgs++;
+      st.bytes += ev.data?.byteLength ?? ev.data?.size ?? (typeof ev.data === "string" ? ev.data.length : 0);
+      st.lastAt = Date.now();
+    }));
+  }
+
   function attach(channel) {
     if (!channel || attached.has(channel)) return;
     const label = channel.label;
     const capDecoder = handlers[label];
+    if (!attached.has(channel)) safe(noteChannel)(channel);
     if (!capDecoder && label !== "collections" && label !== "meet_messages") return;
     attached.add(channel);
     emit("status", { platform: "meet", note: `canal ${label} detectado` });
@@ -141,6 +154,7 @@
         if (capDecoder) {
           const c = capDecoder(bytes);
           if (c) {
+            channelStats[label].decoded++;
             lastProtocolCaption = Date.now();
             emit("caption", { platform: "meet", source: "protocol", ...c });
           }
@@ -180,6 +194,6 @@
 
   // Permite ao fallback por DOM saber se o protocolo está funcionando.
   document.addEventListener("escribanote:ping", () =>
-    emit("protocol-health", { platform: "meet", lastProtocolCaption, ...connectionsHealth() }),
+    emit("protocol-health", { platform: "meet", lastProtocolCaption, channels: channelStats, ...connectionsHealth() }),
   );
 })(globalThis);
