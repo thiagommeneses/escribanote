@@ -367,12 +367,29 @@
         ${running ? "" : '<div class="row"><button class="btn primary" data-hq="start">Transcrever este huddle</button></div>'}
         <div class="muted" id="hq-hint" style="margin-top:8px;font-size:12px">${state.hqHint ? esc(state.hqHint) : ""}</div></div>`;
     } else if (!session || !session.count) {
-      const hint = state.platform !== "meet"
+      // Sem legenda do Meet (desligada ou indisponível): oferece a transcrição pelo áudio, no computador.
+      const hq = (session && session.hq) || { state: "idle" };
+      const hqRunning = ["running", "loading", "starting"].includes(hq.state);
+      const unavailable = state.platform === "meet" && state.captionsOn === "unavailable";
+      let title = state.paused ? "Transcrição pausada" : "Ouvindo…";
+      let hint = state.platform !== "meet"
         ? "Ative as legendas ao vivo na reunião. A transcrição aparece aqui assim que alguém falar."
-        : state.captionsStuck
-          ? "Não consegui ligar as legendas do Meet. Clique no botão de legendas (CC) na barra de baixo do Meet; a transcrição começa em seguida."
-          : "As legendas são ligadas automaticamente. Comece a falar para ver a transcrição aqui.";
-      body.innerHTML = (session ? bannerHtml() : "") + `<div class="center"><h4>${state.paused ? "Transcrição pausada" : state.captionsStuck ? "Legendas desligadas" : "Ouvindo…"}</h4><div>${hint}</div></div>`;
+        : "As legendas são ligadas automaticamente. Comece a falar para ver a transcrição aqui.";
+      let offer = "";
+      if (state.platform === "meet" && hqRunning) {
+        title = hq.state === "running" ? "Ouvindo o áudio…" : "Preparando o reconhecimento…";
+        hint = hq.state === "running" ? "Transcrevendo pelo áudio, neste computador. Fale para ver a transcrição aqui." : `Baixando o modelo de alta precisão… ${hq.progress || 0}%`;
+      } else if (unavailable) {
+        title = "Legendas indisponíveis no Meet";
+        hint = "O próprio Meet avisa que a legenda instantânea está temporariamente indisponível. Isso acontece em salas só com você e em algumas contas. Dá para transcrever pelo áudio, aqui no seu computador.";
+        offer = '<div class="row"><button class="btn primary" data-hq="start">Transcrever pelo áudio</button></div>';
+      } else if (state.captionsStuck) {
+        title = "Legendas desligadas";
+        hint = "Não consegui ligar as legendas do Meet. Clique no botão de legendas (CC) na barra de baixo do Meet, ou transcreva pelo áudio.";
+        offer = '<div class="row"><button class="btn" data-hq="start">Transcrever pelo áudio</button></div>';
+      }
+      body.innerHTML = (session ? bannerHtml() : "") + `<div class="center"><h4>${title}</h4><div>${hint}</div>${offer}
+        <div class="muted" id="hq-hint" style="margin-top:8px;font-size:12px">${state.hqHint ? esc(state.hqHint) : ""}</div></div>`;
     } else if (renaming) {
       // Não redesenha enquanto o nome está sendo editado (a transcrição ao vivo chega a cada segundo).
     } else {
@@ -471,6 +488,7 @@
 
   $("body").addEventListener("click", async (e) => {
     if (e.target.closest("[data-hq]")) {
+      if (bus.ensureSession) bus.ensureSession();
       const r = await send({ type: "hq-start" }).catch((err) => ({ error: err.message }));
       state.hqHint = r && r.error ? r.error.replace(/^O Chrome só libera o áudio depois que você clica no ícone do Escribanote na aba da reunião\. Clique no ícone e tente de novo\.$/, "Toque no ícone do Escribanote na barra do Chrome (ou Alt+Shift+E) para liberar o áudio desta aba, e toque de novo em Transcrever.") : "";
       refresh();

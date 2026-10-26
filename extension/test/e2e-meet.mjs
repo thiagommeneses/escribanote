@@ -685,6 +685,13 @@ try {
   await waitFor(async () => !!(await sw({ type: "get", id: id5 })).endedAt, "sessão 5 encerrada pela tela pós-chamada", 8000);
   step(`tela "Você saiu da chamada" encerra a sessão em ${((Date.now() - t5) / 1000).toFixed(1)} s`);
 
+  // 13) Meet avisa "legenda instantânea temporariamente indisponível" (salas só com uma pessoa): o widget
+  //     explica e oferece a transcrição pelo áudio, sem esperar 12 s.
+  const meet6 = await openMeet("ccx-unav-xyz", "Legenda indisponível", `<button aria-label="A legenda instantânea está temporariamente indisponível">cc</button>`);
+  await waitFor(async () => /Legendas indisponíveis no Meet/.test((await widgetCall(meet6, "#body")) || ""), "widget avisa legenda indisponível", 8000);
+  assert.ok(await widgetCall(meet6, "[data-hq=start]", "function(){ return this.textContent }"), "botão Transcrever pelo áudio");
+  step("legenda indisponível no Meet: widget avisa e oferece transcrever pelo áudio");
+
   console.log("\nE2E OK");
 } finally {
   ws.close();

@@ -100,6 +100,12 @@
     state.ended = false;
     emitState();
   };
+  // Garante que a reunião exista no service worker antes de ligar a transcrição pelo áudio
+  // (os resultados do Whisper só são guardados quando há uma sessão ativa para a aba).
+  bus.ensureSession = () => {
+    enqueue({ kind: "meeting-start", platform });
+    flush();
+  };
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "session-updated" && typeof msg.paused === "boolean" && msg.paused !== state.paused) {
@@ -349,12 +355,13 @@
   // O Meet gera as legendas no idioma da interface; e os botões (ligar/desligar legendas, sair)
   // dizem em que idioma ela está e em que estágio a reunião está. Rótulos observados no Meet.
   const MEET_UI = {
-    pt: { on: /^(ativar|mostrar) legendas/i, off: /^(desativar|ocultar) legendas/i, leave: /^sair da chamada/i, rejoin: /^(voltar a participar|participar de novo|voltar à tela inicial)/i },
-    en: { on: /^turn on captions/i, off: /^turn off captions/i, leave: /^leave call/i, rejoin: /^(rejoin|return to home screen)/i },
-    es: { on: /^(activar|mostrar) subtítulos/i, off: /^(desactivar|ocultar) subtítulos/i, leave: /^salir de la llamada/i, rejoin: /^(volver a unirse|volver a la pantalla principal)/i },
-    fr: { on: /^activer les sous-titres/i, off: /^désactiver les sous-titres/i, leave: /^quitter l'appel/i, rejoin: /^(rejoindre à nouveau|participer à nouveau|revenir à l'écran d'accueil)/i },
-    de: { on: /^untertitel aktivieren/i, off: /^untertitel deaktivieren/i, leave: /^anruf verlassen/i, rejoin: /^(erneut teilnehmen|zurück zum startbildschirm)/i },
-    it: { on: /^attiva (i )?sottotitoli/i, off: /^disattiva (i )?sottotitoli/i, leave: /^abbandona la chiamata/i, rejoin: /^(partecipa di nuovo|torna alla schermata iniziale)/i },
+    // "legenda(s)" / "legenda instantânea": o Meet mudou o nome em 2026; os regex aceitam os dois.
+    pt: { on: /^(ativar|mostrar) (a )?legenda/i, off: /^(desativar|ocultar) (a )?legenda/i, unavailable: /legenda.*indispon[ií]vel/i, leave: /^sair da chamada/i, rejoin: /^(voltar a participar|participar de novo|voltar à tela inicial)/i },
+    en: { on: /^turn on (live )?captions/i, off: /^turn off (live )?captions/i, unavailable: /captions?.*unavailable/i, leave: /^leave call/i, rejoin: /^(rejoin|return to home screen)/i },
+    es: { on: /^(activar|mostrar) (los )?subtítulos/i, off: /^(desactivar|ocultar) (los )?subtítulos/i, unavailable: /subtítulos.*no (están )?disponibles?/i, leave: /^salir de la llamada/i, rejoin: /^(volver a unirse|volver a la pantalla principal)/i },
+    fr: { on: /^activer les sous-titres/i, off: /^désactiver les sous-titres/i, unavailable: /sous-titres.*indisponibles?/i, leave: /^quitter l'appel/i, rejoin: /^(rejoindre à nouveau|participer à nouveau|revenir à l'écran d'accueil)/i },
+    de: { on: /^untertitel aktivieren/i, off: /^untertitel deaktivieren/i, unavailable: /untertitel.*nicht verfügbar/i, leave: /^anruf verlassen/i, rejoin: /^(erneut teilnehmen|zurück zum startbildschirm)/i },
+    it: { on: /^attiva (i )?sottotitoli/i, off: /^disattiva (i )?sottotitoli/i, unavailable: /sottotitoli.*non disponibil/i, leave: /^abbandona la chiamata/i, rejoin: /^(partecipa di nuovo|torna alla schermata iniziale)/i },
   };
   const buttons = () => [...document.querySelectorAll("button[aria-label]")];
   const findButton = (key) => {
@@ -385,18 +392,21 @@
     const leave = findButton("leave");
     const on = findButton("on");
     const off = findButton("off");
-    const lang = (leave || off || on)?.lang || null;
+    const unavailable = !on && !off ? findButton("unavailable") : null;
+    const lang = (leave || off || on || unavailable)?.lang || null;
     if (lang && lang !== state.uiLang) {
       state.uiLang = lang;
       enqueue({ kind: "ui-lang", platform, lang });
       emitState();
     }
-    const captionsOn = off ? true : on ? false : null;
+    // true/false pelo botão; "unavailable" quando o próprio Meet diz que a legenda está indisponível
+    // (acontece em salas só com uma pessoa e em algumas contas): aí só o áudio resolve.
+    const captionsOn = off ? true : on ? false : unavailable ? "unavailable" : null;
     if (captionsOn !== state.captionsOn) {
       state.captionsOn = captionsOn;
       emitState();
     }
-    return { leave, on, off, uiInCall: !!(leave || on || off), rejoin: !leave && rejoinScreen() };
+    return { leave, on, off, uiInCall: !!(leave || on || off || unavailable), rejoin: !leave && rejoinScreen() };
   }
 
   // Religa as legendas quando o Meet as perde (canal fechado numa reconexão, alguém desligou).
@@ -422,7 +432,7 @@
   }
   // Na chamada há mais de 12 s, com legendas ainda desligadas: o widget pede para ligar à mão.
   function trackCaptionsStuck() {
-    const stuck = state.stage === "meeting" && !!state.consent && !state.captionsSeen && state.captionsOn === false && Date.now() - meetingSince > 12_000;
+    const stuck = state.stage === "meeting" && !!state.consent && !state.captionsSeen && (state.captionsOn === "unavailable" || (state.captionsOn === false && Date.now() - meetingSince > 12_000));
     if (stuck !== state.captionsStuck) {
       state.captionsStuck = stuck;
       emitState();

@@ -122,11 +122,16 @@
   // Se o Meet trocar o nome do canal de legendas, é aqui que isso aparece.
   const channelStats = {};
   function noteChannel(channel) {
-    const st = (channelStats[channel.label] ||= { msgs: 0, bytes: 0, decoded: 0, lastAt: 0 });
-    channel.addEventListener("message", safe((ev) => {
+    const st = (channelStats[channel.label] ||= { msgs: 0, bytes: 0, decoded: 0, lastAt: 0, samples: [] });
+    channel.addEventListener("message", safe(async (ev) => {
       st.msgs++;
       st.bytes += ev.data?.byteLength ?? ev.data?.size ?? (typeof ev.data === "string" ? ev.data.length : 0);
       st.lastAt = Date.now();
+      // Amostras brutas (hex) dos canais de legenda que não decodificaram: para ajustar o esquema.
+      if (handlers[channel.label] && st.samples.length < 8) {
+        const b = await toBytes(ev.data);
+        if (b) st.samples.push([...b.subarray(0, 240)].map((x) => x.toString(16).padStart(2, "0")).join(""));
+      }
     }));
   }
 
