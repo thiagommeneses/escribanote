@@ -304,6 +304,21 @@ try {
   await sleep(300);
   step("nome do falante alterado pelo editor do app");
 
+  // Renomear a reunião pelo cabeçalho (Enter salva) e pelo cartão da lista (✎, campo no próprio cartão)
+  await evaluate(app, `(() => { const i = document.querySelector('#m-title'); i.focus(); i.select(); })()`);
+  await typeText(app, "Planejamento Q4");
+  await pressKey(app, "Enter");
+  await waitFor(async () => (await sw({ type: "get", id })).title === "Planejamento Q4", "título alterado pelo cabeçalho");
+  await evaluate(app, `document.querySelector('[data-rename="${id}"]').click()`);
+  await waitFor(() => evaluate(app, "document.activeElement && document.activeElement.classList.contains('mcard-edit')"), "campo de renomear no cartão");
+  await evaluate(app, `document.activeElement.value = ""`);
+  await typeText(app, "Planejamento Q4 (final)");
+  await pressKey(app, "Enter");
+  await waitFor(async () => (await sw({ type: "get", id })).title === "Planejamento Q4 (final)", "título alterado pelo cartão");
+  await waitFor(() => evaluate(app, `document.querySelector('[data-open="${id}"] .mcard-name')?.textContent === "Planejamento Q4 (final)"`), "cartão redesenhado com o nome novo");
+  assert.equal(await evaluate(app, "document.querySelector('#m-title').value"), "Planejamento Q4 (final)", "cabeçalho acompanha o cartão");
+  step("reunião renomeada pelo cabeçalho e pelo cartão da lista");
+
   // Mesclagem pelo app: um terceiro falante sem nome vira "Ana Teste" → confirma → vira a Ana
   const TERCEIRO = "spaces/e2e/devices/10";
   await evaluate(meet, `__say(601, 1, "Eu concordo com a Ana sobre o orçamento.", ${JSON.stringify(TERCEIRO)})`);
