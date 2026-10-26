@@ -156,6 +156,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .m-meta { display: flex; gap: 6px 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
 .m-meta span { display: inline-flex; align-items: center; gap: 4px; }
 .m-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.player { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.player[hidden] { display: none; }
+.player .pbtn { border: 0; background: var(--accent); color: #fff; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 13px; flex: none; }
+.player .pbtn.sm { background: none; color: var(--muted); width: 26px; height: 26px; font-size: 14px; }
+.player .pbtn.sm:hover, .player .pbtn.sm.on { color: var(--text); background: var(--bg-soft); }
+.player .ptime { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.player input[type=range] { flex: 1; min-width: 60px; accent-color: var(--accent); }
+.blk time.seek { cursor: pointer; border-bottom: 1px dotted transparent; }
+.blk time.seek:hover { color: var(--accent); border-bottom-color: currentColor; }
+.blk.playing { background: var(--accent-soft); }
+.blk p.playing { box-shadow: inset 3px 0 0 var(--accent); padding-left: 8px; margin-left: -8px; border-radius: 4px; }
 .menu-wrap { position: relative; }
 .menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 10; min-width: 240px; background: var(--surface); border: 1px solid var(--border);
   border-radius: 12px; box-shadow: var(--shadow); padding: 6px; max-width: calc(100vw - 28px); max-height: calc(100vh - 110px); overflow: auto; }

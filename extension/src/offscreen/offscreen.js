@@ -3,8 +3,9 @@
 // O áudio nunca sai do computador; só o texto vai para o service worker.
 import { createPipeline } from "../asr/pipeline.js";
 import { openMic, watchMic } from "../asr/mic.js";
+import { startKeeping } from "../asr/keep.js";
 
-const state = { tabId: null, status: { state: "idle" }, play: null, mic: null };
+const state = { tabId: null, status: { state: "idle" }, play: null, mic: null, keep: null };
 
 // Relatório de sessão: eventos vão para o service worker, que os guarda na reunião da aba.
 function logEvent(kind, detail) {
@@ -25,12 +26,14 @@ const pipe = createPipeline({
 async function stopCapture() {
   if (state.mic) state.mic.close();
   state.mic = null;
+  if (state.keep) await state.keep.stop().catch(() => {}); // fecha as faixas antes de desligar as fontes
+  state.keep = null;
   await pipe.stopCapture();
   if (state.play) await state.play.close().catch(() => {});
   state.play = null;
 }
 
-async function start({ tabId, streamId, modelKey, lang, mic, echo = true, diarize }) {
+async function start({ tabId, streamId, modelKey, lang, mic, echo = true, diarize, keep = null }) {
   await stopCapture();
   pipe.reset();
   pipe.setEcho(echo);
@@ -57,6 +60,18 @@ async function start({ tabId, streamId, modelKey, lang, mic, echo = true, diariz
     }
   }
   logEvent("capture-started", { sources: mic ? ["tab", "mic"] : ["tab"], model: modelKey, diarize: !!diarize });
+  if (keep && keep.sessionId) {
+    try {
+      state.keep = startKeeping({
+        sessionId: keep.sessionId,
+        streams: { tab: pipe.recordStream("tab"), mic: pipe.recordStream("mic") },
+        onMeta: (meta) => chrome.runtime.sendMessage({ type: "audio-meta", sessionId: keep.sessionId, meta }).catch(() => {}),
+      });
+      if (state.keep) { logEvent("audio-keep-started", { tracks: mic ? ["tab", "mic"] : ["tab"] }); report({ audio: true }); }
+    } catch (err) {
+      logEvent("audio-keep-error", { message: err.message || String(err) });
+    }
+  }
 
   await pipe.run(modelKey, lang, { diarize: !!diarize });
 }

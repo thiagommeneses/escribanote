@@ -6,6 +6,7 @@ import { getSettings, setSettings, DEFAULT_TAGS, MODELS, DEFAULTS, HQ_MODELS } f
 import { LANG_NAMES } from "../lib/lang.js";
 import { diffDocument, diffStats, diffHtml as versionDiffHtml } from "../lib/diff.js";
 import { getBackupDir, setBackupDir, backupPermission, resolveBackupFolder, readBackupFolder } from "../lib/backup.js";
+import { readTrack } from "../lib/audiovault.js";
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ["#2f6bff", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#dc2626", "#65a30d"];
@@ -241,6 +242,7 @@ function renderMeeting() {
     : '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Parar';
   $("m-stop").title = resumable ? "Voltar a transcrever esta reunião na aba da chamada" : "Parar a transcrição agora. A reunião fica salva e você pode continuar na chamada.";
   renderHqButton();
+  renderPlayer(s);
   renderBanner();
   $("m-pause").innerHTML = s.paused
     ? '<svg viewBox="0 0 24 24"><path d="m7 4 13 8-13 8z"/></svg>Retomar'
@@ -610,15 +612,15 @@ function blockHtml(s, b, q) {
   const paras = b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text, original: b.original }];
   const body = paras
     .map((p, i) => {
-      const t = i ? `<time class="pt" data-at="${p.at}" title="Momento em que este trecho começou">${clock(p.at - s.startedAt)}</time>` : "";
+      const t = i ? `<time class="pt${hasAudio(s) ? " seek" : ""}" data-at="${p.at}" title="${hasAudio(s) ? "Ouvir a partir daqui" : "Momento em que este trecho começou"}">${clock(p.at - s.startedAt)}</time>` : "";
       const html = q ? highlight(p.text, q) : b.fixed ? diffHtml(p.original, p.text) : esc(p.text);
       return `<p>${t}${html}</p>`;
     })
     .join("");
   const orig = b.fixed && state.showOrig.has(b.key) ? `<p class="orig">${esc(b.original)}</p>` : "";
-  return `<li class="blk${b.kind === "chat" ? " chat" : ""}" data-key="${esc(b.key)}" data-ids="${esc(JSON.stringify(b.ids))}" data-tags="${esc(JSON.stringify(b.tags))}" data-at="${b.endAt}">
+  return `<li class="blk${b.kind === "chat" ? " chat" : ""}" data-key="${esc(b.key)}" data-ids="${esc(JSON.stringify(b.ids))}" data-tags="${esc(JSON.stringify(b.tags))}" data-start="${b.startAt}" data-at="${b.endAt}">
     ${avatar(b.speakerId, b.speaker, 32)}
-    <div><div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${highlight(b.speaker, q)}</b><time>${clock(b.startAt - s.startedAt)}</time>${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
+    <div><div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${highlight(b.speaker, q)}</b><time class="${hasAudio(s) ? "seek" : ""}" data-at="${b.startAt}" title="${hasAudio(s) ? "Ouvir a partir daqui" : ""}">${clock(b.startAt - s.startedAt)}</time>${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
     ${body}${orig}</div>
     <div class="acts">${acts}<button data-act="copy" title="Copiar"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button data-act="note" title="Nota neste ponto"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></div>
   </li>`;
@@ -681,6 +683,8 @@ $("t-search").addEventListener("input", (e) => {
 $("timeline").addEventListener("click", async (e) => {
   const s = state.session;
   if (!s) return;
+  const tm = e.target.closest("time[data-at]");
+  if (tm && hasAudio(s)) return playAt(Number(tm.dataset.at));
   const img = e.target.closest("[data-shot]");
   if (img) {
     $("lightbox").querySelector("img").src = img.src;
@@ -1382,6 +1386,137 @@ $("quick").addEventListener("click", (e) => {
 });
 
 // ----- Análise -----
+// ---------------- Player do áudio guardado ----------------
+// As faixas (aba/computador e microfone) tocam juntas; a primeira é o relógio. O horário do áudio é
+// s.audio.startedAt (instante em que a gravação começou), então um horário absoluto da reunião vira
+// posição no áudio subtraindo isso.
+function hasAudio(s) {
+  return !!(s && s.audio && s.audio.tracks && s.audio.tracks.length && (s.endedAt || s.audio.done));
+}
+function fmtBytes(b) {
+  return b >= 1024 * 1024 * 1024 ? (b / 1024 / 1024 / 1024).toFixed(2) + " GB" : b >= 1024 * 1024 ? (b / 1024 / 1024).toFixed(1) + " MB" : Math.round(b / 1024) + " KB";
+}
+const TRACK_NAMES = { tab: "os outros", system: "o computador", mic: "seu microfone" };
+async function unloadPlayer() {
+  const p = state.player;
+  if (!p) return;
+  for (const a of p.audios) { try { a.pause(); } catch {} URL.revokeObjectURL(a.src); }
+  state.player = null;
+  $("p-play").textContent = "▶";
+  for (const el of document.querySelectorAll(".playing")) el.classList.remove("playing");
+}
+async function loadPlayer(s) {
+  if (state.player && state.player.id === s.id) return state.player;
+  await unloadPlayer();
+  const audios = [];
+  for (const source of s.audio.tracks) {
+    const f = await readTrack(s.id, source);
+    if (!f || !f.size) continue;
+    const a = new Audio(URL.createObjectURL(f));
+    a.preload = "auto";
+    audios.push(a);
+  }
+  if (!audios.length) throw new Error("O áudio desta reunião não está mais neste computador.");
+  const p = { id: s.id, audios, master: audios[0], startedAt: s.audio.startedAt, duration: 0 };
+  // WebM gravado em pedaços nem sempre traz a duração: usa a registrada ao parar.
+  p.duration = (s.audio.durationMs || 0) / 1000;
+  p.master.addEventListener("loadedmetadata", () => { if (isFinite(p.master.duration)) p.duration = p.master.duration; renderPlayhead(); });
+  p.master.addEventListener("timeupdate", renderPlayhead);
+  p.master.addEventListener("ended", () => { $("p-play").textContent = "▶"; });
+  p.master.addEventListener("play", () => { $("p-play").textContent = "❚❚"; for (const a of audios) if (a !== p.master) a.play().catch(() => {}); renderPlayhead(); });
+  p.master.addEventListener("seeked", renderPlayhead);
+  p.master.addEventListener("pause", () => { $("p-play").textContent = "▶"; for (const a of audios) if (a !== p.master) a.pause(); });
+  state.player = p;
+  return p;
+}
+function renderPlayer(s) {
+  const show = hasAudio(s);
+  $("player").hidden = !show;
+  if (!show) { if (state.player) unloadPlayer(); return; }
+  const dur = s.audio.durationMs ? fmtDuration(s.audio.durationMs) : "";
+  $("p-dur").textContent = state.player && state.player.duration ? clock(state.player.duration * 1000) : s.audio.durationMs ? clock(s.audio.durationMs) : "--:--";
+  $("p-info").textContent = `${s.audio.tracks.map((t) => TRACK_NAMES[t] || t).join(" + ")}${s.audio.bytes ? " · " + fmtBytes(s.audio.bytes) : ""}${dur ? "" : ""}`;
+  $("p-keep").textContent = s.audio.keep ? "★" : "☆";
+  $("p-keep").classList.toggle("on", !!s.audio.keep);
+  $("p-keep").title = s.audio.keep ? "Este áudio está marcado para manter: a limpeza automática não o apaga. Clique para desmarcar." : "Manter este áudio fora da limpeza automática";
+  if (state.player && state.player.id !== s.id) unloadPlayer();
+}
+function renderPlayhead() {
+  const p = state.player;
+  const s = state.session;
+  if (!p || !s || p.id !== s.id) return;
+  const t = p.master.currentTime;
+  $("p-time").textContent = clock(t * 1000);
+  if (p.duration) { $("p-dur").textContent = clock(p.duration * 1000); if (document.activeElement !== $("p-seek")) $("p-seek").value = Math.round((t / p.duration) * 1000); }
+  if (p.master.paused) return;
+  const now = p.startedAt + t * 1000;
+  let cur = null;
+  for (const li of $("timeline").querySelectorAll("li.blk[data-start]")) {
+    if (Number(li.dataset.start) <= now + 400) cur = li; else break;
+  }
+  for (const el of $("timeline").querySelectorAll(".playing")) if (el !== cur) el.classList.remove("playing");
+  if (!cur) return;
+  if (!cur.classList.contains("playing")) { cur.classList.add("playing"); cur.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+  let para = null;
+  for (const pEl of cur.querySelectorAll("p:not(.orig)")) {
+    const tm = pEl.querySelector("time.pt");
+    if (!tm || Number(tm.dataset.at) <= now + 400) para = pEl;
+  }
+  for (const pEl of cur.querySelectorAll("p.playing")) if (pEl !== para) pEl.classList.remove("playing");
+  if (para) para.classList.add("playing");
+}
+async function playAt(absMs) {
+  const s = state.session;
+  if (!s || !hasAudio(s)) return;
+  try {
+    const p = await loadPlayer(s);
+    const rel = Math.max(0, (absMs - p.startedAt) / 1000);
+    for (const a of p.audios) a.currentTime = rel;
+    await p.master.play();
+  } catch (err) {
+    toast(err.message || String(err));
+  }
+}
+$("p-play").addEventListener("click", async () => {
+  const s = state.session;
+  if (!s || !hasAudio(s)) return;
+  try {
+    const p = await loadPlayer(s);
+    if (p.master.paused) await p.master.play(); else p.master.pause();
+  } catch (err) { toast(err.message || String(err)); }
+});
+$("p-seek").addEventListener("input", async () => {
+  const s = state.session;
+  if (!s || !hasAudio(s)) return;
+  const p = await loadPlayer(s).catch(() => null);
+  if (!p || !p.duration) return;
+  const t = (Number($("p-seek").value) / 1000) * p.duration;
+  for (const a of p.audios) a.currentTime = t;
+  $("p-time").textContent = clock(t * 1000);
+});
+$("p-del").addEventListener("click", async () => {
+  const s = state.session;
+  if (!s || !s.audio) return;
+  if (!confirm("Apagar o áudio desta reunião? A transcrição continua; só o som é removido deste computador.")) return;
+  await unloadPlayer();
+  state.session = normalize(await send({ type: "audio-delete", id: s.id }));
+  toast("Áudio apagado");
+  renderMeeting();
+});
+$("p-keep").addEventListener("click", async () => {
+  const s = state.session;
+  if (!s || !s.audio) return;
+  state.session = normalize(await send({ type: "audio-keep-toggle", id: s.id }));
+  toast(state.session.audio?.keep ? "Áudio marcado para manter" : "Áudio volta a entrar na limpeza automática");
+  renderPlayer(state.session);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.code !== "Space" || e.target.closest("input, textarea, [contenteditable]") || !state.session || !hasAudio(state.session) || $("player").hidden || state.view !== "meeting") return;
+  if (!state.player) return; // só controla um áudio já aberto (clicou num horário ou em ▶)
+  e.preventDefault();
+  $("p-play").click();
+});
+
 // ---------------- Diagnóstico (relatório de sessão) ----------------
 const EVENT_LABELS = {
   start: "Reunião detectada",
@@ -1748,11 +1883,32 @@ async function renderSettings() {
   const bytes = await chrome.storage.local.getBytesInUse(null);
   const index = await send({ type: "list" });
   $("usage").textContent = `${index.length} reuniões · ${(bytes / 1024 / 1024).toFixed(2)} MB usados neste computador.`;
+  renderAudioUsage();
 }
+async function renderAudioUsage() {
+  const u = await send({ type: "audio-usage" }).catch(() => null);
+  if (!u) return;
+  $("audio-usage").textContent = u.count
+    ? `${u.count} reunião${u.count === 1 ? "" : "ões"} com áudio · ${fmtBytes(u.bytes)} de ${fmtBytes(u.limitBytes)}${u.retentionDays ? ` · apagadas após ${u.retentionDays} dias` : ""}.`
+    : "Nenhum áudio guardado neste computador.";
+  $("audio-wipe").hidden = !u.count;
+}
+$("audio-wipe").addEventListener("click", async () => {
+  if (!confirm("Apagar todo o áudio guardado? As transcrições continuam; só o som é removido deste computador.")) return;
+  await unloadPlayer();
+  await send({ type: "audio-wipe" });
+  if (state.session?.audio) state.session = normalize(await send({ type: "get", id: state.session.id }));
+  toast("Áudio apagado");
+  renderAudioUsage();
+});
 
 $("settings").addEventListener("change", async (e) => {
   const el = e.target;
   if (!el.name || el.name === "apiKey" || el.closest(".tag-editor")) return;
+  if (el.name === "audioKeep" && el.checked && !confirm("O som das próximas reuniões com captura de áudio (alta precisão ou gravador) será guardado neste computador, em duas faixas: a dos outros participantes e a do seu microfone. Nada sai do computador e você pode apagar por reunião. Avise os participantes quando for o caso. Ligar?")) {
+    el.checked = false;
+    return;
+  }
   const v = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
   state.settings = await setSettings({ [el.name]: v });
   toast("Ajuste salvo");

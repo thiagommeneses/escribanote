@@ -12,6 +12,7 @@ import { mergeDocs, sameContent } from "./lib/sync.js";
 import { streamClaude, ataRequest, chatRequest, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
 import { compileGlossary, applyGlossary, glossaryForPrompt } from "./lib/glossary.js";
+import { deleteAudio, audioInfo, vaultUsage, listAudio, enforceQuota } from "./lib/audiovault.js";
 import { computeStats, findMe } from "./lib/stats.js";
 
 const SESSION_GAP_MS = 30 * 60 * 1000;
@@ -283,6 +284,21 @@ async function flushBackup() {
   return next;
 }
 
+// Cota e retenção do cofre de áudio: apaga o que passou do prazo e, se ainda não couber, as mais
+// antigas (as marcadas "manter" e as reuniões em andamento ficam). Roda ao encerrar uma reunião e na
+// partida do service worker.
+async function enforceAudioQuota() {
+  const st = await getSettings();
+  const protect = new Set(sessionTab.keys());
+  const ids = await enforceQuota({ limitBytes: Number(st.audioQuotaMb || 0) * 1024 * 1024, retentionMs: Number(st.audioRetentionDays || 0) * 86_400_000, protect });
+  for (const id of ids) {
+    const s = await getSession(id);
+    if (s && s.audio) { s.audio = null; noteEvent(s, "audio-evicted"); await changed(s); }
+  }
+  return ids;
+}
+setTimeout(() => enforceAudioQuota().catch(() => {}), 15_000);
+
 // Relatório de sessão: eventos datados para diagnóstico (dispositivos, modelo, pausas, encerramento).
 // Sem conteúdo da reunião. Guardado na própria reunião; a aba "Diagnóstico" do painel mostra.
 const REPORT_MAX = 400;
@@ -396,6 +412,7 @@ async function endSession(tabId, reason = "unknown") {
   queueBackup([s.id], { now: true }); // reunião terminou: backup já, sem esperar o lote
   queueAutoBackup([s.id], { now: true });
   const settings = await getSettings();
+  enforceAudioQuota().catch(() => {});
   // a tela pós-reunião abre já; revisão e ata continuam em segundo plano e aparecem nela
   openAfterCall(s, settings).catch((err) => console.warn("abrir após a chamada:", err));
   if (settings.autoReview) await reviewPending(s).catch(() => {});
@@ -664,8 +681,9 @@ async function startHq(tabId) {
   await ensureOffscreen();
   broadcastHq(tabId, { state: "starting" });
   const hs = await activeFor(tabId);
-  if (hs) noteEvent(await getSession(hs.id), "hq-start", { model: modelKey, mic: !!settings.hqMic, diarize: !!settings.diarize });
-  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: settings.hqMic, echo: settings.echoFilter !== false, diarize: settings.diarize && (await isPro()) });
+  if (hs) noteEvent(await getSession(hs.id), "hq-start", { model: modelKey, mic: !!settings.hqMic, diarize: !!settings.diarize, audio: !!settings.audioKeep });
+  const keep = settings.audioKeep && hs ? { sessionId: hs.id } : null;
+  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: settings.hqMic, echo: settings.echoFilter !== false, diarize: settings.diarize && (await isPro()), keep });
   if (r && r.error) {
     broadcastHq(tabId, { state: "error", message: r.error });
     throw new Error(r.error);
@@ -754,6 +772,7 @@ async function getShots(s) {
 
 async function deleteSession(id) {
   const s = await getSession(id);
+  deleteAudio(id).catch(() => {});
   cache.delete(id);
   dirty.delete(id);
   const index = (await loadIndex()).filter((e) => e.id !== id);
@@ -824,6 +843,47 @@ async function handle(msg, sender) {
     }
     case "meeting-left":
       return endSession(senderTab, msg.reason || "meeting-left");
+    case "audio-meta": {
+      // quem grava (offscreen, gravador) informa início, faixas, bytes e fim
+      const as = await getSession(msg.sessionId);
+      if (!as || !msg.meta) return false;
+      as.audio = { ...(as.audio || {}), ...msg.meta };
+      await changed(as);
+      return true;
+    }
+    case "audio-info":
+      return audioInfo(msg.id);
+    case "audio-delete": {
+      if (!s) return null;
+      await deleteAudio(s.id);
+      s.audio = null;
+      noteEvent(s, "audio-deleted");
+      await changed(s, { now: true });
+      return s;
+    }
+    case "audio-keep-toggle": {
+      // "manter": fora da retenção e da cota
+      if (!s || !s.audio) return s;
+      s.audio.keep = !s.audio.keep;
+      const { writeMeta, readMeta } = await import("./lib/audiovault.js");
+      const meta = (await readMeta(s.id)) || {};
+      await writeMeta(s.id, { ...meta, keep: s.audio.keep }).catch(() => {});
+      await changed(s, { now: true });
+      return s;
+    }
+    case "audio-usage": {
+      const u = await vaultUsage();
+      const st = await getSettings();
+      return { ...u, limitBytes: Number(st.audioQuotaMb || 0) * 1024 * 1024, retentionDays: Number(st.audioRetentionDays || 0) };
+    }
+    case "audio-wipe": {
+      for (const a of await listAudio()) {
+        await deleteAudio(a.id);
+        const ws = await getSession(a.id);
+        if (ws && ws.audio) { ws.audio = null; await changed(ws); }
+      }
+      return true;
+    }
     case "session-report": {
       // eventos do offscreen (com tabId), do gravador e da página da reunião (aba remetente)
       const tabId = msg.tabId ?? senderTab;

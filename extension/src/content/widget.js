@@ -339,6 +339,8 @@
     $("pstop").title = state.ended ? "Voltar a transcrever" : "Parar a transcrição";
     $("pstop").hidden = !state.ended && !canStop;
     $("hqchip").hidden = !(session && session.hq && session.hq.state === "running");
+    $("hqchip").textContent = session && session.hq && session.hq.audio ? "🎧 HQ · 🎙 áudio guardado" : "🎧 HQ";
+    $("hqchip").title = session && session.hq && session.hq.audio ? "Alta precisão ativa e áudio sendo guardado neste computador (Ajustes › Áudio guardado)" : "Alta precisão ativa: Whisper rodando neste computador";
     const hidden = state.settings.hideCaptions;
     $("caps").innerHTML = svg(hidden ? "eyeOff" : "eye");
     $("caps").title = hidden ? "Mostrar legendas nativas" : "Ocultar legendas nativas";

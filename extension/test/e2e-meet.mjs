@@ -29,7 +29,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const step = (t) => console.log("✓", t);
 
 const chrome = spawn(CHROME, [
-  "--headless=new", "--no-sandbox", "--disable-gpu", "--no-first-run", "--window-size=1400,900",
+  "--headless=new", "--no-sandbox", "--disable-gpu", "--no-first-run", "--window-size=1400,900", "--autoplay-policy=no-user-gesture-required",
   `--user-data-dir=${profile}`, `--remote-debugging-port=${PORT}`,
   `--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, "about:blank",
 ], { stdio: "ignore" });
@@ -712,6 +712,44 @@ try {
   await waitFor(async () => /Legendas indisponíveis no Meet/.test((await widgetCall(meet6, "#body")) || ""), "widget avisa legenda indisponível", 8000);
   assert.ok(await widgetCall(meet6, "[data-hq=start]", "function(){ return this.textContent }"), "botão Transcrever pelo áudio");
   step("legenda indisponível no Meet: widget avisa e oferece transcrever pelo áudio");
+
+  // 14) Áudio guardado: grava uma faixa sintética no cofre (OPFS) para a reunião 1, informa o service
+  //     worker e confere o player no painel: aparece, os horários ficam clicáveis e tocar destaca o bloco.
+  const kept = await evaluate(app, `(async () => {
+    const { startKeeping } = await import(chrome.runtime.getURL("src/asr/keep.js"));
+    const { readTrack, audioInfo } = await import(chrome.runtime.getURL("src/lib/audiovault.js"));
+    const ctx = new AudioContext({ sampleRate: 16000 });
+    await ctx.resume();
+    const osc = ctx.createOscillator();
+    const dest = ctx.createMediaStreamDestination();
+    osc.connect(dest);
+    osc.start();
+    const metas = [];
+    const k = startKeeping({ sessionId: ${JSON.stringify(id)}, streams: { tab: dest.stream, mic: null }, timesliceMs: 400, onMeta: (m) => metas.push(m) });
+    await new Promise((r) => setTimeout(r, 2600));
+    const meta = await k.stop();
+    osc.stop();
+    await ctx.close();
+    const f = await readTrack(${JSON.stringify(id)}, "tab");
+    return { bytes: f ? f.size : 0, meta, info: await audioInfo(${JSON.stringify(id)}), metas: metas.length };
+  })()`);
+  assert.ok(kept.bytes > 1000, "faixa gravada no cofre: " + JSON.stringify(kept));
+  assert.ok(kept.meta.done && kept.meta.tracks.join() === "tab" && kept.info.bytes === kept.bytes, "meta e info do cofre: " + JSON.stringify(kept.meta));
+  await sw({ type: "audio-meta", sessionId: id, meta: { ...kept.meta, startedAt: sEnd.startedAt } });
+  assert.ok((await sw({ type: "get", id })).audio.done, "reunião sabe que tem áudio");
+  await send("Page.navigate", { url: `chrome-extension://${extId}/src/app/app.html?id=${id}` }, app);
+  await waitFor(() => evaluate(app, "!document.querySelector('#player').hidden && !!document.querySelector('#timeline time.seek')"), "player visível e horários clicáveis");
+  await evaluate(app, "document.querySelector('#timeline time.seek').click()");
+  await waitFor(() => evaluate(app, "!!document.querySelector('#timeline .blk.playing') && document.querySelector('#p-play').textContent !== '▶'"), "tocar destaca o bloco", 8000).catch(async (err) => {
+    console.log("player:", await evaluate(app, "JSON.stringify({ play: document.querySelector('#p-play').textContent, toast: document.querySelector('#toast').textContent, time: document.querySelector('#p-time').textContent, dur: document.querySelector('#p-dur').textContent, blocks: document.querySelectorAll('#timeline li.blk[data-start]').length, starts: [...document.querySelectorAll('#timeline li.blk[data-start]')].slice(0,3).map(l => l.dataset.start), audioStart: " + sEnd.startedAt + " })"));
+    throw err;
+  });
+  const usage = await sw({ type: "audio-usage" });
+  assert.ok(usage.count >= 1 && usage.bytes >= kept.bytes, "uso do cofre: " + JSON.stringify(usage));
+  await evaluate(app, "window.confirm = () => true; document.querySelector('#p-del').click()");
+  await waitFor(async () => !(await sw({ type: "get", id })).audio, "áudio apagado pela reunião");
+  assert.equal(await evaluate(app, `(async () => { const { audioInfo } = await import(chrome.runtime.getURL("src/lib/audiovault.js")); return await audioInfo(${JSON.stringify(id)}); })()`), null, "pasta do cofre removida");
+  step("áudio guardado: faixa no cofre, player no painel, clique no horário toca e destaca, apagar limpa o cofre");
 
   console.log("\nE2E OK");
 } finally {
