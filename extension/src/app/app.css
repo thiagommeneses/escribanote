@@ -112,7 +112,13 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .mcard { display: block; width: 100%; text-align: left; border: 1px solid transparent; background: none; border-radius: 10px; padding: 10px; cursor: pointer; }
 .mcard:hover { background: var(--surface); border-color: var(--border); }
 .mcard.sel { background: var(--surface); border-color: var(--accent); box-shadow: var(--shadow); }
-.mcard b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mcard:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mcard-top { display: flex; align-items: center; gap: 6px; }
+.mcard b { display: block; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mcard-rename { flex: none; border: 0; background: none; color: var(--muted); font-size: 14px; line-height: 1; padding: 2px 5px; border-radius: 6px; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.mcard:hover .mcard-rename, .mcard:focus-within .mcard-rename, .mcard.sel .mcard-rename { opacity: 1; }
+.mcard-rename:hover { background: var(--bg-soft); color: var(--text); }
+.mcard-edit { flex: 1; min-width: 0; font: inherit; font-weight: 700; padding: 1px 6px; border: 1px solid var(--accent); border-radius: 6px; background: var(--bg); color: var(--text); }
 .mcard .sub { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 2px; flex-wrap: wrap; }
 .mcard .snippet { font-size: 12px; color: var(--text-2); margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .badge { font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--bg-soft); border: 1px solid var(--border); color: var(--text-2); }
@@ -142,6 +148,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .m-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
 .m-title { border: 1px solid transparent !important; background: none !important; font-size: 19px; font-weight: 700; padding: 2px 6px !important; margin-left: -6px; box-shadow: none !important; }
 .m-title:hover, .m-title:focus { border-color: var(--border-strong) !important; }
+.m-titlerow { display: flex; align-items: center; gap: 4px; }
+.m-titlerow .m-title { flex: 1; min-width: 0; }
+.m-rename { flex: none; border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+.m-rename:hover { background: var(--bg-soft); color: var(--text); }
+.m-titlerow:focus-within .m-rename { visibility: hidden; }
 .m-meta { display: flex; gap: 6px 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
 .m-meta span { display: inline-flex; align-items: center; gap: 4px; }
 .m-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }

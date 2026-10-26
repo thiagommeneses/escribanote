@@ -29,7 +29,9 @@ const backupQueue = new Set(); // ids de reuniões ("settings" para os ajustes) 
 let backupTimer = null;
 const autoQueue = new Set(); // backup automático (Downloads ou área interna): grava poucos segundos após cada mudança
 let autoTimer = null;
-const AUTO_BACKUP_DELAY_MS = 3_000;
+let autoScheduling = false;
+const AUTO_BACKUP_DELAY_MS = 3_000; // área interna: barata e invisível, pode ser a cada mudança
+const AUTO_BACKUP_DOWNLOADS_DELAY_MS = 45_000; // pasta Downloads: cada gravação passa pela API de downloads, então agrupa
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === "install") chrome.tabs.create({ url: chrome.runtime.getURL("src/app/app.html?bemvindo=1") }).catch(() => {});
@@ -138,9 +140,32 @@ async function saveDirty() {
 // extensão no perfil do Chrome. A pasta escolhida pelo usuário (acima) continua como segunda cópia.
 function queueAutoBackup(ids, { now = false } = {}) {
   for (const id of ids) autoQueue.add(id);
-  clearTimeout(autoTimer);
-  autoTimer = setTimeout(() => flushAutoBackup().catch(() => {}), now ? 0 : AUTO_BACKUP_DELAY_MS);
+  if (now) {
+    clearTimeout(autoTimer);
+    autoScheduling = false;
+    autoTimer = setTimeout(() => flushAutoBackup().catch(() => {}), 0);
+    return;
+  }
+  // Um lote já marcado sai no prazo dele: a reunião ao vivo muda a cada segundo e não pode empurrar o backup para sempre.
+  if (autoTimer || autoScheduling) return;
+  autoScheduling = true;
+  getSettings().then((settings) => {
+    if (!autoScheduling) return;
+    autoScheduling = false;
+    const delay = (settings.backupAuto || "off") === "downloads" ? AUTO_BACKUP_DOWNLOADS_DELAY_MS : AUTO_BACKUP_DELAY_MS;
+    autoTimer = setTimeout(() => flushAutoBackup().catch(() => {}), delay);
+  });
 }
+
+// Esconde a barra/bolha de downloads do navegador enquanto o backup é gravado: sem isso, cada
+// gravação aparece como se fosse um download feito pelo usuário. A API é por extensão (não mexe
+// no que outras extensões fizeram) e pode não existir em todo navegador.
+async function downloadsUi(enabled) {
+  try {
+    if (chrome.downloads.setUiOptions) await chrome.downloads.setUiOptions({ enabled });
+  } catch {}
+}
+downloadsUi(true); // se o service worker morreu no meio de uma gravação, a barra volta ao normal
 
 async function downloadText(name, text) {
   let url;
@@ -149,23 +174,29 @@ async function downloadText(name, text) {
     await ensureOffscreen();
     url = (await toOffscreen({ type: "object-url", text, mime: "application/json" })).url;
   }
-  const id = await chrome.downloads.download({ url, filename: `Escribanote/backup/${name}`, conflictAction: "overwrite", saveAs: false });
-  await new Promise((ok, fail) => {
-    const onChange = (d) => {
-      if (d.id !== id || !d.state) return;
-      if (d.state.current === "complete") { chrome.downloads.onChanged.removeListener(onChange); ok(); }
-      if (d.state.current === "interrupted") { chrome.downloads.onChanged.removeListener(onChange); fail(new Error(d.error?.current || "download interrompido")); }
-    };
-    chrome.downloads.onChanged.addListener(onChange);
-    chrome.downloads.search({ id }).then(([d]) => { if (d?.state === "complete") { chrome.downloads.onChanged.removeListener(onChange); ok(); } });
-  });
-  chrome.downloads.erase({ id }).catch(() => {}); // sai do histórico de downloads (o arquivo fica)
-  if (url.startsWith("blob:")) toOffscreen({ type: "revoke-url", url }).catch(() => {});
+  await downloadsUi(false);
+  try {
+    const id = await chrome.downloads.download({ url, filename: `Escribanote/backup/${name}`, conflictAction: "overwrite", saveAs: false });
+    await new Promise((ok, fail) => {
+      const onChange = (d) => {
+        if (d.id !== id || !d.state) return;
+        if (d.state.current === "complete") { chrome.downloads.onChanged.removeListener(onChange); ok(); }
+        if (d.state.current === "interrupted") { chrome.downloads.onChanged.removeListener(onChange); fail(new Error(d.error?.current || "download interrompido")); }
+      };
+      chrome.downloads.onChanged.addListener(onChange);
+      chrome.downloads.search({ id }).then(([d]) => { if (d?.state === "complete") { chrome.downloads.onChanged.removeListener(onChange); ok(); } });
+    });
+    await chrome.downloads.erase({ id }).catch(() => {}); // sai do histórico de downloads (o arquivo fica)
+  } finally {
+    await downloadsUi(true);
+    if (url.startsWith("blob:")) toOffscreen({ type: "revoke-url", url }).catch(() => {});
+  }
 }
 
 async function flushAutoBackup() {
   clearTimeout(autoTimer);
   autoTimer = null;
+  autoScheduling = false;
   const settings = await getSettings();
   const mode = settings.backupAuto || "off";
   const { autoBackup = {} } = await chrome.storage.local.get("autoBackup");

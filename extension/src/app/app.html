@@ -60,7 +60,10 @@
 
         <div id="m" hidden>
           <div class="m-head">
-            <input id="m-title" class="m-title" aria-label="Título da reunião" maxlength="200">
+            <div class="m-titlerow">
+              <input id="m-title" class="m-title" aria-label="Título da reunião" maxlength="200" title="Clique para renomear a reunião" placeholder="Nome da reunião">
+              <button type="button" class="m-rename" id="m-rename" title="Renomear a reunião" aria-label="Renomear a reunião">✎</button>
+            </div>
             <div class="m-meta" id="m-meta"></div>
             <div class="m-actions">
               <button class="btn sm" id="m-pause" hidden></button>

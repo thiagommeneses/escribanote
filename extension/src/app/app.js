@@ -310,6 +310,7 @@ $("m-hq").addEventListener("click", async () => {
 
 async function renderRecent() {
   const index = await send({ type: "list" });
+  if (renaming()) return;
   $("recent").innerHTML = index.length
     ? `<div class="day">Reuniões recentes</div>` + index.slice(0, 4).map(cardHtml).join("")
     : `<p class="restore-hint">Reinstalou o Escribanote ou trocou de computador?
@@ -345,9 +346,18 @@ document.addEventListener("click", (e) => {
 
 $("m-title").addEventListener("change", async (e) => {
   if (!state.session) return;
-  state.session = normalize(await send({ type: "update", id: state.session.id, title: e.target.value }));
+  const value = e.target.value.trim();
+  if (!value || value === state.session.title) { e.target.value = state.session.title; return; }
+  state.session = normalize(await send({ type: "update", id: state.session.id, title: value }));
   renderMeeting();
+  renderList();
+  toast("Reunião renomeada");
 });
+$("m-title").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+  if (e.key === "Escape") { e.target.value = state.session ? state.session.title : ""; e.target.blur(); }
+});
+$("m-rename").addEventListener("click", () => { $("m-title").focus(); $("m-title").select(); });
 
 $("m-stop").addEventListener("click", async () => {
   const s = state.session;
@@ -1440,8 +1450,9 @@ function cardHtml(m, snippet) {
   const names = m.participants || [];
   const sel = state.session && state.session.id === m.id ? " sel" : "";
   const live = !m.endedAt && Date.now() - m.updatedAt < 5 * 60 * 1000;
-  return `<button class="mcard${sel}" data-open="${esc(m.id)}">
-    <b>${live ? '<span style="color:var(--danger)">● </span>' : ""}${esc(m.title)}</b>
+  return `<div class="mcard${sel}" role="button" tabindex="0" data-open="${esc(m.id)}">
+    <div class="mcard-top"><b>${live ? '<span style="color:var(--danger)">● </span>' : ""}<span class="mcard-name">${esc(m.title)}</span></b>
+      <button type="button" class="mcard-rename" data-rename="${esc(m.id)}" title="Renomear" aria-label="Renomear ${esc(m.title)}">✎</button></div>
     <div class="sub"><span>${new Date(m.startedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
       <span>${esc(PLATFORM[m.platform] || m.platform)}</span>
       ${m.endedAt ? `<span>${fmtDuration(m.endedAt - m.startedAt)}</span>` : ""}
@@ -1449,22 +1460,75 @@ function cardHtml(m, snippet) {
       ${m.part > 1 ? `<span class="badge" title="Mesmo link de reunião, retomado no mesmo dia">parte ${m.part}</span>` : ""}
       ${m.hasSummary ? '<span class="badge ok">ata</span>' : ""}${m.highlights ? `<span class="badge">⭐ ${m.highlights}</span>` : ""}</div>
     ${snippet ? `<div class="snippet">${highlight(snippet, state.listQuery.trim())}</div>` : ""}
-  </button>`;
+  </div>`;
 }
 
 function openFromCard(e) {
+  if (e.target.closest("[data-rename]")) return startRename(e.target.closest("[data-rename]").dataset.rename);
+  if (e.target.closest(".mcard-edit")) return; // digitando o novo nome
   const c = e.target.closest("[data-open]");
   if (!c) return;
   state.view = "meeting";
   state.tab = "transcript";
   openSession(c.dataset.open, true);
 }
+// Os cartões são <div role=button> (um botão não pode conter o botão de renomear): Enter/espaço abrem; F2 renomeia.
+function cardKeys(e) {
+  const c = e.target.closest("[data-open]");
+  if (!c || e.target !== c) return;
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); c.click(); }
+  if (e.key === "F2") { e.preventDefault(); startRename(c.dataset.open); }
+}
+
+// Renomeia a reunião no próprio cartão (lista e "recentes"): Enter salva, Esc cancela, sair do campo salva.
+function renaming() {
+  return document.activeElement && document.activeElement.classList.contains("mcard-edit");
+}
+function startRename(id) {
+  const card = document.querySelector(`[data-open="${CSS.escape(id)}"]`);
+  const name = card && card.querySelector(".mcard-name");
+  if (!name || card.querySelector(".mcard-edit")) return;
+  const old = name.textContent;
+  const input = document.createElement("input");
+  input.className = "mcard-edit";
+  input.maxLength = 200;
+  input.value = old;
+  input.setAttribute("aria-label", "Novo nome da reunião");
+  name.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const value = input.value.trim();
+    input.replaceWith(name); // devolve o nome ao cartão (as listas só redesenham sem campo em edição)
+    if (save && value && value !== old) {
+      try {
+        const s = await send({ type: "update", id, title: value });
+        if (state.session && state.session.id === id && s) { state.session = normalize(s); renderMeeting(); }
+        toast("Reunião renomeada");
+      } catch (err) { toast(err.message); }
+    }
+    renderList();
+    renderRecent();
+  };
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    if (e.key === "Escape") { e.preventDefault(); finish(false); }
+  });
+  input.addEventListener("blur", () => finish(true));
+}
 $("list").addEventListener("click", openFromCard);
+$("list").addEventListener("keydown", cardKeys);
+$("recent").addEventListener("keydown", cardKeys);
 for (const b of document.querySelectorAll("[data-recorder]")) b.addEventListener("click", () => send({ type: "open-recorder" }).catch((e) => toast(e.message)));
 $("recent").addEventListener("click", openFromCard);
 
 async function renderList() {
   state.index = await send({ type: "list" });
+  if (renaming()) return;
   let items = state.index;
   const f = state.listFilter;
   if (["meet", "teams", "zoom", "slack"].includes(f)) items = items.filter((m) => m.platform === f);
