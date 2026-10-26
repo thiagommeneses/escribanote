@@ -1,4 +1,4 @@
-import { toBlocks, speakerName, timeline, participantNames, normalize } from "../lib/transcript.js";
+import { toBlocks, speakerName, timeline, participantNames, normalize, effectiveEntries } from "../lib/transcript.js";
 import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName, ataEditorHtml } from "../lib/format.js";
 import { computeStats, findMe, fmtDuration } from "../lib/stats.js";
 import { QUICK_PROMPTS, API_ORIGIN } from "../lib/ai.js";
@@ -243,6 +243,7 @@ function renderMeeting() {
   $("m-stop").title = resumable ? "Voltar a transcrever esta reunião na aba da chamada" : "Parar a transcrição agora. A reunião fica salva e você pode continuar na chamada.";
   renderHqButton();
   renderPlayer(s);
+  $("m-undo").hidden = !(s.undo && s.undo.length);
   renderBanner();
   $("m-pause").innerHTML = s.paused
     ? '<svg viewBox="0 0 24 24"><path d="m7 4 13 8-13 8z"/></svg>Retomar'
@@ -489,6 +490,93 @@ function askInline(anchor, { label, value = "", placeholder = "", suggestions = 
 function closeInline() {
   if (closeInline.current) closeInline.current();
 }
+// Caixa de texto flutuante (correção de uma fala). Ctrl+Enter salva, Esc cancela.
+function askText(anchor, { label, value = "" }) {
+  closeInline();
+  return new Promise((resolve) => {
+    const pop = document.createElement("div");
+    pop.className = "ask";
+    pop.innerHTML = `<label class="field-label">${esc(label)}</label><textarea maxlength="20000"></textarea>
+      <div class="ask-acts"><button class="btn sm" data-cancel>Cancelar</button><button class="btn sm primary" data-ok>Salvar</button></div>`;
+    document.body.appendChild(pop);
+    const ta = pop.querySelector("textarea");
+    ta.value = value;
+    const r = anchor.getBoundingClientRect();
+    const w = Math.min(420, document.documentElement.clientWidth - 24);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(12, Math.min(r.left, document.documentElement.clientWidth - w - 12)) + "px";
+    pop.style.top = Math.min(r.bottom + 6, window.innerHeight - 180) + "px";
+    const done = (v) => { pop.remove(); closeInline.current = null; resolve(v); };
+    closeInline.current = () => done(null);
+    pop.querySelector("[data-ok]").addEventListener("click", () => done(ta.value));
+    pop.querySelector("[data-cancel]").addEventListener("click", () => done(null));
+    ta.addEventListener("keydown", (e) => { if (e.key === "Escape") done(null); if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) done(ta.value); });
+    ta.focus();
+  });
+}
+// Lista flutuante (escolher um falante). Resolve com o valor escolhido (ou null).
+function askSelect(anchor, { label, options }) {
+  closeInline();
+  return new Promise((resolve) => {
+    const pop = document.createElement("div");
+    pop.className = "ask";
+    pop.innerHTML = `<label class="field-label">${esc(label)}</label><select>${options.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("")}</select>
+      <div class="ask-acts"><button class="btn sm" data-cancel>Cancelar</button><button class="btn sm primary" data-ok>Mover</button></div>`;
+    document.body.appendChild(pop);
+    const r = anchor.getBoundingClientRect();
+    const w = Math.min(280, document.documentElement.clientWidth - 24);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(12, Math.min(r.left, document.documentElement.clientWidth - w - 12)) + "px";
+    pop.style.top = Math.min(r.bottom + 6, window.innerHeight - 120) + "px";
+    const done = (v) => { pop.remove(); closeInline.current = null; resolve(v); };
+    closeInline.current = () => done(null);
+    pop.querySelector("[data-ok]").addEventListener("click", () => done(pop.querySelector("select").value));
+    pop.querySelector("[data-cancel]").addEventListener("click", () => done(null));
+    pop.querySelector("select").focus();
+  });
+}
+async function undoLast() {
+  const s = state.session;
+  if (!s || !(s.undo && s.undo.length)) return;
+  state.session = normalize(await send({ type: "undo-edit", id: s.id }));
+  toast("Correção desfeita");
+  renderMeeting();
+}
+$("m-undo").addEventListener("click", undoLast);
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.target.closest("input, textarea, [contenteditable]") && state.view === "meeting" && state.tab === "transcript") { e.preventDefault(); undoLast(); }
+});
+
+// ----- Capítulos -----
+function renderChapters(s) {
+  const el = $("chapters");
+  const list = s.chapters || [];
+  const dur = (s.endedAt || s.updatedAt) - s.startedAt;
+  const canMake = !isLive(s) && dur >= 3 * 60_000 && s.entries.length + s.asr.length >= 8;
+  if (!list.length && !canMake) { el.hidden = true; return; }
+  el.hidden = false;
+  if (!list.length) {
+    el.innerHTML = `<button type="button" class="chip" id="ch-make" title="Divide a reunião por assunto com a IA (chave própria ou 1 crédito do Pro)">${state.chaptersBusy ? "⏳ Dividindo em capítulos…" : "📑 Dividir em capítulos"}</button>`;
+  } else {
+    el.innerHTML = list.map((c, i) => `<button type="button" class="chip" data-ch="${i + 1}" title="${esc(c.title)}"><time>${clock(c.startAt - s.startedAt)}</time><span>${esc(c.title)}</span></button>`).join("") +
+      `<button type="button" class="chip" id="ch-make" title="Gerar os capítulos de novo">${state.chaptersBusy ? "⏳" : "↻"}</button><button type="button" class="chip" id="ch-clear" title="Remover os capítulos">✕</button>`;
+  }
+  $("ch-make").addEventListener("click", async () => {
+    if (state.chaptersBusy) return;
+    state.chaptersBusy = true;
+    renderChapters(s);
+    try {
+      state.session = normalize(await send({ type: "chapters", id: s.id }));
+      toast(`${state.session.chapters.length} capítulos`);
+    } catch (err) { toast(err.message || String(err)); } finally { state.chaptersBusy = false; renderMeeting(); }
+  });
+  $("ch-clear")?.addEventListener("click", async () => { state.session = normalize(await send({ type: "chapters-clear", id: s.id })); renderMeeting(); });
+  el.querySelectorAll("[data-ch]").forEach((b) => b.addEventListener("click", () => {
+    const li = $(`ch-${b.dataset.ch}`);
+    if (li) li.scrollIntoView({ block: "start", behavior: "smooth" });
+  }));
+}
+
 // Pergunta com até três respostas; resolve com a chave da escolhida (ou null).
 function askChoice(anchor, { title, text, choices }) {
   closeInline();
@@ -613,7 +701,8 @@ function blockHtml(s, b, q) {
   const acts = tags().map((t) => `<button data-tag="${t.id}" class="${b.tags.includes(t.id) ? "on" : ""}" title="${esc(t.label)}">${t.emoji}</button>`).join("");
   const badges =
     (b.hq ? '<span class="badge-hq" title="Transcrito pela alta precisão (Whisper local)">🎧</span>' : "") +
-    (b.fixed ? `<span class="badge-fix" data-act="orig" title="Revisado pela IA — clique para ver o original">✓ revisado</span>` : "");
+    (b.fixed ? `<span class="badge-fix" data-act="orig" title="Revisado pela IA — clique para ver o original">✓ revisado</span>` : "") +
+    (b.edited ? `<span class="badge-edit" title="Corrigido à mão">✎ editado</span>` : "");
   // Um <p> por parágrafo; do segundo em diante, o horário em que ele começou.
   const paras = b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text, original: b.original }];
   const body = paras
@@ -628,7 +717,7 @@ function blockHtml(s, b, q) {
     ${avatar(b.speakerId, b.speaker, 32)}
     <div><div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${highlight(b.speaker, q)}</b><time class="${hasAudio(s) ? "seek" : ""}" data-at="${b.startAt}" title="${hasAudio(s) ? "Ouvir a partir daqui" : ""}">${clock(b.startAt - s.startedAt)}</time>${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
     ${body}${orig}</div>
-    <div class="acts">${acts}<button data-act="copy" title="Copiar"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button data-act="note" title="Nota neste ponto"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></div>
+    <div class="acts">${acts}<button data-act="copy" title="Copiar"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button data-act="note" title="Nota neste ponto"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button data-act="edit" title="Corrigir o texto">✎</button><button data-act="move" title="Mover para outro falante">👤</button><button data-act="del" title="Apagar esta fala">🗑</button></div>
   </li>`;
 }
 
@@ -637,6 +726,7 @@ function renderTranscript() {
   if (!s) return;
   renderSpeakers(s);
   const q = state.query.trim().toLowerCase();
+  renderChapters(s);
   const items = timeline(s).filter((it) => {
     if (it.type !== "block") return !q;
     const b = it.block;
@@ -645,6 +735,7 @@ function renderTranscript() {
   const html = items
     .map((it) => {
       if (it.type === "block") return blockHtml(s, it.block, q);
+      if (it.type === "chapter") return q ? "" : `<li class="tl-chapter" id="ch-${it.chapter.n}"><span class="n">${it.chapter.n}</span>${esc(it.chapter.title)}</li>`;
       const t = clock(it.at - s.startedAt);
       if (it.type === "note") return `<li class="tl-note">📝 <time>${t}</time><span>${esc(it.note.text)}</span><button class="x" data-del-note="${esc(it.note.id)}" title="Apagar nota">✕</button></li>`;
       const url = state.shots[it.shot.id];
@@ -720,8 +811,37 @@ $("timeline").addEventListener("click", async (e) => {
     return renderTranscript();
   }
   if (act && act.dataset.act === "copy") {
-    await navigator.clipboard.writeText(blk.querySelector("p:not(.orig)").innerText);
+    await navigator.clipboard.writeText([...blk.querySelectorAll("p:not(.orig)")].map((p) => p.innerText).join("\n\n"));
     toast("Trecho copiado");
+  } else if (act && act.dataset.act === "edit") {
+    const ids = JSON.parse(blk.dataset.ids);
+    const b = toBlocks(s).find((x) => x.key === blk.dataset.key);
+    const text = await askText(act, { label: "Corrigir o texto desta fala", value: b ? b.text : "" });
+    if (text != null && text.trim() && text.trim() !== (b && b.text)) {
+      state.session = normalize(await send({ type: "edit-block", id: s.id, ids, text: text.trim(), label: "texto" }));
+      toast("Fala corrigida");
+      renderMeeting();
+    }
+  } else if (act && act.dataset.act === "move") {
+    const ids = JSON.parse(blk.dataset.ids);
+    const cur = blk.querySelector("[data-speaker]").dataset.speaker;
+    const known = [...new Set(effectiveEntries(s).filter((e) => e.kind === "caption").map((e) => e.speakerId))].filter((id) => id !== cur && id !== "desconhecido");
+    const options = known.map((id) => ({ value: id, label: speakerName(s, id) }));
+    if (!options.length) return toast("Não há outro falante nesta reunião.");
+    const to = await askSelect(act, { label: "Mover esta fala para", options });
+    if (to) {
+      state.session = normalize(await send({ type: "edit-block", id: s.id, ids, speakerId: to, label: "falante" }));
+      toast("Fala movida para " + speakerName(state.session, to));
+      renderMeeting();
+    }
+  } else if (act && act.dataset.act === "del") {
+    const ids = JSON.parse(blk.dataset.ids);
+    const ok = await askChoice(act, { title: "Apagar esta fala?", text: "Ela some da transcrição, da ata e das exportações. Dá para desfazer.", choices: [{ key: "ok", label: "Apagar", primary: true }, { key: "cancel", label: "Cancelar" }] });
+    if (ok === "ok") {
+      state.session = normalize(await send({ type: "edit-block", id: s.id, ids, deleted: true, label: "apagar" }));
+      toast("Fala apagada");
+      renderMeeting();
+    }
   } else if (act && act.dataset.act === "note") {
     const text = await askInline(act, { label: "Nota neste ponto da reunião", placeholder: "O que anotar aqui?" });
     if (text && text.trim()) {

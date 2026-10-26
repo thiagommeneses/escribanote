@@ -319,6 +319,20 @@ try {
   assert.equal(await evaluate(app, "document.querySelector('#m-title').value"), "Planejamento Q4 (final)", "cabeçalho acompanha o cartão");
   step("reunião renomeada pelo cabeçalho e pelo cartão da lista");
 
+  // Correção manual pelo painel: ✎ abre a caixa, Ctrl+Enter salva; Desfazer volta
+  const firstKey = await evaluate(app, "document.querySelector('#timeline li.blk').dataset.key");
+  const before = await evaluate(app, "document.querySelector('#timeline li.blk p').innerText");
+  await evaluate(app, "document.querySelector('#timeline li.blk [data-act=\"edit\"]').click()");
+  await waitFor(() => evaluate(app, "document.activeElement && document.activeElement.tagName === 'TEXTAREA' && document.activeElement.closest('.ask') !== null"), "caixa de correção aberta");
+  await evaluate(app, "document.activeElement.value = 'Texto corrigido à mão.'");
+  await evaluate(app, "document.querySelector('.ask [data-ok]').click()");
+  await waitFor(() => evaluate(app, `document.querySelector('#timeline li.blk[data-key="${firstKey}"] p')?.innerText === 'Texto corrigido à mão.'`), "texto corrigido no painel");
+  assert.ok(await evaluate(app, `!!document.querySelector('#timeline li.blk[data-key="${firstKey}"] .badge-edit')`), "selo 'editado'");
+  assert.equal((await sw({ type: "get", id })).undo.length, 1, "pilha de desfazer");
+  await evaluate(app, "document.querySelector('#m-undo').click()");
+  await waitFor(() => evaluate(app, `document.querySelector('#timeline li.blk[data-key="${firstKey}"] p')?.innerText === ${JSON.stringify(before)}`), "desfazer devolve o texto");
+  step("correção manual de uma fala pelo painel e desfazer");
+
   // Mesclagem pelo app: um terceiro falante sem nome vira "Ana Teste" → confirma → vira a Ana
   const TERCEIRO = "spaces/e2e/devices/10";
   await evaluate(meet, `__say(601, 1, "Eu concordo com a Ana sobre o orçamento.", ${JSON.stringify(TERCEIRO)})`);

@@ -74,6 +74,7 @@
                 <button class="btn sm" id="m-export">Exportar <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
                 <div class="menu" id="export-menu" hidden></div>
               </div>
+              <button class="btn sm ghost" id="m-undo" hidden title="Desfazer a última correção manual (Ctrl+Z na transcrição)">↶ Desfazer</button>
               <button class="btn sm ghost" id="m-delete" title="Apagar reunião">Apagar</button>
             </div>
             <div class="player" id="player" hidden>
@@ -100,6 +101,7 @@
 
           <section class="pane" id="pane-transcript">
             <div id="t-banner"></div>
+            <div class="chapters" id="chapters" hidden></div>
             <div class="t-tools">
               <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                 <input id="t-search" type="search" placeholder="Buscar nesta reunião…" aria-label="Buscar na transcrição"></div>
@@ -295,6 +297,7 @@
             <span id="key-status" class="muted tiny"></span>
             <label class="field"><span>Modelo</span><select name="aiModel" id="model-select"></select></label>
             <label class="switch"><input type="checkbox" name="autoAta"><span></span>Gerar a ata automaticamente quando a reunião terminar (sem chave, usa 1 crédito do Pro)</label>
+            <label class="switch"><input type="checkbox" name="chaptersAuto"><span></span>Dividir em capítulos automaticamente quando a reunião terminar (a partir de 3 min; sem chave, usa 1 crédito do Pro)</label>
           </div>
 
           <div class="card">
