@@ -105,6 +105,8 @@
     .rn { flex-wrap: wrap; }
     .rn button { padding: 1px 6px; border-radius: 6px; font-size: 12px; background: rgba(255,255,255,.1); color: #e8eaed; }
     .blk .who time { color: #9aa0a6; font-size: 11px; }
+    .blk p + p { margin-top: 6px; }
+    .blk p .pt { color: #9aa0a6; font-size: 10.5px; margin-right: 5px; font-variant-numeric: tabular-nums; }
     .blk .tags { margin-left: auto; font-size: 12px; }
     .blk p { margin: 1px 0 0; color: #e8eaed; word-wrap: break-word; }
     .blk .acts { position: absolute; right: 6px; top: 2px; display: none; gap: 2px; background: #2d2e33; border-radius: 999px; padding: 2px 4px;
@@ -400,7 +402,7 @@
             <time>${clock(b.startAt - session.startedAt)}</time>${b.kind === "chat" ? '<span class="muted">chat</span>' : ""}
             ${b.hq ? '<span class="badge" title="Transcrito pelo modo de alta precisão">🎧</span>' : ""}${b.fixed ? `<span class="badge" title="Revisado pela IA. Original: ${esc(b.original)}">✓</span>` : ""}
             <span class="tags">${b.tags.map((id) => (t.find((x) => x.id === id) || {}).emoji || "🏷").join(" ")}</span></div>
-          <p>${esc(b.text)}</p>
+          ${(b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text }]).map((p, i) => `<p>${i ? `<time class="pt">${clock(p.at - session.startedAt)}</time>` : ""}${esc(p.text)}</p>`).join("")}
           <div class="acts">${t.map((x) => `<button data-tag="${x.id}" class="${b.tags.includes(x.id) ? "on" : ""}" title="${esc(x.label)}">${x.emoji}</button>`).join("")}</div>
         </div>`)
         .join("");

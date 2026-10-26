@@ -606,12 +606,20 @@ function blockHtml(s, b, q) {
   const badges =
     (b.hq ? '<span class="badge-hq" title="Transcrito pela alta precisão (Whisper local)">🎧</span>' : "") +
     (b.fixed ? `<span class="badge-fix" data-act="orig" title="Revisado pela IA — clique para ver o original">✓ revisado</span>` : "");
-  const body = q ? highlight(b.text, q) : b.fixed ? diffHtml(b.original, b.text) : esc(b.text);
+  // Um <p> por parágrafo; do segundo em diante, o horário em que ele começou.
+  const paras = b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text, original: b.original }];
+  const body = paras
+    .map((p, i) => {
+      const t = i ? `<time class="pt" data-at="${p.at}" title="Momento em que este trecho começou">${clock(p.at - s.startedAt)}</time>` : "";
+      const html = q ? highlight(p.text, q) : b.fixed ? diffHtml(p.original, p.text) : esc(p.text);
+      return `<p>${t}${html}</p>`;
+    })
+    .join("");
   const orig = b.fixed && state.showOrig.has(b.key) ? `<p class="orig">${esc(b.original)}</p>` : "";
   return `<li class="blk${b.kind === "chat" ? " chat" : ""}" data-key="${esc(b.key)}" data-ids="${esc(JSON.stringify(b.ids))}" data-tags="${esc(JSON.stringify(b.tags))}" data-at="${b.endAt}">
     ${avatar(b.speakerId, b.speaker, 32)}
     <div><div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${highlight(b.speaker, q)}</b><time>${clock(b.startAt - s.startedAt)}</time>${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
-    <p>${body}</p>${orig}</div>
+    ${body}${orig}</div>
     <div class="acts">${acts}<button data-act="copy" title="Copiar"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button data-act="note" title="Nota neste ponto"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></div>
   </li>`;
 }

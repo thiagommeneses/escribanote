@@ -640,3 +640,61 @@ Assessor Jurídico-Administrativo da PGJ`;
   // sem assinatura: nada centralizado
   assert.doesNotMatch(ataEditorHtml("## Resumo\nTexto.\n\n## Decisões\n- A\n- B"), /center/);
 });
+
+test("toBlocks: pausa de 2,5 s ou parágrafo longo abre parágrafo novo; 30 s de monólogo abre bloco novo no fim da frase", async () => {
+  const { PARA_GAP_MS } = await import("../src/lib/transcript.js");
+  const s = createSession({ id: "p1", platform: "meet", url: "https://meet.google.com/abc-defg-hij", title: "T", startedAt: 1_000_000 });
+  let t = 1_000_000;
+  const say = (id, text, gap = 1000) => { t += gap; applyEvent(s, { kind: "caption", id, speakerId: "d", version: 1, text }, t); };
+  say("a", "Primeira frase do mesmo parágrafo.");
+  say("b", "Segunda frase, logo em seguida.");
+  say("c", "Depois de uma pausa vem outro parágrafo.", PARA_GAP_MS + 100);
+  let blocks = toBlocks(s);
+  assert.equal(blocks.length, 1);
+  assert.equal(blocks[0].paras.length, 2, "pausa abre parágrafo");
+  assert.equal(blocks[0].paras[0].text, "Primeira frase do mesmo parágrafo. Segunda frase, logo em seguida.");
+  assert.equal(blocks[0].paras[1].at, t);
+  assert.equal(blocks[0].text, "Primeira frase do mesmo parágrafo. Segunda frase, logo em seguida.\n\nDepois de uma pausa vem outro parágrafo.");
+
+  // parágrafo longo (>400 caracteres) só quebra quando a fala anterior terminou a frase
+  const longo = "palavra ".repeat(60).trim() + " sem ponto";
+  say("d", longo);
+  say("e", "ainda no mesmo parágrafo porque o anterior não terminou a frase");
+  say("f", "agora terminou.");
+  say("g", "Parágrafo novo.");
+  blocks = toBlocks(s);
+  assert.equal(blocks.length, 1);
+  assert.equal(blocks[0].paras.length, 3);
+  assert.ok(blocks[0].paras[1].text.endsWith("agora terminou."));
+  assert.equal(blocks[0].paras[2].text, "Parágrafo novo.");
+
+  // 30 s do mesmo falante: bloco novo assim que uma frase termina
+  say("h", "Trinta segundos depois, frase que termina.", 25_000);
+  say("i", "Esta já começa um bloco novo.");
+  blocks = toBlocks(s);
+  assert.equal(blocks.length, 2, "bloco novo depois de 30 s");
+  assert.equal(blocks[1].text, "Trinta segundos depois, frase que termina. Esta já começa um bloco novo.");
+  assert.equal(blocks[1].speakerId, "d");
+  // os ids continuam todos cobertos (destaques e revisão não se perdem)
+  assert.deepEqual([...blocks[0].ids, ...blocks[1].ids], ["a", "b", "c", "d", "e", "f", "g", "h", "i"]);
+});
+
+test("glossário: 'Termo = erro, erro2' corrige palavra inteira, mantém maiúscula inicial e alimenta o prompt", async () => {
+  const { compileGlossary, applyGlossary, glossaryForPrompt, parseGlossary } = await import("../src/lib/glossary.js");
+  const rules = compileGlossary("Agno = argum, agnum\nOKR\nfront-end → front end, fronte\n# comentário");
+  assert.equal(applyGlossary("Saída do argum. Argum é novo. argumento fica. front end e Fronte.", rules), "Saída do Agno. Agno é novo. argumento fica. front-end e Front-end.");
+  assert.equal(applyGlossary("sem nada", []), "sem nada");
+  assert.deepEqual(parseGlossary("Agno = argum\nOKR").terms, ["Agno", "OKR"]);
+  const prompt = glossaryForPrompt("Agno = argum, agnum\nOKR", "direito administrativo e software");
+  assert.equal(prompt, "Agno (as legendas costumam escrever: argum, agnum)\nOKR\nContexto das reuniões: direito administrativo e software");
+});
+
+test("exportações levam os parágrafos com o horário do segundo em diante", () => {
+  const s = createSession({ id: "p2", platform: "meet", url: "https://meet.google.com/abc-defg-hij", title: "T", startedAt: 1_000_000 });
+  applyEvent(s, { kind: "caption", id: "a", speakerId: "d", version: 1, text: "Começo." }, 1_001_000);
+  applyEvent(s, { kind: "caption", id: "b", speakerId: "d", version: 1, text: "Depois da pausa." }, 1_011_000);
+  const txt = toText(s);
+  assert.ok(txt.includes("Começo.\n\n[00:00:11] Depois da pausa."), txt);
+  const md = toMarkdown(s);
+  assert.ok(md.includes("Começo.\n\n`00:00:11` Depois da pausa."), md);
+});

@@ -219,8 +219,12 @@
             <p class="muted tiny" id="diarize-info">Na alta precisão e no gravador do computador, separa quem fala comparando as vozes (modelos pyannote e WeSpeaker, ~32 MB, baixados uma vez; nada sai do computador). Quando as legendas trazem os nomes, o Escribanote aprende de quem é cada voz; sem legendas, mostra "Falante 1", "Falante 2"… que você pode renomear.</p>
             <div class="row"><button type="button" class="btn sm ghost" id="mic-perm">Permitir microfone</button><button type="button" class="btn sm ghost" id="hq-test">Testar o modelo</button><span class="muted tiny" id="hq-test-out"></span></div>
 
-            <label class="field"><span>Glossário: nomes, siglas e termos da sua equipe (um por linha)</span>
-              <textarea name="glossary" rows="4" placeholder="Q4&#10;OKR&#10;Thiago Meneses&#10;meneseslabs"></textarea></label>
+            <label class="field"><span>Vocabulário da equipe: nomes, siglas, termos jurídicos, de tecnologia e em inglês (um por linha)</span>
+              <textarea name="glossary" rows="6" placeholder="Q4&#10;OKR&#10;Thiago Meneses&#10;Agno = argum, agnum&#10;front-end = front end, fronte&#10;data venia = data vênia, dá tá vênia"></textarea></label>
+            <p class="muted tiny">Escreva <b>Termo = forma errada, outra forma</b> para corrigir na hora o que as legendas costumam errar, em toda fala que chegar. Os termos também vão para a revisão por IA, a ata e o chat, que passam a grafá-los certo mesmo em variações novas.</p>
+            <label class="field"><span>Sobre as reuniões (área, assuntos, vocabulário comum)</span>
+              <textarea name="teamContext" rows="2" maxlength="600" placeholder="Equipe de inovação de um órgão público: direito administrativo, licitações e desenvolvimento de software. Termos em inglês de tecnologia são comuns."></textarea></label>
+            <p class="muted tiny">Esse contexto vai junto nos prompts da revisão, da ata e do chat, para a IA reconhecer termos da sua área em vez de trocá-los por palavras parecidas.</p>
             <label class="switch"><input type="checkbox" name="autoReview"><span></span>Revisar com IA automaticamente durante a reunião (usa sua chave de API ou 1 crédito do Pro por reunião)</label>
           </div>
 

@@ -48,7 +48,8 @@ export const DEFAULTS = {
   aiModel: "claude-opus-5-5",
   talkTarget: 30, // % de fala desejada para "você"
   captionLang: "pt-BR",
-  glossary: "",
+  glossary: "", // vocabulário: um termo por linha; "Termo = forma errada, outra" corrige na hora (lib/glossary.js)
+  teamContext: "", // sobre as reuniões (área, assuntos), para a revisão, a ata e o chat
   ataTemplate: "", // id do modelo de ata padrão ("" = formato do Escribanote)
   ataInstructions: "", // instruções extras padrão para todas as atas (a reunião pode ter as suas)
   autoReview: false,

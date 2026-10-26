@@ -1,5 +1,12 @@
 // Exportação da reunião em vários formatos.
 import { toBlocks, speakerName, timeline, participantNames } from "./transcript.js";
+
+// Texto de um bloco com os parágrafos separados; do segundo em diante, o horário em que começou.
+// `wrap` formata o horário no estilo de cada saída (texto, Markdown, HTML).
+function blockText(session, b, wrap, sep = "\n\n") {
+  const paras = b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text }];
+  return paras.map((p, i) => (i ? wrap(clock(p.at - session.startedAt)) + " " : "") + p.text).join(sep);
+}
 import { DEFAULT_TAGS } from "./settings.js";
 
 function pad(n, w = 2) {
@@ -42,7 +49,7 @@ export function toText(session, opts = {}) {
       const b = it.block;
       const tag = b.kind === "chat" ? " (chat)" : "";
       const mark = b.tags.length ? ` [${b.tags.map((id) => tagLabel(opts.tags, id)).join(", ")}]` : "";
-      return `${t} ${b.speaker}${tag}${mark}: ${b.text}`;
+      return `${t} ${b.speaker}${tag}${mark}: ${blockText(session, b, (c) => `[${c}]`)}`;
     })
     .join("\n\n");
   return `${head}\n${body}\n`;
@@ -62,7 +69,7 @@ export function toMarkdown(session, opts = {}) {
   if (hls.length) {
     lines.push("## Destaques", "");
     for (const b of hls) {
-      lines.push(`- ${b.tags.map((id) => tagLabel(opts.tags, id)).join(" ")} **${b.speaker}** (\`${clock(b.startAt - session.startedAt)}\`): ${b.text}`);
+      lines.push(`- ${b.tags.map((id) => tagLabel(opts.tags, id)).join(" ")} **${b.speaker}** (\`${clock(b.startAt - session.startedAt)}\`): ${b.text.replace(/\s*\n+\s*/g, " ")}`);
     }
     lines.push("");
   }
@@ -76,7 +83,7 @@ export function toMarkdown(session, opts = {}) {
       const b = it.block;
       const tag = b.kind === "chat" ? " _(chat)_" : "";
       const mark = b.tags.length ? " " + b.tags.map((id) => tagLabel(opts.tags, id)).join(" ") : "";
-      lines.push(`**${b.speaker}**${tag} · ${t}${mark}`, "", b.text, "");
+      lines.push(`**${b.speaker}**${tag} · ${t}${mark}`, "", blockText(session, b, (c) => `\`${c}\``), "");
     }
   }
   return lines.join("\n");
@@ -119,7 +126,7 @@ export function toHtml(session, { tags, shotUrls = {} } = {}) {
   if (hls.length) {
     parts.push("<h2>Destaques</h2><ul>");
     for (const b of hls) {
-      parts.push(`<li>${esc(b.tags.map((id) => tagLabel(tags, id)).join(" "))} <b>${esc(b.speaker)}</b> (${clock(b.startAt - session.startedAt)}): ${esc(b.text)}</li>`);
+      parts.push(`<li>${esc(b.tags.map((id) => tagLabel(tags, id)).join(" "))} <b>${esc(b.speaker)}</b> (${clock(b.startAt - session.startedAt)}): ${esc(b.text.replace(/\s*\n+\s*/g, " "))}</li>`);
     }
     parts.push("</ul>");
   }
@@ -134,7 +141,10 @@ export function toHtml(session, { tags, shotUrls = {} } = {}) {
     } else {
       const b = it.block;
       const mark = b.tags.length ? " " + esc(b.tags.map((id) => tagLabel(tags, id)).join(" ")) : "";
-      parts.push(`<p><b>${esc(b.speaker)}</b> <span style="color:#888">${t}${b.kind === "chat" ? " · chat" : ""}</span>${mark}<br>${esc(b.text)}</p>`);
+      const paras = (b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text }])
+        .map((p, i) => (i ? `<span style="color:#888;font-size:smaller">${clock(p.at - session.startedAt)}</span> ` : "") + esc(p.text).replace(/\n+/g, "<br>"))
+        .join("<br><br>");
+      parts.push(`<p><b>${esc(b.speaker)}</b> <span style="color:#888">${t}${b.kind === "chat" ? " · chat" : ""}</span>${mark}<br>${paras}</p>`);
     }
   }
   return parts.join("\n");
