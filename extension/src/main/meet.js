@@ -87,6 +87,32 @@
   const attached = new WeakSet();
   let lastProtocolCaption = 0;
 
+  // Conexões WebRTC vivas. Sair da chamada fecha todas (o Meet chama close(), que não dispara
+  // evento), então "já houve conexão e agora não há nenhuma" é o sinal mais confiável de saída,
+  // em qualquer idioma da interface. Numa reconexão, uma nova abre em poucos segundos.
+  const livePcs = new Set();
+  let pcSeen = false;
+  let lastPcAt = 0;
+  function trackPc(pc) {
+    livePcs.add(pc);
+    pcSeen = true;
+    lastPcAt = Date.now();
+    const check = () => {
+      if (["closed", "failed"].includes(pc.connectionState) || pc.signalingState === "closed") forget(pc);
+      else lastPcAt = Date.now();
+    };
+    pc.addEventListener("connectionstatechange", safe(check));
+    pc.addEventListener("signalingstatechange", safe(check));
+  }
+  function forget(pc) {
+    if (!livePcs.delete(pc)) return;
+    if (!livePcs.size) emit("connections-closed", { platform: "meet" });
+  }
+  function connectionsHealth() {
+    for (const pc of [...livePcs]) if (pc.connectionState === "closed" || pc.signalingState === "closed") forget(pc);
+    return { connections: livePcs.size, connectionsSeen: pcSeen, lastConnectionAt: lastPcAt };
+  }
+
   const handlers = {
     captions_v2: (b) => decodeCaptionsV2(b),
     captions: (b) => decodeLegacyCaption(b),
@@ -136,9 +162,16 @@
     return ch;
   };
 
+  const nativeClose = NativePC.prototype.close;
+  NativePC.prototype.close = function () {
+    safe(forget)(this);
+    return nativeClose.apply(this, arguments);
+  };
+
   function PatchedPC(config, constraints) {
     const pc = new NativePC(config, constraints);
     pc.addEventListener("datachannel", safe((ev) => attach(ev.channel)));
+    safe(trackPc)(pc);
     return pc;
   }
   PatchedPC.prototype = NativePC.prototype;
@@ -147,6 +180,6 @@
 
   // Permite ao fallback por DOM saber se o protocolo está funcionando.
   document.addEventListener("escribanote:ping", () =>
-    emit("protocol-health", { platform: "meet", lastProtocolCaption }),
+    emit("protocol-health", { platform: "meet", lastProtocolCaption, ...connectionsHealth() }),
   );
 })(globalThis);

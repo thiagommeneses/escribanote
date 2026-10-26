@@ -124,15 +124,15 @@ async function pressKey(sid, key) {
 }
 const rectOf = (sid, sel) => widgetCall(sid, sel, "function(){ const r = this.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } }");
 
-const MEET_HTML = (title) => `<!doctype html><html><head><title>Meet - ${title}</title></head><body style="background:#202124;margin:0;height:100vh">
+const MEET_HTML = (title, extra = "") => `<!doctype html><html><head><title>Meet - ${title}</title></head><body style="background:#202124;margin:0;height:100vh">
 <div style="color:#fff;font:20px sans-serif;padding:40px">Reunião simulada</div>
 <div data-participant-id="spaces/abc/devices/1" data-self-name="Thiago Teste" style="color:#fff"><span>Você</span></div>
 <div data-participant-id="spaces/abc/devices/9" style="color:#fff"><span>Carla Bloco</span></div>
 <div role="region" aria-label="Legendas" style="position:fixed;bottom:80px;left:40px;color:#fff">legenda nativa</div>
-<button aria-label="Sair da chamada" style="position:fixed;bottom:16px;left:50%">sair</button></body></html>`;
+<button aria-label="Sair da chamada" style="position:fixed;bottom:16px;left:50%">sair</button>${extra}</body></html>`;
 
 // Abre uma "reunião" e devolve a sessão CDP.
-async function openMeet(code, title) {
+async function openMeet(code, title, extra = "") {
   const { targetId } = await send("Target.createTarget", { url: "about:blank" });
   const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
   await send("Fetch.enable", { patterns: [{ urlPattern: "https://meet.google.com/*" }] }, sessionId);
@@ -141,7 +141,7 @@ async function openMeet(code, title) {
       send("Fetch.fulfillRequest", {
         requestId: msg.params.requestId, responseCode: 200,
         responseHeaders: [{ name: "Content-Type", value: "text/html; charset=utf-8" }],
-        body: Buffer.from(MEET_HTML(title)).toString("base64"),
+        body: Buffer.from(MEET_HTML(title, extra)).toString("base64"),
       }, sessionId);
     }
   });
@@ -152,6 +152,7 @@ async function openMeet(code, title) {
   // Par WebRTC local: pc1 envia, pc2 recebe pelo evento "datachannel" (como no Meet).
   await evaluate(sessionId, `(async () => {
     const pc1 = new RTCPeerConnection(), pc2 = new RTCPeerConnection();
+    window.__pcs = [pc1, pc2];
     pc1.onicecandidate = (e) => e.candidate && pc2.addIceCandidate(e.candidate);
     pc2.onicecandidate = (e) => e.candidate && pc1.addIceCandidate(e.candidate);
     window.__caps = pc1.createDataChannel("captions_v2");
@@ -587,12 +588,29 @@ try {
   await screenshot(app, "9-ajustes.png");
   step("layout de painel lateral e Ajustes");
 
-  // 10) Sair da chamada (o botão some, a página continua): a sessão termina sozinha em ~20 s
-  //     e, com o ajuste "Ao sair da reunião: abrir no Escribanote", a tela pós-reunião abre numa aba.
+  // 10) Sair da chamada: o Meet fecha as conexões WebRTC e tira o botão de sair; a página continua.
+  //     A sessão termina sozinha em poucos segundos, a última fala (cortada pelo protocolo) é
+  //     completada pela legenda que ainda estava na tela, o selo REC some e, com o ajuste
+  //     "Ao sair da reunião: abrir no Escribanote", a tela pós-reunião abre numa aba.
   await evaluate(app, `(async () => { const { settings = {} } = await chrome.storage.local.get("settings"); await chrome.storage.local.set({ settings: { ...settings, afterCall: "app" } }); })()`);
-  await evaluate(meet, `document.querySelector('button[aria-label="Sair da chamada"]').remove()`);
-  await waitFor(async () => !!(await sw({ type: "get", id })).endedAt, "sessão encerrada ao sair da chamada", 30_000);
-  step("sair da chamada encerra a sessão sem fechar a aba");
+  assert.equal(await evaluate(app, `chrome.action.getBadgeText({ tabId: ${meetTabId} })`), "REC", "selo REC durante a reunião");
+  await evaluate(meet, `(() => {
+    __say(777, 1, "então ficamos combinados assim e a gente se fala", ${JSON.stringify(ANA)});
+    const region = document.querySelector('[role="region"][aria-label="Legendas"]');
+    region.innerHTML = '<div><div>Ana Teste</div><div>então ficamos combinados assim e a gente se fala na próxima semana, obrigada</div></div>';
+  })()`);
+  await waitFor(async () => (await sw({ type: "get", id })).entries.some((e) => e.id === "777/" + ANA), "última fala pelo protocolo");
+  await sleep(1800); // um tique do leitor de tela, para a legenda inteira ser vista
+  const t0 = Date.now();
+  await evaluate(meet, `(() => { document.querySelector('button[aria-label="Sair da chamada"]').remove(); for (const pc of __pcs) pc.close(); })()`);
+  await waitFor(async () => !!(await sw({ type: "get", id })).endedAt, "sessão encerrada ao sair da chamada", 15_000);
+  const leaveMs = Date.now() - t0;
+  assert.ok(leaveMs < 12_000, "encerrou rápido após fechar as conexões: " + leaveMs + " ms");
+  const sEnd = await sw({ type: "get", id });
+  assert.equal(sEnd.entries.find((e) => e.id === "777/" + ANA).text, "então ficamos combinados assim e a gente se fala na próxima semana, obrigada", "última fala completada pela tela");
+  await waitFor(async () => (await evaluate(app, `chrome.action.getBadgeText({ tabId: ${meetTabId} })`)) === "", "selo REC apagado");
+  await waitFor(async () => /Transcrição encerrada/.test((await widgetCall(meet, "#body")) || ""), "widget mostra encerrada ao sair");
+  step(`sair da chamada encerra a sessão em ${(leaveMs / 1000).toFixed(1)} s, completa a última fala e apaga o selo REC`);
   // A aba criada por chrome.tabs.create não aparece no Target.getTargets do Chrome headless;
   // confere pela API de abas e, para o aviso, abre a mesma URL no alvo do app.
   const afterTab = await waitFor(async () => {
@@ -627,6 +645,25 @@ try {
   assert.equal(s4.entries.length, 1, "nada entra depois de encerrar");
   assert.ok(s4.endedAt, "continua encerrada");
   step("botão Encerrar do widget fecha a sessão e ignora o que vem depois");
+
+  // 12) Legendas que não ligam: o Escribanote clica em "Ativar legendas" sozinho (sem depender do botão
+  //     de sair); se mesmo assim nada vem, o widget pede para ligar à mão. Depois, a tela
+  //     "Você saiu da chamada" encerra a sessão na hora.
+  const meet5 = await openMeet("ccx-stuk-xyz", "Legendas travadas", `<button aria-label="Ativar legendas" onclick="window.__cc=(window.__cc||0)+1">cc</button>`);
+  await waitFor(() => evaluate(meet5, "(window.__cc || 0) >= 1"), "clique automático em Ativar legendas", 8000);
+  await waitFor(async () => /Legendas desligadas/.test((await widgetCall(meet5, "#body")) || ""), "widget pede para ligar as legendas à mão", 20_000);
+  assert.ok((await evaluate(meet5, "window.__cc")) <= 3, "no máximo 3 cliques automáticos");
+  step("legendas ligadas sozinhas sem depender do botão de sair; aviso quando não ligam");
+  await evaluate(meet5, `(() => { __device(${JSON.stringify(ANA)}, "Ana Teste"); __say(901, 1, "agora sim, as legendas ligaram", ${JSON.stringify(ANA)}); })()`);
+  const id5 = (await waitFor(async () => (await sw({ type: "list" })).find((m) => m.meetingKey === "meet:ccx-stuk-xyz" && m.count === 1), "sessão 5", 12_000).catch(async (err) => {
+    console.log("lista:", JSON.stringify((await sw({ type: "list" })).map((m) => [m.meetingKey, m.count, m.endedAt])));
+    console.log("página:", await evaluate(meet5, "JSON.stringify({ cc: window.__cc, caps: __caps.readyState, pcs: __pcs.map((p) => p.connectionState), url: location.href })"));
+    throw err;
+  })).id;
+  const t5 = Date.now();
+  await evaluate(meet5, `(() => { document.body.innerHTML = '<div>Você saiu da chamada</div><button>Voltar a participar</button><button>Voltar à tela inicial</button>'; for (const pc of __pcs) pc.close(); })()`);
+  await waitFor(async () => !!(await sw({ type: "get", id: id5 })).endedAt, "sessão 5 encerrada pela tela pós-chamada", 8000);
+  step(`tela "Você saiu da chamada" encerra a sessão em ${((Date.now() - t5) / 1000).toFixed(1)} s`);
 
   console.log("\nE2E OK");
 } finally {

@@ -23,6 +23,8 @@
     ended: false, // transcrição encerrada (botão do widget ou saída da chamada); nada mais é enviado
     uiLang: null, // idioma da interface do Meet, lido dos rótulos dos botões
     captionsOn: null, // true/false quando dá para saber pelo botão de legendas
+    captionsStuck: false, // na chamada há um tempo e as legendas não ligaram (nem sozinhas, nem à mão)
+    protocol: { connections: 0, connectionsSeen: false, lastConnectionAt: 0 }, // conexões WebRTC vistas pelo coletor (Meet)
     settings: { mode: "always", widget: true, hideCaptions: true, autoCaptions: true, domFallback: true, notifyMessage: "" },
   };
   bus.state = state;
@@ -151,17 +153,25 @@
     }
     if (ev.kind === "protocol-health") {
       lastProtocolCaption = Math.max(lastProtocolCaption, ev.lastProtocolCaption || 0);
+      if ("connections" in ev) state.protocol = { connections: ev.connections || 0, connectionsSeen: !!ev.connectionsSeen, lastConnectionAt: ev.lastConnectionAt || 0 };
       return;
     }
     if (ev.kind === "status") return;
     if (ev.kind === "channel-closed") return onCaptionsChannelClosed();
     if (ev.kind === "channel-open") return;
+    if (ev.kind === "connections-closed") {
+      // Saiu da chamada (ou caiu): não espera o próximo tique para começar a contar.
+      state.protocol = { ...state.protocol, connections: 0, connectionsSeen: true };
+      trackStage(readMeetUi());
+      return;
+    }
     if (ev.kind === "speaker" && ev.speakerId && ev.name) namedIds.add(ev.speakerId);
     if (ev.kind === "caption") {
       lastCaptionAt = Date.now();
       if (ev.source === "protocol") {
         lastProtocolCaption = lastCaptionAt;
         rememberProtocolCaption(ev);
+        rememberLastProtocol(ev);
       }
       if (!state.captionsSeen) {
         state.captionsSeen = true;
@@ -200,6 +210,26 @@
     else recentProto.push(item);
     if (recentProto.length > 30) recentProto.shift();
     matchNames();
+  }
+  // Últimas falas do protocolo (com ou sem nome). Ao sair da chamada o Meet fecha o canal na hora e a
+  // última fala fica pela metade; a legenda que ainda estava na tela costuma ter o texto inteiro.
+  const lastProto = []; // {id, speakerId, version, text, lang, at}
+  function rememberLastProtocol(ev) {
+    const i = lastProto.findIndex((p) => p.id === ev.id);
+    const item = { id: ev.id, speakerId: ev.speakerId, version: ev.version || 0, text: ev.text, lang: ev.lang, at: Date.now() };
+    if (i >= 0) lastProto[i] = item;
+    else lastProto.push(item);
+    if (lastProto.length > 12) lastProto.shift();
+  }
+  function complementFromScreen() {
+    const now = Date.now();
+    for (const p of lastProto) {
+      if (now - p.at > 20_000) continue;
+      const hit = recentDom.find((d) => now - d.at < 20_000 && d.text.length > p.text.length + 2 && normText(d.text).startsWith(normText(p.text)));
+      if (!hit) continue;
+      p.text = hit.text;
+      enqueue({ kind: "caption", platform: "meet", source: "protocol", id: p.id, speakerId: p.speakerId, version: p.version + 1, text: hit.text, ...(p.lang ? { lang: p.lang } : {}) });
+    }
   }
   function rememberDomCaption(name, text) {
     if (isSelfLabel(name)) name = selfName() || "Você";
@@ -255,14 +285,25 @@
   // Estágio: entrou na chamada / saiu (Meet pelo botão de sair; Slack pelo áudio do huddle). Sair não descarrega a página, então sem isto a
   // sessão só terminaria 30 min depois. Se a pessoa volta na mesma aba, a reunião continua
   // (menos de 10 min) ou vira uma nova parte.
+  // Sinais, do mais confiável ao menos: (1) as conexões WebRTC que o coletor vê — sair fecha todas,
+  // em qualquer idioma; (2) a tela "Você saiu da chamada" (botão de voltar a participar); (3) o botão
+  // de sair sumiu. Numa reconexão as conexões caem por alguns segundos com a tela da chamada ainda
+  // aberta, por isso o botão de sair presente alonga a espera em vez de encurtá-la.
   let leftAt = null;
-  const LEFT_GRACE_MS = 20_000;
-  function trackStage(inCallNow) {
+  let meetingSince = 0;
+  const GRACE = { reconnecting: 20_000, connections: 6_000, button: 10_000 };
+  function trackStage(ui) {
     const now = Date.now();
+    const { leave = false, rejoin = false, uiInCall = !!leave } = typeof ui === "boolean" ? { leave: ui } : ui || {};
+    const pcs = state.protocol;
+    // Conexão viva + algum sinal da tela da chamada (botões de sair/legendas, ou legendas já vistas):
+    // a sala de espera também pode abrir conexão, mas não tem esses botões.
+    const inCallNow = (pcs.connections > 0 && (uiInCall || state.captionsSeen)) || (!pcs.connectionsSeen && !!leave);
     if (inCallNow) {
       if (state.stage !== "meeting") {
         if (state.stage === "left") state.ended = false; // voltou à chamada: transcreve de novo
         state.stage = "meeting";
+        meetingSince = now;
         leftAt = null;
         autoClicks = 0;
         emitState();
@@ -271,11 +312,14 @@
     }
     if (state.stage === "meeting") {
       leftAt ||= now;
-      if (now - leftAt >= LEFT_GRACE_MS) {
+      const grace = rejoin ? 0 : leave ? GRACE.reconnecting : pcs.connectionsSeen ? GRACE.connections : GRACE.button;
+      if (now - leftAt >= grace) {
         state.stage = "left";
         leftAt = null;
-        state.ended = true;
+        if (platform === "meet") complementFromScreen();
         flush();
+        state.ended = true;
+        pending = [];
         if (isTop) chrome.runtime.sendMessage({ type: "meeting-left" }).catch(() => {});
         emitState();
       }
@@ -283,6 +327,7 @@
       state.stage = "prejoin";
     }
   }
+  bus.trackStage = trackStage;
 
   if (platform === "slack") {
     // Huddle do Slack: o detector (slack.js) diz se há áudio ao vivo; não há legendas, só o áudio da aba.
@@ -297,12 +342,12 @@
   // O Meet gera as legendas no idioma da interface; e os botões (ligar/desligar legendas, sair)
   // dizem em que idioma ela está e em que estágio a reunião está. Rótulos observados no Meet.
   const MEET_UI = {
-    pt: { on: /^(ativar|mostrar) legendas/i, off: /^(desativar|ocultar) legendas/i, leave: /^sair da chamada/i },
-    en: { on: /^turn on captions/i, off: /^turn off captions/i, leave: /^leave call/i },
-    es: { on: /^(activar|mostrar) subtítulos/i, off: /^(desactivar|ocultar) subtítulos/i, leave: /^salir de la llamada/i },
-    fr: { on: /^activer les sous-titres/i, off: /^désactiver les sous-titres/i, leave: /^quitter l'appel/i },
-    de: { on: /^untertitel aktivieren/i, off: /^untertitel deaktivieren/i, leave: /^anruf verlassen/i },
-    it: { on: /^attiva (i )?sottotitoli/i, off: /^disattiva (i )?sottotitoli/i, leave: /^abbandona la chiamata/i },
+    pt: { on: /^(ativar|mostrar) legendas/i, off: /^(desativar|ocultar) legendas/i, leave: /^sair da chamada/i, rejoin: /^(voltar a participar|participar de novo|voltar à tela inicial)/i },
+    en: { on: /^turn on captions/i, off: /^turn off captions/i, leave: /^leave call/i, rejoin: /^(rejoin|return to home screen)/i },
+    es: { on: /^(activar|mostrar) subtítulos/i, off: /^(desactivar|ocultar) subtítulos/i, leave: /^salir de la llamada/i, rejoin: /^(volver a unirse|volver a la pantalla principal)/i },
+    fr: { on: /^activer les sous-titres/i, off: /^désactiver les sous-titres/i, leave: /^quitter l'appel/i, rejoin: /^(rejoindre à nouveau|participer à nouveau|revenir à l'écran d'accueil)/i },
+    de: { on: /^untertitel aktivieren/i, off: /^untertitel deaktivieren/i, leave: /^anruf verlassen/i, rejoin: /^(erneut teilnehmen|zurück zum startbildschirm)/i },
+    it: { on: /^attiva (i )?sottotitoli/i, off: /^disattiva (i )?sottotitoli/i, leave: /^abbandona la chiamata/i, rejoin: /^(partecipa di nuovo|torna alla schermata iniziale)/i },
   };
   const buttons = () => [...document.querySelectorAll("button[aria-label]")];
   const findButton = (key) => {
@@ -312,9 +357,19 @@
     }
     return null;
   };
+  // A tela pós-chamada usa botões de texto (sem aria-label): "Voltar a participar", "Rejoin"…
+  const rejoinScreen = () => {
+    for (const el of document.querySelectorAll("button, [role=button]")) {
+      const t = (el.ariaLabel || el.textContent || "").trim();
+      if (t && t.length <= 40 && Object.values(MEET_UI).some((rx) => rx.rejoin.test(t))) return true;
+    }
+    return false;
+  };
 
   function inCall() {
-    return !!findButton("leave");
+    const leave = !!findButton("leave");
+    const uiInCall = leave || !!findButton("on") || !!findButton("off");
+    return (state.protocol.connections > 0 && (uiInCall || state.captionsSeen)) || (!state.protocol.connectionsSeen && leave);
   }
   bus.inCall = inCall;
 
@@ -334,7 +389,7 @@
       state.captionsOn = captionsOn;
       emitState();
     }
-    return { leave, on, off };
+    return { leave, on, off, uiInCall: !!(leave || on || off), rejoin: !leave && rejoinScreen() };
   }
 
   // Religa as legendas quando o Meet as perde (canal fechado numa reconexão, alguém desligou).
@@ -347,13 +402,23 @@
     lastCaptionAt = 0;
     retryAfter = Date.now() + 5000;
   }
+  // O botão "Ativar legendas" só existe dentro da chamada, então ele basta: não depende de achar o
+  // botão de sair (se o Meet mudar esse rótulo, as legendas continuam ligando sozinhas).
   function tryEnableCaptions(ui) {
     if (!state.consent || state.paused || !state.settings.autoCaptions || autoClicks >= 3 || totalClicks >= 12) return;
-    if (Date.now() < retryAfter || Date.now() - lastCaptionAt < 30_000 || !ui.leave) return;
+    if (Date.now() < retryAfter || Date.now() - lastCaptionAt < 30_000) return;
     if (ui.on) {
       autoClicks++;
       totalClicks++;
       ui.on.button.click();
+    }
+  }
+  // Na chamada há mais de 12 s, com legendas ainda desligadas: o widget pede para ligar à mão.
+  function trackCaptionsStuck() {
+    const stuck = state.stage === "meeting" && !!state.consent && !state.captionsSeen && state.captionsOn === false && Date.now() - meetingSince > 12_000;
+    if (stuck !== state.captionsStuck) {
+      state.captionsStuck = stuck;
+      emitState();
     }
   }
 
@@ -417,11 +482,13 @@
     document.dispatchEvent(new CustomEvent("escribanote:ping"));
     if (state.consent) scanTiles();
     const ui = readMeetUi();
-    trackStage(!!ui.leave);
+    trackStage(ui);
     tryEnableCaptions(ui);
+    trackCaptionsStuck();
     // Só usa o DOM se o protocolo nunca entregou legendas nesta página (evita duplicatas).
     if (state.consent !== false && state.settings.domFallback && lastProtocolCaption === 0) scrapeDom();
-    // Com o protocolo ativo, a tela serve só para descobrir nomes que o protocolo não trouxe.
-    else if (state.consent && recentProto.length) scrapeDom(true);
+    // Com o protocolo ativo, a tela serve para descobrir nomes que o protocolo não trouxe e para
+    // guardar a última legenda inteira (complemento ao sair da chamada).
+    else if (state.consent) scrapeDom(true);
   }, 1500);
 })();

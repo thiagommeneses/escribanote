@@ -68,8 +68,8 @@ async function analyzeSpeakers({ clips }) {
 
 async function stop() {
   await stopCapture();
-  // termina o que já estava na fila antes de avisar
-  await pipe.pump();
+  // termina o que já estava na fila (inclusive o trecho que estava sendo transcrito) antes de avisar
+  await Promise.race([pipe.drain(), new Promise((r) => setTimeout(r, 20_000))]);
   report({ state: "idle" });
   state.tabId = null;
 }
