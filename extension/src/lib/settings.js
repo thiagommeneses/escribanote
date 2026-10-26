@@ -45,6 +45,7 @@ export const DEFAULTS = {
   autoCaptions: true,
   domFallback: true,
   autoAta: false,
+  chaptersAuto: false, // capítulos por IA ao terminar a reunião (chave própria ou 1 crédito do Pro)
   aiModel: "claude-opus-5-5",
   talkTarget: 30, // % de fala desejada para "você"
   captionLang: "pt-BR",

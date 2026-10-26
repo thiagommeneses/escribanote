@@ -2,14 +2,14 @@
 // (chrome.storage.local). Só fala com a rede quando o usuário usa a IA.
 import { commitSummary } from "./lib/diff.js";
 import { mergeSpeakers,
-  createSession, applyEvent, normalize, setBlockTags, toggleLastBlockTag, participantNames,
+  createSession, applyEvent, normalize, setBlockTags, toggleLastBlockTag, participantNames, editBlock, undoEdit,
   addAsrSegment, effectiveEntries, toBlocks, speakerName,
 } from "./lib/transcript.js";
 import { getSettings, DEFAULTS, HQ_MODELS, pushSyncedSettings, pullSyncedSettings } from "./lib/settings.js";
 import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, writeSettingsFile, internalBackupDir, backupFileName, sessionFileText, settingsFileText, SETTINGS_FILE, readBackupFolder } from "./lib/backup.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
-import { streamClaude, ataRequest, chatRequest, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN } from "./lib/ai.js";
+import { streamClaude, ataRequest, chatRequest, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
 import { compileGlossary, applyGlossary, glossaryForPrompt } from "./lib/glossary.js";
 import { deleteAudio, audioInfo, vaultUsage, listAudio, enforceQuota } from "./lib/audiovault.js";
@@ -417,6 +417,7 @@ async function endSession(tabId, reason = "unknown") {
   openAfterCall(s, settings).catch((err) => console.warn("abrir após a chamada:", err));
   if (settings.autoReview) await reviewPending(s).catch(() => {});
   maybeAutoAta(s);
+  maybeAutoChapters(s);
 }
 
 // Slack (Pro): com "publicar sozinho" ligado na conta, a ata automática vai para o canal padrão.
@@ -457,6 +458,40 @@ async function openAfterCall(s, settings) {
     note({ url, error: err.message });
     throw err;
   }
+}
+
+// Capítulos por IA: chave própria com esquema JSON; conta Pro pelo endpoint de perguntas (1 crédito),
+// com a resposta em JSON extraída do texto.
+async function runChapters(ai, s, settings) {
+  let text;
+  if (ai.kind === "key") {
+    const r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...chaptersRequest(s), maxTokens: 4000 });
+    text = r.text;
+  } else {
+    const done = await accountCall(() => accountStream("/ai/ask", { meeting: forAccount(s), history: [{ role: "user", text: chaptersQuestion() }], tags: settings.tags, glossary: promptGlossary(settings) }, {}));
+    text = done.text;
+  }
+  const chapters = parseChapters(text, s);
+  if (chapters.length < 2) throw new Error("A IA não conseguiu dividir esta reunião em capítulos.");
+  return { chapters, model: ai.kind === "key" ? settings.aiModel : "pro" };
+}
+async function generateChapters(s) {
+  const settings = await getSettings();
+  const dur = (s.endedAt || s.updatedAt) - s.startedAt;
+  if (dur < CHAPTERS_MIN_MS) throw new Error("Capítulos só a partir de 3 minutos de reunião.");
+  const ai = await aiProvider();
+  if (!ai) throw new Error(NO_AI);
+  const r = await runChapters(ai, s, settings);
+  s.chapters = r.chapters;
+  s.chaptersBy = r.model;
+  noteEvent(s, "chapters", { count: r.chapters.length, by: r.model });
+  await changed(s, { now: true });
+  return s;
+}
+async function maybeAutoChapters(s) {
+  const settings = await getSettings();
+  if (!settings.chaptersAuto || (s.chapters && s.chapters.length)) return;
+  await generateChapters(s).catch(() => {});
 }
 
 async function maybeAutoAta(s) {
@@ -619,7 +654,8 @@ async function reviewPending(s, { force = false, onProgress } = {}) {
   try {
     const now = Date.now();
     const all = effectiveEntries(s).filter((e) => e.kind === "caption");
-    const todo = all.filter((e) => !s.reviewed[e.id] && (force || s.endedAt || now - e.updatedAt > 8000));
+    // falas corrigidas à mão não passam pela revisão (a correção manual vence)
+    const todo = all.filter((e) => !s.reviewed[e.id] && !s.edits?.[e.id]?.text && (force || s.endedAt || now - e.updatedAt > 8000));
     let changedCount = 0;
     for (let i = 0; i < todo.length; i += 40) {
       const batch = todo.slice(i, i + 40);
@@ -915,6 +951,34 @@ async function handle(msg, sender) {
       await changed(done, { now: true });
       if (st.autoReview) reviewPending(done, { force: true }).catch(() => {});
       return done;
+    }
+    case "chapters": {
+      if (!s) throw new Error("Reunião não encontrada.");
+      return generateChapters(s);
+    }
+    case "chapters-clear": {
+      if (!s) return null;
+      s.chapters = [];
+      s.chaptersBy = null;
+      await changed(s, { now: true });
+      return s;
+    }
+    case "edit-block": {
+      // correção manual: {ids, text} | {ids, speakerId} | {ids, deleted:true}
+      if (!s) return null;
+      const ids = Array.isArray(msg.ids) ? msg.ids.filter((x) => typeof x === "string") : [];
+      if (!ids.length) throw new Error("Nada para editar.");
+      const patch = typeof msg.text === "string" ? { text: msg.text.slice(0, 20000) } : msg.speakerId ? { speakerId: String(msg.speakerId) } : msg.deleted ? { deleted: true } : null;
+      if (!patch || !editBlock(s, ids, patch, msg.label)) throw new Error("Edição inválida.");
+      noteEvent(s, "edit", { kind: Object.keys(patch)[0], n: ids.length });
+      await changed(s, { now: true });
+      return s;
+    }
+    case "undo-edit": {
+      if (!s) return null;
+      const step = undoEdit(s);
+      if (step) await changed(s, { now: true });
+      return s;
     }
     case "import-create": {
       // Arquivo de áudio/vídeo importado pelo painel: nasce uma reunião já encerrada, sem aba; o painel

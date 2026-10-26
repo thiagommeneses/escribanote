@@ -46,6 +46,7 @@ export function toText(session, opts = {}) {
       const t = `[${clock(it.at - session.startedAt)}]`;
       if (it.type === "note") return `${t} 📝 Nota: ${it.note.text}`;
       if (it.type === "shot") return `${t} 📷 Captura de tela`;
+      if (it.type === "chapter") return `--- ${it.chapter.n}. ${it.chapter.title} ---`;
       const b = it.block;
       const tag = b.kind === "chat" ? " (chat)" : "";
       const mark = b.tags.length ? ` [${b.tags.map((id) => tagLabel(opts.tags, id)).join(", ")}]` : "";
@@ -74,9 +75,15 @@ export function toMarkdown(session, opts = {}) {
     lines.push("");
   }
   if (session.notes.text.trim()) lines.push("## Notas", "", session.notes.text.trim(), "");
+  if (session.chapters && session.chapters.length) {
+    lines.push("## Capítulos", "");
+    for (const c of session.chapters) lines.push(`- \`${clock(c.startAt - session.startedAt)}\` ${c.title}`);
+    lines.push("");
+  }
   lines.push("## Transcrição", "");
   for (const it of timeline(session, opts)) {
     const t = `\`${clock(it.at - session.startedAt)}\``;
+    if (it.type === "chapter") { lines.push(`### ${it.chapter.n}. ${it.chapter.title}`, ""); continue; }
     if (it.type === "note") lines.push(`> 📝 ${t} ${it.note.text}`, "");
     else if (it.type === "shot") lines.push(`> 📷 ${t} Captura de tela`, "");
     else {
@@ -122,6 +129,7 @@ export function toHtml(session, { tags, shotUrls = {} } = {}) {
     `<p><b>Plataforma:</b> ${esc(PLATFORM[session.platform] || session.platform)} · <b>Data:</b> ${esc(dateLabel(session.startedAt))}<br><b>Participantes:</b> ${esc(participantNames(session).join(", ") || "—")}</p>`,
   ];
   if (session.summary && session.summary.text) parts.push("<h2>Ata</h2>", mdToHtml(session.summary.text));
+  if (session.chapters && session.chapters.length) parts.push("<h2>Capítulos</h2><ul>", ...session.chapters.map((c) => `<li><span style="color:#888">${clock(c.startAt - session.startedAt)}</span> ${esc(c.title)}</li>`), "</ul>");
   const hls = highlightsOf(session);
   if (hls.length) {
     parts.push("<h2>Destaques</h2><ul>");
@@ -134,7 +142,8 @@ export function toHtml(session, { tags, shotUrls = {} } = {}) {
   parts.push("<h2>Transcrição</h2>");
   for (const it of timeline(session)) {
     const t = clock(it.at - session.startedAt);
-    if (it.type === "note") parts.push(`<blockquote>📝 <i>${t}</i> ${esc(it.note.text)}</blockquote>`);
+    if (it.type === "chapter") parts.push(`<h3>${it.chapter.n}. ${esc(it.chapter.title)}</h3>`);
+    else if (it.type === "note") parts.push(`<blockquote>📝 <i>${t}</i> ${esc(it.note.text)}</blockquote>`);
     else if (it.type === "shot") {
       const url = shotUrls[it.shot.id];
       parts.push(url ? `<p><i>${t}</i><br><img src="${url}" alt="Captura de tela" style="max-width:100%;border:1px solid #ddd;border-radius:6px"></p>` : `<p><i>${t} 📷 Captura de tela</i></p>`);

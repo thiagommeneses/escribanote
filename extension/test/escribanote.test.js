@@ -785,3 +785,49 @@ test("cofre de áudio: retenção e cota apagam as mais antigas, poupando 'mante
   assert.deepEqual(planEviction(items, { limitBytes: 0, retentionMs: 0, now }), [], "sem limites, nada sai");
   assert.deepEqual(planEviction(items, { limitBytes: 10, retentionMs: 0, now, protect: new Set(["ativa"]) }).sort(), ["a", "b", "velha"], "cota apertada poupa só a mantida e a ativa");
 });
+
+test("edição manual: texto, falante e apagar com desfazer; a revisão da IA não sobrescreve", async () => {
+  const { editBlock, undoEdit, effectiveEntries } = await import("../src/lib/transcript.js");
+  const s = createSession({ id: "ed1", platform: "meet", url: "https://meet.google.com/abc-defg-hij", title: "T", startedAt: 1_000_000 });
+  applyEvent(s, { kind: "caption", id: "a", speakerId: "d", version: 1, text: "o deploi ficou pra sexta" }, 1_001_000);
+  applyEvent(s, { kind: "caption", id: "b", speakerId: "d", version: 1, text: "e o front end também" }, 1_002_000);
+  applyEvent(s, { kind: "caption", id: "c", speakerId: "e", version: 1, text: "combinado" }, 1_004_000);
+  s.fixes.a = "o deploy ficou pra sexta"; // revisão da IA
+  assert.ok(editBlock(s, ["a", "b"], { text: "O deploy e o front-end ficaram para sexta." }, "texto"));
+  let eff = effectiveEntries(s);
+  assert.deepEqual(eff.map((e) => e.id), ["a", "c"], "a segunda fala do bloco some (texto foi para a primeira)");
+  assert.equal(eff[0].text, "O deploy e o front-end ficaram para sexta.");
+  assert.ok(eff[0].edited && !eff[0].fixed && eff[0].original === "o deploi ficou pra sexta", "correção manual vence a revisão e guarda o original");
+  assert.ok(editBlock(s, ["c"], { speakerId: "d" }, "falante"));
+  assert.equal(effectiveEntries(s).find((e) => e.id === "c").speakerId, "d");
+  assert.ok(editBlock(s, ["c"], { deleted: true }, "apagar"));
+  assert.deepEqual(effectiveEntries(s).map((e) => e.id), ["a"]);
+  assert.equal(s.undo.length, 3);
+  undoEdit(s);
+  assert.deepEqual(effectiveEntries(s).map((e) => e.id), ["a", "c"], "desfazer o apagar");
+  undoEdit(s);
+  assert.equal(effectiveEntries(s).find((e) => e.id === "c").speakerId, "e", "desfazer a troca de falante");
+  undoEdit(s);
+  eff = effectiveEntries(s);
+  assert.deepEqual(eff.map((e) => e.id), ["a", "b", "c"]);
+  assert.equal(eff[0].text, "o deploy ficou pra sexta", "sem edição, a revisão da IA volta a valer");
+  assert.equal(undoEdit(s), null);
+  assert.equal(toBlocks(s)[0].text, "o deploy ficou pra sexta e o front end também");
+});
+
+test("capítulos: parseChapters valida, ajusta ao bloco mais próximo e limita; exportações levam a seção", async () => {
+  const { parseChapters, chapterLines } = await import("../src/lib/ai.js");
+  const s = createSession({ id: "ch1", platform: "meet", url: "https://meet.google.com/abc-defg-hij", title: "T", startedAt: 1_000_000 });
+  let t = 1_000_000;
+  for (let i = 0; i < 6; i++) { t += 60_000; applyEvent(s, { kind: "caption", id: "c" + i, speakerId: i % 2 ? "a" : "b", version: 1, text: "Assunto número " + i + " em discussão." }, t); }
+  assert.ok(chapterLines(s).startsWith("[00:01:00] "), chapterLines(s).slice(0, 40));
+  const ch = parseChapters('Aqui está:\n{"chapters":[{"start":"03:05","title":"\\"Orçamento do trimestre\\""},{"start":"00:00","title":"Abertura"},{"start":"03:00","title":"Repetido"},{"start":"xx","title":"inválido"},{"start":"05:02","title":"Encerramento e próximos passos"}]}', s);
+  assert.deepEqual(ch.map((c) => [clockOf(c.startAt - s.startedAt), c.title]), [["00:01:00", "Abertura"], ["00:03:00", "Orçamento do trimestre"], ["00:05:00", "Encerramento e próximos passos"]]);
+  assert.deepEqual(parseChapters("nada de json", s), []);
+  assert.deepEqual(parseChapters('[{"start":"01:00","title":"Só um"}]', s).length, 1);
+  s.chapters = ch;
+  const md = toMarkdown(s);
+  assert.ok(md.includes("## Capítulos") && md.includes("`00:03:00` Orçamento do trimestre") && md.includes("### 2. Orçamento do trimestre"), md);
+  assert.ok(toText(s).includes("--- 2. Orçamento do trimestre ---"));
+  function clockOf(ms) { const sec = Math.round(ms / 1000); return [Math.floor(sec / 3600), Math.floor((sec % 3600) / 60), sec % 60].map((n) => String(n).padStart(2, "0")).join(":"); }
+});

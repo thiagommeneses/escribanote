@@ -41,6 +41,10 @@ export function normalize(s) {
   s.ataTemplateId ??= null; // modelo de ata escolhido para esta reunião (null = padrão dos Ajustes)
   s.ataPrompt ??= ""; // instruções extras do usuário para a IA ao gerar a ata (prevalecem sobre as regras e o modelo)
   s.report ||= { events: [] }; // relatório de sessão: {at, kind, detail} (dispositivos, modelo, pausas, encerramento)
+  s.chapters ||= []; // capítulos por IA: {startAt, title}
+  s.chaptersBy ??= null;
+  s.edits ||= {}; // correções manuais por fala: id -> {text?, speakerId?, deleted?, at}
+  s.undo ||= []; // pilha de desfazer: [{at, label, prev: {id -> edição anterior ou null}}]
   s.paused ??= false;
   s.endedAt ??= null;
   s.summary ??= null;
@@ -343,13 +347,21 @@ export function effectiveEntries(session) {
   }
   out.push(...asr);
   out.sort((a, b) => a.at - b.at);
+  const edits = session.edits || {};
   for (const e of out) {
     e.original = e.text;
     if (fixes[e.id] && fixes[e.id] !== e.text) {
       e.text = fixes[e.id];
       e.fixed = true;
     }
+    // Correção manual vence a revisão da IA; o original continua guardado para comparação.
+    const ed = edits[e.id];
+    if (ed) {
+      if (typeof ed.text === "string") { e.text = ed.text; e.fixed = false; e.edited = true; }
+      if (ed.speakerId) { e.speakerId = canonicalSpeaker(session, ed.speakerId); e.edited = true; }
+    }
   }
+  return out.filter((e) => !edits[e.id]?.deleted);
   return out;
 }
 
@@ -409,6 +421,7 @@ export function toBlocks(session, { gapMs = 60_000, includeChat = true, maxMs = 
       last.ids.push(e.id, ...(e.coveredIds || []));
       last.endAt = Math.max(last.endAt, e.updatedAt);
       last.fixed ||= !!e.fixed;
+      last.edited ||= !!e.edited;
       last.hq ||= e.source === "whisper";
       continue;
     }
@@ -423,6 +436,7 @@ export function toBlocks(session, { gapMs = 60_000, includeChat = true, maxMs = 
       paras: [{ at: e.at, texts: [e.text], originals: [e.original] }],
       ids: [e.id, ...(e.coveredIds || [])],
       fixed: !!e.fixed,
+      edited: !!e.edited,
       hq: e.source === "whisper",
     });
   }
@@ -453,10 +467,44 @@ export function toggleLastBlockTag(session, tagId) {
   return { key: b.key, tags };
 }
 
-// Linha do tempo unificada: blocos de fala, notas com horário e capturas de tela.
+// Edição manual de um bloco (todas as falas dele), registrada na pilha de desfazer como um passo só.
+// patch: {text} (o texto do bloco inteiro fica na primeira fala; as outras somem), {speakerId} ou {deleted}.
+export function editBlock(session, ids, patch, label) {
+  session.edits ||= {};
+  session.undo ||= [];
+  const prev = {};
+  for (const id of ids) prev[id] = session.edits[id] ? { ...session.edits[id] } : null;
+  const at = Date.now();
+  if (typeof patch.text === "string") {
+    const text = patch.text.replace(/\s+\n/g, "\n").trim();
+    if (!text) return false;
+    session.edits[ids[0]] = { ...(session.edits[ids[0]] || {}), text, at };
+    for (const id of ids.slice(1)) session.edits[id] = { ...(session.edits[id] || {}), deleted: true, at };
+  } else if (patch.speakerId) {
+    for (const id of ids) session.edits[id] = { ...(session.edits[id] || {}), speakerId: patch.speakerId, at };
+  } else if (patch.deleted) {
+    for (const id of ids) session.edits[id] = { ...(session.edits[id] || {}), deleted: true, at };
+  } else return false;
+  session.undo.push({ at, label: label || "edição", prev });
+  if (session.undo.length > 50) session.undo.shift();
+  session.updatedAt = Math.max(session.updatedAt, at);
+  return true;
+}
+export function undoEdit(session) {
+  const step = (session.undo || []).pop();
+  if (!step) return null;
+  for (const [id, prev] of Object.entries(step.prev)) {
+    if (prev) session.edits[id] = prev;
+    else delete session.edits[id];
+  }
+  return step;
+}
+
+// Linha do tempo unificada: blocos de fala, notas com horário, capturas de tela e capítulos.
 export function timeline(session, opts) {
   const items = [
     ...toBlocks(session, opts).map((b) => ({ type: "block", at: b.startAt, block: b })),
+    ...(session.chapters || []).map((c, i) => ({ type: "chapter", at: c.startAt - 1, chapter: { ...c, n: i + 1 } })),
     ...session.notes.items.map((n) => ({ type: "note", at: n.at, note: n })),
     ...session.shots.map((s) => ({ type: "shot", at: s.at, shot: s })),
   ];

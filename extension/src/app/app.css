@@ -163,6 +163,18 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .player .pbtn.sm:hover, .player .pbtn.sm.on { color: var(--text); background: var(--bg-soft); }
 .player .ptime { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .player input[type=range] { flex: 1; min-width: 60px; accent-color: var(--accent); }
+.chapters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 8px; }
+.chapters[hidden] { display: none; }
+.chapters .chip { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; max-width: 100%; }
+.chapters .chip:hover { border-color: var(--accent); }
+.chapters .chip time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.chapters .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-chapter { list-style: none; display: flex; align-items: center; gap: 8px; margin: 14px 0 4px; padding: 0 8px; font-weight: 700; font-size: 13.5px; color: var(--text); }
+.tl-chapter::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.tl-chapter .n { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 11px; }
+.badge-edit { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; }
+.ask textarea { width: 100%; min-height: 90px; resize: vertical; font: inherit; }
+.ask select { width: 100%; }
 .blk time.seek { cursor: pointer; border-bottom: 1px dotted transparent; }
 .blk time.seek:hover { color: var(--accent); border-bottom-color: currentColor; }
 .blk.playing { background: var(--accent-soft); }
