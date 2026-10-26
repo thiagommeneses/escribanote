@@ -33,6 +33,27 @@ function loadTrack(spec, caseDir, formato) {
   if (!spec) return null;
   const gen = /^gerar:silencio:(\d+)$/.exec(spec);
   if (gen) return new Float32Array(SR * Number(gen[1]));
+  // gerar:eco:<arquivo>:<ganho>:<atraso_ms> — a mesma fala, mais baixa e atrasada (vazamento da caixa de som)
+  const eco = /^gerar:eco:(.+):([\d.]+):(\d+)$/.exec(spec);
+  if (eco) {
+    const src = loadTrack(eco[1], caseDir, formato);
+    const gain = Number(eco[2]);
+    const delay = Math.round((Number(eco[3]) * SR) / 1000);
+    const out = new Float32Array(src.length + delay);
+    for (let i = 0; i < src.length; i++) out[i + delay] = src[i] * gain;
+    return out;
+  }
+  // gerar:ruido:<arquivo>:<rms> — a fala com ruído branco constante por cima (determinístico)
+  const ruido = /^gerar:ruido:(.+):([\d.]+)$/.exec(spec);
+  if (ruido) {
+    const src = loadTrack(ruido[1], caseDir, formato);
+    const rms = Number(ruido[2]);
+    let seed = 12345;
+    const rand = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff - 0.5; };
+    const out = new Float32Array(src.length);
+    for (let i = 0; i < src.length; i++) out[i] = src[i] + rand() * rms * 3.46; // uniforme: rms = amplitude/sqrt(3)
+    return out;
+  }
   const path = resolve(caseDir, spec);
   const buf = readFileSync(path);
   if (path.toLowerCase().endsWith(".wav")) return wavToFloat(buf);
@@ -94,6 +115,7 @@ function score(truth, segs) {
     lado: found ? side / found : null,
     vazamento: leakTotal ? leaked / leakTotal : 0,
     linhas: segs.length,
+    linhas_mic: segs.filter((s) => s.source === "mic").length,
     palavras: segs.reduce((a, s) => a + norm(s.text).length, 0),
   };
 }
@@ -149,7 +171,7 @@ const PAGE_RUNNER = `(async (modelKey, tracks) => {
   const loadMs = Math.round(performance.now() - t0);
   const dec = (s) => { const bin = atob(s); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Float32Array(u8.buffer); };
   const t1 = performance.now();
-  for (const [source, b64] of Object.entries(tracks)) {
+  for (const [source, b64] of Object.entries(tracks).sort(([a], [b]) => (a === "mic") - (b === "mic"))) {
     const push = pipe.addOfflineSource(source, 0);
     push(dec(b64));
   }
@@ -187,6 +209,7 @@ await withExtension(async (evaluate) => {
     if (lim.lado != null && (m.lado ?? 0) < lim.lado) problems.push(`lado ${pct(m.lado)} < ${pct(lim.lado)}`);
     if (lim.vazamento_max != null && m.vazamento > lim.vazamento_max) problems.push(`vazamento ${pct(m.vazamento)} > ${pct(lim.vazamento_max)}`);
     if (lim.linhas_max != null && m.linhas > lim.linhas_max) problems.push(`linhas ${m.linhas} > ${lim.linhas_max}`);
+    if (lim.linhas_mic_max != null && m.linhas_mic > lim.linhas_mic_max) problems.push(`linhas do microfone ${m.linhas_mic} > ${lim.linhas_mic_max}`);
     if (problems.length) failed = true;
     results.push({ caso: name, ...m, segundos: +(r.workMs / 1000).toFixed(1), modelo: MODEL, problemas: problems, saida: segs });
     console.log(`encontradas ${pct(m.encontradas)} · lado ${pct(m.lado)} · vazamento ${pct(m.vazamento)} · ${m.linhas} linhas · ${(r.workMs / 1000).toFixed(1)} s${problems.length ? "  ✗ " + problems.join("; ") : "  ✓"}`);

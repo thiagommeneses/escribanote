@@ -1,0 +1,5 @@
+{
+  "descricao": "Microfone com ruído branco constante (RMS 0,006, cerca de -44 dBFS) sob a fala real; a aba em silêncio. A fala precisa ser encontrada no lado do microfone.",
+  "faixas": { "aba": "gerar:silencio:4", "mic": "gerar:ruido:../../../extension/src/asr/fala-teste.pcm:0.006" },
+  "formato": "s16"
+}

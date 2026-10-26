@@ -55,6 +55,7 @@ export const DEFAULTS = {
   autoReview: false,
   hq: "off", // "off" | "base" | "small" | "turbo" — motor Whisper local
   hqMic: false,
+  echoFilter: true, // descarta do microfone o que é a voz dos outros saindo da caixa de som (energia e texto)
   diarize: false, // identificar falantes pela voz (Pro): pyannote + WeSpeaker locais
   afterCall: "off", // ao sair da chamada: "off" | "app" (abre a reunião no Escribanote) | "web" (app web da conta Pro)
   myName: "",

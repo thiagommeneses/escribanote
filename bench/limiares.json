@@ -1,4 +1,6 @@
 {
   "silencio": { "linhas_max": 0 },
-  "fala-teste": { "encontradas": 0.6, "lado": 1 }
+  "fala-teste": { "encontradas": 0.6, "lado": 1 },
+  "eco-sintetico": { "encontradas": 0.6, "lado": 1, "linhas_mic_max": 0, "vazamento_max": 0 },
+  "mic-ruidoso-sintetico": { "encontradas": 0.5, "lado": 1 }
 }

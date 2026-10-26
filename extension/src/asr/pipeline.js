@@ -1,7 +1,7 @@
 // Pipeline de reconhecimento local: recebe MediaStreams de áudio, segmenta por pausas e
 // transcreve com o Whisper. Usado pelo documento offscreen (áudio da aba da reunião) e pelo
 // gravador (áudio do computador, para apps como o Slack). O áudio nunca sai do computador.
-import { Segmenter } from "./segmenter.js";
+import { Segmenter, levelSamples, isStockPhrase, ownSpeechRatio, ECHO_KEEP_RATIO } from "./segmenter.js";
 import { createEngine, saveDiag } from "./engine.js";
 import { createSpeakerEngine } from "./speakers.js";
 import { HQ_MODELS, WHISPER_LANG } from "../lib/settings.js";
@@ -11,7 +11,7 @@ const SR = 16000;
 // onResult({start, end, text, source}) a cada trecho transcrito; onStatus(patch) para progresso;
 // onLevel(source, rms) a cada ~100 ms de áudio (para medidores de volume);
 // onEvent(kind, detail) para o relatório de sessão (modelo carregado, fonte trocada, erros, totais).
-export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent = () => {} } = {}) {
+export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent = () => {}, echo = true } = {}) {
   const state = {
     modelKey: null,
     engine: null,
@@ -20,10 +20,29 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
     busy: false,
     inputs: [], // {source, stream, ctx, node, src}
     segmenters: [],
-    stats: { segments: 0, audioMs: 0, workMs: 0, coalesced: 0 },
+    echo, // filtro de eco por energia (microfone x faixa dos outros)
+    others: { t: [], rms: [] }, // energia por quadro da faixa dos outros, em ms de parede
+    stats: { segments: 0, audioMs: 0, workMs: 0, coalesced: 0, droppedEcho: 0, droppedLow: 0, droppedStock: 0 },
   };
   const report = (patch) => onStatus({ ...patch, queue: state.queue.length });
   const emit = (kind, detail) => { try { onEvent(kind, detail); } catch {} };
+  const profileOf = (source) => (source === "mic" ? "mic" : "tab");
+  const OTHERS_MAX = 60_000; // ~30 min de quadros (benchmark empurra a faixa inteira de uma vez)
+  const noteOther = (t, rms) => {
+    state.others.t.push(t);
+    state.others.rms.push(rms);
+    if (state.others.t.length > OTHERS_MAX) { state.others.t.splice(0, 10_000); state.others.rms.splice(0, 10_000); }
+  };
+  // Recebe um segmento do segmentador já com horário de parede; aplica o filtro de eco ao microfone.
+  const accept = (s, source) => {
+    if (source === "mic" && state.echo) {
+      const ratio = ownSpeechRatio(s, s.start, state.others);
+      if (ratio < ECHO_KEEP_RATIO) { state.stats.droppedEcho++; return; }
+    }
+    state.queue.push(s);
+    if (state.queue.length > 6) coalesceQueue();
+    pump();
+  };
 
   async function addStream(stream, source) {
     const ctx = new AudioContext({ sampleRate: SR });
@@ -38,12 +57,10 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
     let index = 0;
     const seg = new Segmenter({
       sampleRate: SR,
-      onSegment: (s) => {
-        state.queue.push({ ...s, source, start: Math.round(wall0 + s.startSample / (SR / 1000)), end: Math.round(wall0 + s.endSample / (SR / 1000)) });
-        // Se o computador não acompanhar, junta os segmentos mais antigos em vez de descartá-los.
-        if (state.queue.length > 6) coalesceQueue();
-        pump();
-      },
+      profile: profileOf(source),
+      onFrame: source === "mic" ? null : (start, rms) => noteOther(wall0 + start / (SR / 1000), rms),
+      // Se o computador não acompanhar, accept() junta os segmentos mais antigos em vez de descartá-los.
+      onSegment: (s) => accept({ ...s, source, start: Math.round(wall0 + s.startSample / (SR / 1000)), end: Math.round(wall0 + s.endSample / (SR / 1000)) }, source),
     });
     node.port.onmessage = (e) => {
       seg.push(e.data, index);
@@ -79,10 +96,9 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
     let index = 0;
     const seg = new Segmenter({
       sampleRate: SR,
-      onSegment: (s) => {
-        state.queue.push({ ...s, source, start: Math.round(t0 + s.startSample / (SR / 1000)), end: Math.round(t0 + s.endSample / (SR / 1000)) });
-        pump();
-      },
+      profile: profileOf(source),
+      onFrame: source === "mic" ? null : (start, rms) => noteOther(t0 + start / (SR / 1000), rms),
+      onSegment: (s) => accept({ ...s, source, start: Math.round(t0 + s.startSample / (SR / 1000)), end: Math.round(t0 + s.endSample / (SR / 1000)) }, source),
     });
     state.segmenters.push(seg);
     return (samples) => {
@@ -108,11 +124,9 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
     let index = 0;
     const seg = new Segmenter({
       sampleRate: SR,
-      onSegment: (s) => {
-        state.queue.push({ ...s, source, start: Math.round(wall0 + s.startSample / (SR / 1000)), end: Math.round(wall0 + s.endSample / (SR / 1000)) });
-        if (state.queue.length > 6) coalesceQueue();
-        pump();
-      },
+      profile: profileOf(source),
+      onFrame: source === "mic" ? null : (start, rms) => noteOther(wall0 + start / (SR / 1000), rms),
+      onSegment: (s) => accept({ ...s, source, start: Math.round(wall0 + s.startSample / (SR / 1000)), end: Math.round(wall0 + s.endSample / (SR / 1000)) }, source),
     });
     state.segmenters.push(seg);
     return (samples) => {
@@ -144,7 +158,7 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
       const samples = new Float32Array(a.samples.length + Math.min(gap, SR) + b.samples.length);
       samples.set(a.samples);
       samples.set(b.samples, a.samples.length + Math.min(gap, SR));
-      q.splice(i, 2, { ...a, samples, end: b.end });
+      q.splice(i, 2, { ...a, samples, end: b.end, speechRms: Math.max(a.speechRms || 0, b.speechRms || 0), levels: null, speechMask: null });
       state.stats.coalesced++;
       return;
     }
@@ -156,6 +170,8 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
     try {
       while (state.queue.length && state.engine) {
         const seg = state.queue.shift();
+        // Áudio baixo demais não tem fala, só alucinação do modelo.
+        if (seg.speechRms != null && seg.speechRms < 0.004) { state.stats.droppedLow++; continue; }
         const t0 = performance.now();
         // Com identificação de falantes, o trecho é dividido por voz e cada parte é transcrita
         // separadamente (falas de pessoas diferentes não se misturam num bloco só).
@@ -168,8 +184,12 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
           }
         }
         for (const part of parts) {
-          const text = await state.engine.transcribe(part.samples);
-          if (text) onResult({ start: seg.start + part.startMs, end: seg.start + part.endMs, text, source: seg.source, ...(part.voice ? { voice: part.voice } : {}) });
+          // Nivela a fala antes do modelo: trechos baixos e altos chegam com a mesma intensidade.
+          const text = await state.engine.transcribe(levelSamples(part.samples, seg.speechRms));
+          if (!text) continue;
+          // "Obrigado.", "Tchau." sozinhos com áudio baixo são legenda inventada, não fala.
+          if (isStockPhrase(text) && (seg.speechRms == null || seg.speechRms < 0.02)) { state.stats.droppedStock++; continue; }
+          onResult({ start: seg.start + part.startMs, end: seg.start + part.endMs, text, source: seg.source, ...(part.voice ? { voice: part.voice } : {}) });
         }
         state.stats.workMs += performance.now() - t0;
         state.stats.audioMs += (seg.samples.length / SR) * 1000;
@@ -286,7 +306,9 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
     state.queue = [];
   }
 
-  return { addStream, replaceStream, addOfflineSource, flushSources, addPushSource, loadEngine, loadSpeakers, run, stop, stopCapture, drain, reset, pump, get busy() { return state.busy || state.queue.length > 0; }, get speakers() { return state.speakers; }, get stats() { return state.stats; } };
+  function setEcho(on) { state.echo = !!on; }
+
+  return { addStream, replaceStream, addOfflineSource, flushSources, addPushSource, loadEngine, loadSpeakers, run, stop, stopCapture, drain, reset, pump, setEcho, get busy() { return state.busy || state.queue.length > 0; }, get speakers() { return state.speakers; }, get stats() { return state.stats; } };
 }
 
 function trackLabel(stream) {

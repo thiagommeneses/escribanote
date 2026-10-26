@@ -665,7 +665,7 @@ async function startHq(tabId) {
   broadcastHq(tabId, { state: "starting" });
   const hs = await activeFor(tabId);
   if (hs) noteEvent(await getSession(hs.id), "hq-start", { model: modelKey, mic: !!settings.hqMic, diarize: !!settings.diarize });
-  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: settings.hqMic, diarize: settings.diarize && (await isPro()) });
+  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: settings.hqMic, echo: settings.echoFilter !== false, diarize: settings.diarize && (await isPro()) });
   if (r && r.error) {
     broadcastHq(tabId, { state: "error", message: r.error });
     throw new Error(r.error);

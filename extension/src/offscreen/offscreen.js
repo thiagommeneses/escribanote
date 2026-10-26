@@ -30,9 +30,10 @@ async function stopCapture() {
   state.play = null;
 }
 
-async function start({ tabId, streamId, modelKey, lang, mic, diarize }) {
+async function start({ tabId, streamId, modelKey, lang, mic, echo = true, diarize }) {
   await stopCapture();
   pipe.reset();
+  pipe.setEcho(echo);
   state.tabId = tabId;
   state.status = { state: "starting" };
 

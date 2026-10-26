@@ -235,24 +235,49 @@ export function resolveSpeaker(session, start, end) {
   return best ? best[0] : null;
 }
 
-// Palavras em comum entre dois textos, em relação ao menor (0 a 1).
+const wordsOf = (t) => (t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").match(/[\p{L}\p{N}]+/gu) || [];
+
+// Palavras em comum entre dois textos, em relação ao menor (0 a 1). Complementa os trigramas quando
+// o Whisper varia uma palavra no meio ("para" / "pra"), o que quebra as sequências.
 function wordSimilarity(a, b) {
-  const wa = new Set(a.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
-  const wb = new Set(b.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
+  const wa = new Set(wordsOf(a));
+  const wb = new Set(wordsOf(b));
   if (!wa.size || !wb.size) return 0;
   let common = 0;
   for (const w of wa) if (wb.has(w)) common++;
   return common / Math.min(wa.size, wb.size);
 }
 
+// Eco por texto: a fala do microfone é eco quando metade ou mais dos seus trigramas de palavras aparece
+// no que os outros disseram no mesmo momento. Frases curtas (menos de 3 palavras) exigem a sequência
+// inteira. Devolve a fração de trigramas repetidos (0 a 1).
+export function textEchoRatio(micText, otherTexts) {
+  const a = wordsOf(micText);
+  const other = otherTexts.map(wordsOf).filter((w) => w.length);
+  if (!a.length || !other.length) return 0;
+  const grams = (w, n) => { const out = new Set(); for (let i = 0; i + n <= w.length; i++) out.add(w.slice(i, i + n).join(" ")); return out; };
+  const n = Math.min(3, a.length);
+  const mine = grams(a, n);
+  const theirs = new Set();
+  for (const w of other) for (const g of grams(w, n)) theirs.add(g);
+  let hit = 0;
+  for (const g of mine) if (theirs.has(g)) hit++;
+  return hit / mine.size;
+}
+
 // Sem fone de ouvido, o microfone também capta a voz dos outros saindo da caixa de som.
-// Um trecho do microfone que repete, no mesmo momento, o que veio do áudio do sistema é eco.
-const ECHO_TOLERANCE_MS = 1500;
+// Um trecho do microfone que repete, no mesmo momento, o que veio da aba ou do computador é eco.
+const ECHO_TOLERANCE_MS = 2000;
+const OTHERS = new Set(["system", "tab"]);
+export const isTextEcho = (micText, otherTexts) => textEchoRatio(micText, otherTexts) >= 0.5 || otherTexts.some((o) => wordSimilarity(micText, o) >= 0.7);
 function echoOf(session, seg, text) {
-  const other = seg.source === "mic" ? "system" : "mic";
-  return session.asr.find(
-    (a) => a.source === other && overlap(seg.start - ECHO_TOLERANCE_MS, seg.end + ECHO_TOLERANCE_MS, a.start, a.end) > 0 && wordSimilarity(a.text, text) >= 0.6,
-  );
+  const near = (a) => overlap(seg.start - ECHO_TOLERANCE_MS, seg.end + ECHO_TOLERANCE_MS, a.start, a.end) > 0;
+  if (seg.source === "mic") {
+    const others = session.asr.filter((a) => OTHERS.has(a.source) && near(a));
+    return others.length && isTextEcho(text, others.map((a) => a.text)) ? others[0] : null;
+  }
+  // chegou a fala dos outros: um trecho do microfone já guardado pode ser o eco dela
+  return session.asr.find((a) => a.source === "mic" && near(a) && isTextEcho(a.text, [text])) || null;
 }
 
 // Adiciona um segmento do Whisper. source "mic" é sempre a própria pessoa; "system" é o áudio
@@ -260,7 +285,7 @@ function echoOf(session, seg, text) {
 export function addAsrSegment(session, seg, meId) {
   const text = norm(seg.text);
   if (!text || /^\[.*\]$|^\(.*\)$/.test(text)) return false; // "[música]", "(risos)"
-  if (seg.source === "mic" || seg.source === "system") {
+  if (seg.source === "mic" || OTHERS.has(seg.source)) {
     const echo = echoOf(session, seg, text);
     if (echo && seg.source === "mic") return false;
     if (echo) session.asr.splice(session.asr.indexOf(echo), 1); // o eco chegou antes: fica a versão limpa
