@@ -347,10 +347,12 @@
         ${running ? "" : '<div class="row"><button class="btn primary" data-hq="start">Transcrever este huddle</button></div>'}
         <div class="muted" id="hq-hint" style="margin-top:8px;font-size:12px">${state.hqHint ? esc(state.hqHint) : ""}</div></div>`;
     } else if (!session || !session.count) {
-      const hint = state.platform === "meet"
-        ? "As legendas são ligadas automaticamente. Comece a falar para ver a transcrição aqui."
-        : "Ative as legendas ao vivo na reunião. A transcrição aparece aqui assim que alguém falar.";
-      body.innerHTML = (session ? bannerHtml() : "") + `<div class="center"><h4>${state.paused ? "Transcrição pausada" : "Ouvindo…"}</h4><div>${hint}</div></div>`;
+      const hint = state.platform !== "meet"
+        ? "Ative as legendas ao vivo na reunião. A transcrição aparece aqui assim que alguém falar."
+        : state.captionsStuck
+          ? "Não consegui ligar as legendas do Meet. Clique no botão de legendas (CC) na barra de baixo do Meet; a transcrição começa em seguida."
+          : "As legendas são ligadas automaticamente. Comece a falar para ver a transcrição aqui.";
+      body.innerHTML = (session ? bannerHtml() : "") + `<div class="center"><h4>${state.paused ? "Transcrição pausada" : state.captionsStuck ? "Legendas desligadas" : "Ouvindo…"}</h4><div>${hint}</div></div>`;
     } else if (renaming) {
       // Não redesenha enquanto o nome está sendo editado (a transcrição ao vivo chega a cada segundo).
     } else {

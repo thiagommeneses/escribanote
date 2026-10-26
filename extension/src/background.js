@@ -22,6 +22,7 @@ const cache = new Map(); // id -> sessão
 const dirty = new Set();
 const tabLocks = new Map();
 const sessionTab = new Map(); // id -> tabId (reunião em andamento)
+const asrInflight = new Set(); // resultados do Whisper ainda sendo aplicados (o encerramento espera por eles)
 let saveTimer = null;
 const backupQueue = new Set(); // ids de reuniões ("settings" para os ajustes) a gravar na pasta
 let backupTimer = null;
@@ -316,15 +317,21 @@ function setBadge(tabId, s) {
 async function endSession(tabId) {
   const active = await activeFor(tabId);
   if (!active) return;
-  await chrome.storage.session.remove(`active:${tabId}`);
   const s = await getSession(active.id);
+  if (s && !s.endedAt) {
+    // Primeiro o Whisper termina o que tinha na fila (os resultados chegam por mensagem e precisam
+    // encontrar a sessão ainda aberta); só depois a sessão fecha. Antes, esses últimos trechos se perdiam.
+    await Promise.race([stopHq(tabId), new Promise((r) => setTimeout(r, 25_000))]);
+    await Promise.allSettled([...asrInflight]);
+  }
+  await chrome.storage.session.remove(`active:${tabId}`);
   sessionTab.delete(active.id);
+  chrome.action.setBadgeText({ tabId, text: "" }).catch(() => {}); // o selo REC some junto com a sessão
   if (!s || s.endedAt) return;
   s.endedAt = s.updatedAt;
   await changed(s, { now: true });
   queueBackup([s.id], { now: true }); // reunião terminou: backup já, sem esperar o lote
   queueAutoBackup([s.id], { now: true });
-  await stopHq(tabId);
   const settings = await getSettings();
   // a tela pós-reunião abre já; revisão e ata continuam em segundo plano e aparecem nela
   openAfterCall(s, settings).catch((err) => console.warn("abrir após a chamada:", err));
@@ -763,9 +770,13 @@ async function handle(msg, sender) {
       return s;
     case "my-view":
       return widgetView(s);
-    case "asr-result":
+    case "asr-result": {
       // vem do offscreen (com tabId) ou do gravador do computador (a própria aba)
-      return onAsrResult({ ...msg, tabId: msg.tabId ?? senderTab });
+      const p = onAsrResult({ ...msg, tabId: msg.tabId ?? senderTab });
+      asrInflight.add(p);
+      p.finally(() => asrInflight.delete(p));
+      return p;
+    }
     case "recorder-start": {
       // Gravador do computador (Slack e outros apps): a aba do gravador faz o papel da reunião,
       // então fechar a aba encerra a sessão como sair de uma reunião.
