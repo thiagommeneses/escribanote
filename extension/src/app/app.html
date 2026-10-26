@@ -39,7 +39,8 @@
         <div class="list-foot">
           <button class="btn ghost sm" data-recorder title="Slack e outros apps fora do navegador">Gravar do computador</button>
           <button class="btn ghost sm" id="backup">Exportar backup</button>
-          <label class="btn ghost sm">Importar<input type="file" id="import" accept="application/json" hidden></label>
+          <label class="btn ghost sm" title="Transcrever uma gravação (mp3, wav, m4a, webm, mp4…) com o Whisper, neste computador">Transcrever arquivo<input type="file" id="import-audio" accept="audio/*,video/*" hidden></label>
+          <label class="btn ghost sm" title="Restaurar reuniões de um arquivo de backup (.json)">Importar backup<input type="file" id="import" accept="application/json" hidden></label>
         </div>
       </aside>
 
@@ -81,6 +82,7 @@
               <input type="range" id="p-seek" min="0" max="1000" value="0" step="1" aria-label="Posição no áudio">
               <span class="ptime" id="p-dur">00:00</span>
               <span class="muted tiny" id="p-info"></span>
+              <button type="button" class="pbtn sm" id="p-retrans" title="Transcrever de novo a partir do áudio guardado (outro modelo ou com falantes pela voz)">↻</button>
               <button type="button" class="pbtn sm" id="p-keep" title="Manter este áudio fora da limpeza automática">☆</button>
               <button type="button" class="pbtn sm" id="p-del" title="Apagar o áudio desta reunião (a transcrição fica)">🗑</button>
             </div>

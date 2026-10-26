@@ -28,7 +28,7 @@ export function dateLabel(ts) {
   return new Date(ts).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
-export const PLATFORM = { meet: "Google Meet", teams: "Microsoft Teams", zoom: "Zoom", slack: "Slack", desktop: "Áudio do computador" };
+export const PLATFORM = { meet: "Google Meet", teams: "Microsoft Teams", zoom: "Zoom", slack: "Slack", desktop: "Áudio do computador", import: "Arquivo importado" };
 
 function tagLabel(tags, id) {
   const t = (tags || DEFAULT_TAGS).find((x) => x.id === id);

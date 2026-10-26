@@ -4,8 +4,9 @@
 import { createPipeline } from "../asr/pipeline.js";
 import { openMic, watchMic } from "../asr/mic.js";
 import { startKeeping } from "../asr/keep.js";
+import { readTrack } from "../lib/audiovault.js";
 
-const state = { tabId: null, status: { state: "idle" }, play: null, mic: null, keep: null };
+const state = { tabId: null, status: { state: "idle" }, play: null, mic: null, keep: null, retrans: null };
 
 // Relatório de sessão: eventos vão para o service worker, que os guarda na reunião da aba.
 function logEvent(kind, detail) {
@@ -18,10 +19,80 @@ function report(patch) {
 }
 
 const pipe = createPipeline({
-  onStatus: report,
-  onResult: (seg) => chrome.runtime.sendMessage({ type: "asr-result", tabId: state.tabId, seg }).catch(() => {}),
-  onEvent: logEvent,
+  onStatus: (patch) => { if (state.retrans) retransProgress(patch); else report(patch); },
+  onResult: (seg) => {
+    if (state.retrans) {
+      state.retrans.segments++;
+      retransProgress({ progress: Math.min(99, Math.round(((seg.end - state.retrans.startedAt) / Math.max(1, state.retrans.durationMs)) * 100)) });
+      return chrome.runtime.sendMessage({ type: "asr-result", sessionId: state.retrans.sessionId, seg }).catch(() => {});
+    }
+    return chrome.runtime.sendMessage({ type: "asr-result", tabId: state.tabId, seg }).catch(() => {});
+  },
+  onEvent: (kind, detail) => { if (state.retrans) chrome.runtime.sendMessage({ type: "session-report", sessionId: state.retrans.sessionId, kind, detail }).catch(() => {}); else logEvent(kind, detail); },
 });
+
+function retransProgress(patch) {
+  const r = state.retrans;
+  if (!r) return;
+  Object.assign(r.status, patch);
+  chrome.runtime.sendMessage({ type: "retranscribe-progress", sessionId: r.sessionId, status: { ...r.status, segments: r.segments } }).catch(() => {});
+}
+
+// Decodifica uma faixa do cofre (WebM/Opus gravado, ou mp3/wav/m4a importado) em mono 16 kHz.
+async function decodeTrack(file) {
+  const buf = await file.arrayBuffer();
+  const ctx = new AudioContext();
+  let decoded;
+  try {
+    decoded = await ctx.decodeAudioData(buf);
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+  const SR = 16000;
+  const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * SR), SR);
+  const src = off.createBufferSource();
+  src.buffer = decoded;
+  src.connect(off.destination);
+  src.start();
+  const out = await off.startRendering();
+  return { samples: out.getChannelData(0), durationMs: Math.round(decoded.duration * 1000) };
+}
+
+// Transcreve de novo (ou pela primeira vez, num arquivo importado) as faixas guardadas de uma reunião.
+// Usa o mesmo pipeline da alta precisão, com fontes offline no relógio original (startedAt).
+async function retranscribe({ sessionId, modelKey, lang, diarize, startedAt, tracks }) {
+  if (state.tabId) throw new Error("A alta precisão está em uso numa reunião. Termine-a antes de transcrever de novo.");
+  if (state.retrans) throw new Error("Já há uma transcrição em andamento.");
+  state.retrans = { sessionId, startedAt, durationMs: 0, segments: 0, status: { state: "starting", progress: 0 } };
+  try {
+    pipe.reset();
+    retransProgress({ state: "decoding" });
+    const decoded = [];
+    for (const source of tracks) {
+      const f = await readTrack(sessionId, source);
+      if (!f || !f.size) continue;
+      const d = await decodeTrack(f);
+      decoded.push({ source, ...d });
+      state.retrans.durationMs = Math.max(state.retrans.durationMs, d.durationMs);
+    }
+    if (!decoded.length) throw new Error("O áudio desta reunião não está mais neste computador.");
+    await pipe.run(modelKey, lang, { diarize: !!diarize });
+    retransProgress({ state: "running", progress: 0 });
+    // a faixa dos outros entra antes do microfone: o filtro de eco compara com o que já chegou
+    decoded.sort((a, b) => (a.source === "mic") - (b.source === "mic"));
+    for (const d of decoded) pipe.addOfflineSource(d.source, startedAt)(d.samples);
+    pipe.flushSources();
+    await pipe.drain();
+    await pipe.stopCapture();
+    retransProgress({ state: "done", progress: 100 });
+    return { segments: state.retrans.segments, durationMs: state.retrans.durationMs };
+  } catch (err) {
+    retransProgress({ state: "error", message: err.message || String(err) });
+    throw err;
+  } finally {
+    state.retrans = null;
+  }
+}
 
 async function stopCapture() {
   if (state.mic) state.mic.close();
@@ -117,7 +188,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   // object-url: o service worker não tem URL.createObjectURL; o backup automático grande passa por aqui.
   const objectUrl = async ({ text, mime }) => ({ url: URL.createObjectURL(new Blob([text], { type: mime || "application/json" })) });
   const revokeUrl = async ({ url }) => URL.revokeObjectURL(url);
-  const run = { start, stop, "transcribe-samples": transcribeSamples, "analyze-speakers": analyzeSpeakers, status: async () => state.status, "object-url": objectUrl, "revoke-url": revokeUrl }[msg.type];
+  const run = { start, stop, retranscribe, "transcribe-samples": transcribeSamples, "analyze-speakers": analyzeSpeakers, status: async () => state.status, "object-url": objectUrl, "revoke-url": revokeUrl }[msg.type];
   if (!run) return;
   run(msg)
     .then((r) => sendResponse(r ?? { ok: true }))

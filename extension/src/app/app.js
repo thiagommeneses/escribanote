@@ -6,7 +6,7 @@ import { getSettings, setSettings, DEFAULT_TAGS, MODELS, DEFAULTS, HQ_MODELS } f
 import { LANG_NAMES } from "../lib/lang.js";
 import { diffDocument, diffStats, diffHtml as versionDiffHtml } from "../lib/diff.js";
 import { getBackupDir, setBackupDir, backupPermission, resolveBackupFolder, readBackupFolder } from "../lib/backup.js";
-import { readTrack } from "../lib/audiovault.js";
+import { readTrack, writeTrackFile } from "../lib/audiovault.js";
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ["#2f6bff", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#dc2626", "#65a30d"];
@@ -280,6 +280,12 @@ function renderHqButton() {
 
 function renderBanner() {
   const parts = [];
+  const rt = state.retrans;
+  if (rt && state.session && rt.id === state.session.id) {
+    const st = rt.status || {};
+    const label = st.state === "decoding" ? "Lendo o áudio…" : st.state === "loading" ? `Baixando o modelo… ${st.progress || 0}%` : st.state === "error" ? `Falhou: ${st.message || ""}` : `Transcrevendo… ${st.progress || 0}%${st.segments ? ` · ${st.segments} trechos` : ""}`;
+    parts.push(`<div class="banner${st.state === "error" ? " warn" : ""}">🎧 <b>${esc(label)}</b> ${st.state === "error" ? "" : "A transcrição aparece aqui conforme avança; você pode continuar usando o Escribanote."}</div>`);
+  }
   // Aberto sozinho ao sair da chamada (ajuste "Ao sair da reunião")
   if (params.get("fim") && state.session?.endedAt && params.get("id") === state.session.id) {
     parts.push(`<div class="banner"><b>A chamada terminou e a transcrição foi encerrada.</b> ${state.session.summary?.text ? "A ata já está na aba <b>Ata</b>." : state.settings.autoAta ? "A ata está sendo gerada e aparece na aba <b>Ata</b>." : "Gere a ata na aba <b>Ata</b>,"} revise os destaques ou exporte pelo botão <b>Exportar</b>.</div>`);
@@ -1396,7 +1402,7 @@ function hasAudio(s) {
 function fmtBytes(b) {
   return b >= 1024 * 1024 * 1024 ? (b / 1024 / 1024 / 1024).toFixed(2) + " GB" : b >= 1024 * 1024 ? (b / 1024 / 1024).toFixed(1) + " MB" : Math.round(b / 1024) + " KB";
 }
-const TRACK_NAMES = { tab: "os outros", system: "o computador", mic: "seu microfone" };
+const TRACK_NAMES = { tab: "os outros", system: "o computador", mic: "seu microfone", import: "gravação importada" };
 async function unloadPlayer() {
   const p = state.player;
   if (!p) return;
@@ -1503,6 +1509,49 @@ $("p-del").addEventListener("click", async () => {
   toast("Áudio apagado");
   renderMeeting();
 });
+// Escolha do modelo para transcrever de novo / arquivo importado; depois, o service worker faz o resto.
+async function startRetranscribe(anchor, s) {
+  if (!s || !s.audio || !s.audio.tracks?.length) return;
+  const cur = state.settings.hq !== "off" ? state.settings.hq : "base";
+  const choices = Object.entries(HQ_MODELS).map(([key, m]) => ({ key, label: `${m.label || key}${key === cur ? " (atual)" : ""}`, primary: key === cur }));
+  choices.push({ key: "cancel", label: "Cancelar" });
+  const key = await askChoice(anchor, { title: "Transcrever com qual modelo?", text: "Roda neste computador. O modelo é baixado na primeira vez. A transcrição atual pelo áudio é substituída; legendas, notas e destaques ficam.", choices });
+  if (!key || key === "cancel") return;
+  state.retrans = { id: s.id, status: { state: "starting", progress: 0 } };
+  renderBanner();
+  try {
+    const done = await send({ type: "retranscribe", id: s.id, modelKey: key, lang: state.settings.captionLang });
+    if (state.session && state.session.id === s.id && done) state.session = normalize(done);
+    toast("Transcrição concluída");
+  } catch (err) {
+    toast(err.message || String(err));
+  } finally {
+    if (state.retrans && state.retrans.id === s.id) state.retrans = null;
+    renderMeeting();
+  }
+}
+$("p-retrans").addEventListener("click", (e) => startRetranscribe(e.currentTarget, state.session));
+
+$("import-audio").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  if (file.size > 1024 * 1024 * 1024) return toast("Arquivo grande demais (máximo 1 GB).");
+  try {
+    const title = file.name.replace(/\.[^.]+$/, "").slice(0, 200) || "Arquivo importado";
+    const rec = normalize(await send({ type: "import-create", title, name: file.name, bytes: file.size, startedAt: file.lastModified || Date.now() }));
+    const bytes = await writeTrackFile(rec.id, "import", file);
+    await send({ type: "audio-meta", sessionId: rec.id, meta: { startedAt: rec.startedAt, tracks: ["import"], mime: file.type || "", bytes, done: true, keep: false, imported: file.name } });
+    state.view = "meeting";
+    state.tab = "transcript";
+    await openSession(rec.id, true);
+    renderList();
+    await startRetranscribe($("p-retrans"), state.session);
+  } catch (err) {
+    toast("Não deu para importar: " + (err.message || err));
+  }
+});
+
 $("p-keep").addEventListener("click", async () => {
   const s = state.session;
   if (!s || !s.audio) return;
@@ -2219,6 +2268,10 @@ $("wipe").addEventListener("click", async () => {
 let pending = null;
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "backup-updated") return refreshBackupUi();
+  if (msg.type === "retranscribe-progress") {
+    if (state.retrans && state.retrans.id === msg.sessionId) { state.retrans.status = msg.status || {}; if (state.session && state.session.id === msg.sessionId) renderBanner(); }
+    return;
+  }
   if (msg.type === "account-updated") return renderAccount();
   if (msg.type === "index-updated") {
     if (!$("view-list").hidden) renderList();

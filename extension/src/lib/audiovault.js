@@ -57,11 +57,21 @@ export async function readMeta(id) {
 export async function readTrack(id, source) {
   const dir = await sessionAudioDir(id);
   if (!dir) return null;
-  try {
-    return await (await dir.getFileHandle(`${source}.webm`)).getFile();
-  } catch {
-    return null;
+  for await (const [name, h] of dir.entries()) {
+    if (h.kind === "file" && name.startsWith(`${source}.`) && name !== "meta.json") return h.getFile();
   }
+  return null;
+}
+
+// Guarda um arquivo inteiro como faixa (importação): mantém a extensão original para o player.
+export async function writeTrackFile(id, source, file) {
+  const dir = await sessionAudioDir(id, true);
+  const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "bin";
+  const fh = await dir.getFileHandle(`${source}.${ext}`, { create: true });
+  const w = await fh.createWritable();
+  await w.write(file);
+  await w.close();
+  return file.size;
 }
 
 export async function audioInfo(id) {
@@ -70,9 +80,9 @@ export async function audioInfo(id) {
   const tracks = [];
   let bytes = 0;
   for await (const [name, h] of dir.entries()) {
-    if (h.kind !== "file" || !name.endsWith(".webm")) continue;
+    if (h.kind !== "file" || name === "meta.json") continue;
     const f = await h.getFile();
-    tracks.push({ source: name.replace(/\.webm$/, ""), bytes: f.size });
+    tracks.push({ source: name.replace(/\.[^.]+$/, ""), bytes: f.size });
     bytes += f.size;
   }
   return tracks.length ? { tracks, bytes, meta: await readMeta(id) } : null;
