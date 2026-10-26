@@ -1,0 +1,36 @@
+name: Testes e benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Testes unitários
+        working-directory: extension
+        run: npm test
+      - name: Chromium
+        run: npx --yes playwright@1.56.0 install --with-deps chromium
+      - name: Cache do modelo Whisper (perfil do navegador)
+        uses: actions/cache@v4
+        with:
+          path: bench/.perfil
+          key: bench-perfil-base-v1
+      - name: Benchmark
+        run: |
+          CHROME=$(ls -d ~/.cache/ms-playwright/chromium-*/chrome-linux*/chrome | head -1)
+          CHROME="$CHROME" node bench/run.mjs --modelo base --verificar
+      - name: Resultado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-resultados
+          path: bench/resultados/

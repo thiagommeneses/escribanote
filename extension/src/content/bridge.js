@@ -94,7 +94,7 @@
     state.ended = true;
     pending = [];
     emitState();
-    await chrome.runtime.sendMessage({ type: "meeting-left" }).catch(() => {});
+    await chrome.runtime.sendMessage({ type: "meeting-left", reason: "stop-widget" }).catch(() => {});
   };
   bus.resumeSession = () => {
     state.ended = false;
@@ -264,7 +264,7 @@
   // Encerramento: o service worker fecha a sessão (e pode gerar a ata automática).
   window.addEventListener("pagehide", () => {
     flush();
-    if (isTop) chrome.runtime.sendMessage({ type: "meeting-left" }).catch(() => {});
+    if (isTop) chrome.runtime.sendMessage({ type: "meeting-left", reason: "tab-closed" }).catch(() => {});
   });
 
   // ---------- Legendas nativas ----------
@@ -333,7 +333,8 @@
         flush();
         state.ended = true;
         pending = [];
-        if (isTop) chrome.runtime.sendMessage({ type: "meeting-left" }).catch(() => {});
+        const reason = rejoin ? "rejoin-screen" : leave ? "leave-button" : pcs.connectionsSeen ? "connections-closed" : "call-ui-gone";
+        if (isTop) chrome.runtime.sendMessage({ type: "meeting-left", reason }).catch(() => {});
         emitState();
       }
     } else if (state.stage === "unknown") {
@@ -435,6 +436,7 @@
     const stuck = state.stage === "meeting" && !!state.consent && !state.captionsSeen && (state.captionsOn === "unavailable" || (state.captionsOn === false && Date.now() - meetingSince > 12_000));
     if (stuck !== state.captionsStuck) {
       state.captionsStuck = stuck;
+      if (stuck && isTop) chrome.runtime.sendMessage({ type: "session-report", kind: "captions-stuck", detail: { captionsOn: state.captionsOn } }).catch(() => {});
       emitState();
     }
   }

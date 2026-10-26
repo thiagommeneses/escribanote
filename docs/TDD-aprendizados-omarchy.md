@@ -6,7 +6,7 @@
 | Time             | Thiago Meneses (produto e código), Claude Code (implementação assistida)                |
 | Épico            | ClickUp, espaço Escribanote, lista "01" (a criar a partir deste documento)              |
 | Referências      | github.com/jankeesvw/omarchy-meeting-recorder · github.com/illegalstudio/omarchy-call-recorder |
-| Status           | Draft                                                                                   |
+| Status           | Em execução                                                                                   |
 | Criado           | 2026-10-26                                                                              |
 | Última atualização | 2026-10-26                                                                            |
 
@@ -272,10 +272,10 @@ A extensão não envia telemetria. A observabilidade é local:
 
 | # | Questão | Contexto | Status |
 | - | ------- | -------- | ------ |
-| 1 | O gravador do computador (Slack e outros) também guarda áudio? | Usa o mesmo pipeline, mas a captura é de tela; precisa confirmar se o áudio da tela pode ser gravado junto | Aberta |
-| 2 | Os capítulos entram como "ata" no consumo de créditos Pro ou têm regra própria? | Hoje a ata consome um crédito por reunião | Aberta |
-| 3 | Vozes sintéticas em pt-BR para o benchmark: piper tem vozes suficientes ou gravamos frases reais? | Qualidade da voz afeta a validade do benchmark | Aberta |
-| 4 | Exportação em pasta usa a pasta de backup existente ou uma pasta própria? | Uma pasta só é mais simples; separar evita misturar JSON de backup com arquivos legíveis | Aberta |
+| 1 | O gravador do computador (Slack e outros) também guarda áudio? | Usa o mesmo pipeline | ✅ Resolvida em 2026-10-26: sim, guarda, com o mesmo ajuste |
+| 2 | Os capítulos entram como "ata" no consumo de créditos Pro ou têm regra própria? | Hoje a ata consome um crédito por reunião | ✅ Resolvida em 2026-10-26: consomem um crédito quando não há chave própria, mesma regra da ata |
+| 3 | Vozes sintéticas em pt-BR para o benchmark ou frases reais? | Qualidade da voz afeta a validade do benchmark | ✅ Resolvida em 2026-10-26: vozes reais, gravadas pela equipe; o benchmark nasce com a estrutura e recebe os áudios conforme forem gravados |
+| 4 | Exportação em pasta usa a pasta de backup existente ou uma pasta própria? | Evitar misturar JSON de backup com arquivos legíveis | ✅ Resolvida em 2026-10-26: pasta própria "Reuniões", criada dentro da pasta de backup já autorizada, para não pedir uma segunda permissão |
 
 ## Glossário
 

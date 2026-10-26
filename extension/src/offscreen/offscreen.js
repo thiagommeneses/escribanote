@@ -2,8 +2,14 @@
 // microfone) e o entrega ao pipeline do Whisper local (src/asr/pipeline.js).
 // O áudio nunca sai do computador; só o texto vai para o service worker.
 import { createPipeline } from "../asr/pipeline.js";
+import { openMic, watchMic } from "../asr/mic.js";
 
-const state = { tabId: null, status: { state: "idle" }, play: null };
+const state = { tabId: null, status: { state: "idle" }, play: null, mic: null };
+
+// Relatório de sessão: eventos vão para o service worker, que os guarda na reunião da aba.
+function logEvent(kind, detail) {
+  chrome.runtime.sendMessage({ type: "session-report", tabId: state.tabId, kind, detail }).catch(() => {});
+}
 
 function report(patch) {
   state.status = { ...state.status, ...patch };
@@ -13,9 +19,12 @@ function report(patch) {
 const pipe = createPipeline({
   onStatus: report,
   onResult: (seg) => chrome.runtime.sendMessage({ type: "asr-result", tabId: state.tabId, seg }).catch(() => {}),
+  onEvent: logEvent,
 });
 
 async function stopCapture() {
+  if (state.mic) state.mic.close();
+  state.mic = null;
   await pipe.stopCapture();
   if (state.play) await state.play.close().catch(() => {});
   state.play = null;
@@ -38,12 +47,15 @@ async function start({ tabId, streamId, modelKey, lang, mic, diarize }) {
 
   if (mic) {
     try {
-      const m = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      const m = await openMic();
       await pipe.addStream(m, "mic");
+      state.mic = watchMic(m, { onStream: (s) => pipe.replaceStream("mic", s), onEvent: logEvent });
     } catch (err) {
+      logEvent("mic-denied", { error: err.name || String(err) });
       report({ warning: "Microfone indisponível (" + err.message + "). Sua própria fala segue pelas legendas." });
     }
   }
+  logEvent("capture-started", { sources: mic ? ["tab", "mic"] : ["tab"], model: modelKey, diarize: !!diarize });
 
   await pipe.run(modelKey, lang, { diarize: !!diarize });
 }

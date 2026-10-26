@@ -8,12 +8,16 @@ class EscribanoteCapture extends AudioWorkletProcessor {
 
   process(inputs) {
     const chans = inputs[0];
-    if (!chans || !chans.length) return true;
-    const n = chans[0].length;
+    // Sem fonte ligada (microfone trocado, faixa encerrada), o tempo continua passando: entra
+    // silêncio no lugar, para os horários das falas seguintes não adiantarem.
+    const n = chans && chans.length ? chans[0].length : 128;
     for (let i = 0; i < n; i++) {
       let v = 0;
-      for (let c = 0; c < chans.length; c++) v += chans[c][i];
-      this.buf[this.len++] = v / chans.length;
+      if (chans && chans.length) {
+        for (let c = 0; c < chans.length; c++) v += chans[c][i];
+        v /= chans.length;
+      }
+      this.buf[this.len++] = v;
       if (this.len === this.buf.length) {
         this.port.postMessage(this.buf);
         this.buf = new Float32Array(1600);

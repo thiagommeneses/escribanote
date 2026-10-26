@@ -9,20 +9,21 @@ import { HQ_MODELS, WHISPER_LANG } from "../lib/settings.js";
 const SR = 16000;
 
 // onResult({start, end, text, source}) a cada trecho transcrito; onStatus(patch) para progresso;
-// onLevel(source, rms) a cada ~100 ms de áudio (para medidores de volume).
-export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) {
+// onLevel(source, rms) a cada ~100 ms de áudio (para medidores de volume);
+// onEvent(kind, detail) para o relatório de sessão (modelo carregado, fonte trocada, erros, totais).
+export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent = () => {} } = {}) {
   const state = {
     modelKey: null,
     engine: null,
     speakers: null, // motor de identificação de falantes (opcional)
     queue: [],
     busy: false,
-    streams: [],
-    contexts: [],
+    inputs: [], // {source, stream, ctx, node, src}
     segmenters: [],
-    stats: { segments: 0, audioMs: 0, workMs: 0 },
+    stats: { segments: 0, audioMs: 0, workMs: 0, coalesced: 0 },
   };
   const report = (patch) => onStatus({ ...patch, queue: state.queue.length });
+  const emit = (kind, detail) => { try { onEvent(kind, detail); } catch {} };
 
   async function addStream(stream, source) {
     const ctx = new AudioContext({ sampleRate: SR });
@@ -30,7 +31,8 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
     const node = new AudioWorkletNode(ctx, "escribanote-capture");
     const mute = ctx.createGain();
     mute.gain.value = 0;
-    ctx.createMediaStreamSource(stream).connect(node).connect(mute).connect(ctx.destination);
+    const src = ctx.createMediaStreamSource(stream);
+    src.connect(node).connect(mute).connect(ctx.destination);
     // Relógio: amostra 0 corresponde a este instante (ms desde a época).
     const wall0 = Date.now() - ctx.currentTime * 1000;
     let index = 0;
@@ -52,9 +54,49 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
         onLevel(source, Math.sqrt(sum / e.data.length));
       }
     };
-    state.streams.push(stream);
-    state.contexts.push(ctx);
+    state.inputs.push({ source, stream, ctx, node, src });
     state.segmenters.push(seg);
+    emit("source-added", { source, label: trackLabel(stream) });
+  }
+
+  // Troca a fonte de áudio de uma entrada já ligada (ex.: o microfone padrão mudou). O relógio e o
+  // segmentador continuam os mesmos: o tempo sem fonte virou silêncio no worklet, então os horários batem.
+  function replaceStream(source, stream) {
+    const inp = state.inputs.find((i) => i.source === source);
+    if (!inp) return false;
+    try { inp.src.disconnect(); } catch {}
+    inp.stream.getTracks().forEach((t) => t.stop());
+    inp.stream = stream;
+    inp.src = inp.ctx.createMediaStreamSource(stream);
+    inp.src.connect(inp.node);
+    emit("source-replaced", { source, label: trackLabel(stream) });
+    return true;
+  }
+
+  // Fonte offline (benchmark e retranscrição): amostras prontas com horário absoluto `t0` (ms) para
+  // a amostra 0. Devolve push(samples); use flushSources() + drain() ao terminar.
+  function addOfflineSource(source, t0) {
+    let index = 0;
+    const seg = new Segmenter({
+      sampleRate: SR,
+      onSegment: (s) => {
+        state.queue.push({ ...s, source, start: Math.round(t0 + s.startSample / (SR / 1000)), end: Math.round(t0 + s.endSample / (SR / 1000)) });
+        pump();
+      },
+    });
+    state.segmenters.push(seg);
+    return (samples) => {
+      const CHUNK = SR; // 1 s por vez, para o segmentador trabalhar como ao vivo
+      for (let off = 0; off < samples.length; off += CHUNK) {
+        const part = samples.subarray(off, Math.min(samples.length, off + CHUNK));
+        seg.push(part, index);
+        index += part.length;
+      }
+    };
+  }
+
+  function flushSources() {
+    for (const s of state.segmenters) s.flush();
   }
 
   // Fonte que entrega amostras prontas (mono 16 kHz), como o ajudante nativo do Windows. Devolve
@@ -103,6 +145,7 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
       samples.set(a.samples);
       samples.set(b.samples, a.samples.length + Math.min(gap, SR));
       q.splice(i, 2, { ...a, samples, end: b.end });
+      state.stats.coalesced++;
       return;
     }
   }
@@ -136,6 +179,7 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
       }
     } catch (err) {
       saveDiag({ error: "transcrever: " + (err.message || String(err)) });
+      emit("transcribe-error", { message: err.message || String(err) });
       report({ state: "error", message: "Falha ao transcrever: " + err.message });
     } finally {
       state.busy = false;
@@ -148,12 +192,15 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
     state.engine = null;
     state.modelKey = modelKey;
     const files = {};
+    const t0 = performance.now();
     report({ state: "loading", progress: 0, model: modelKey });
     const engine = await createEngine({
       preset: HQ_MODELS[modelKey],
       language: WHISPER_LANG[(lang || "pt").slice(0, 2)] || "portuguese",
-      onFallback: () =>
-        report({ device: "wasm", warning: "A placa de vídeo deste computador não transcreveu corretamente; o Escribanote passou a usar o processador (mais lento, mas funciona)." }),
+      onFallback: (reason) => {
+        emit("engine-fallback", { reason: String(reason || "").slice(0, 200) });
+        report({ device: "wasm", warning: "A placa de vídeo deste computador não transcreveu corretamente; o Escribanote passou a usar o processador (mais lento, mas funciona)." });
+      },
       onProgress: (p) => {
         files[p.file] = p;
         const list = Object.values(files);
@@ -163,6 +210,7 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
       },
     });
     state.engine = engine;
+    emit("engine-loaded", { model: modelKey, device: engine.device, loadMs: Math.round(performance.now() - t0), check: engine.check ? { ok: true, ms: engine.check.ms } : null });
     return engine;
   }
 
@@ -199,8 +247,10 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
     if (diarize) {
       try {
         await loadSpeakers();
+        emit("speakers-loaded", {});
       } catch (err) {
         saveDiag({ speakersError: err.message || String(err) });
+        emit("speakers-error", { message: err.message || String(err) });
         report({ warning: "Não deu para carregar os modelos de identificação de falantes (" + err.message + "). A transcrição segue sem eles." });
       }
     } else await unloadSpeakers();
@@ -211,10 +261,10 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
 
   async function stopCapture() {
     for (const s of state.segmenters) s.flush();
-    for (const st of state.streams) st.getTracks().forEach((t) => t.stop());
-    for (const c of state.contexts) await c.close().catch(() => {});
-    state.streams = [];
-    state.contexts = [];
+    for (const i of state.inputs) i.stream.getTracks().forEach((t) => t.stop());
+    for (const i of state.inputs) await i.ctx.close().catch(() => {});
+    if (state.inputs.length || state.segmenters.length) emit("capture-stopped", { ...state.stats, rtf: +(state.stats.workMs / Math.max(1, state.stats.audioMs)).toFixed(2) });
+    state.inputs = [];
     state.segmenters = [];
   }
 
@@ -236,5 +286,10 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel } = {}) 
     state.queue = [];
   }
 
-  return { addStream, addPushSource, loadEngine, loadSpeakers, run, stop, stopCapture, drain, reset, pump, get busy() { return state.busy || state.queue.length > 0; }, get speakers() { return state.speakers; } };
+  return { addStream, replaceStream, addOfflineSource, flushSources, addPushSource, loadEngine, loadSpeakers, run, stop, stopCapture, drain, reset, pump, get busy() { return state.busy || state.queue.length > 0; }, get speakers() { return state.speakers; }, get stats() { return state.stats; } };
+}
+
+function trackLabel(stream) {
+  const t = stream.getAudioTracks()[0];
+  return t ? (t.label || "").slice(0, 80) : "";
 }

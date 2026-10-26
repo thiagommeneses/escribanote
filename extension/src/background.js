@@ -283,6 +283,19 @@ async function flushBackup() {
   return next;
 }
 
+// Relatório de sessão: eventos datados para diagnóstico (dispositivos, modelo, pausas, encerramento).
+// Sem conteúdo da reunião. Guardado na própria reunião; a aba "Diagnóstico" do painel mostra.
+const REPORT_MAX = 400;
+function noteEvent(s, kind, detail) {
+  if (!s) return;
+  s.report ||= { events: [] };
+  const ev = { at: Date.now(), kind };
+  if (detail && Object.keys(detail).length) ev.detail = detail;
+  s.report.events.push(ev);
+  if (s.report.events.length > REPORT_MAX) s.report.events.splice(0, s.report.events.length - REPORT_MAX);
+  scheduleSave(s.id);
+}
+
 // Salva e avisa as páginas abertas (app e widget da reunião).
 async function changed(s, { now = false } = {}) {
   scheduleSave(s.id);
@@ -344,10 +357,13 @@ async function onEvents(msg, tabId) {
   if (s.paused) return;
   if (msg.meeting.title && (!s.title || s.title === "Reunião sem título")) s.title = msg.meeting.title;
   let didChange = msg.events.some((ev) => ev.kind === "meeting-start" && !s.entries.length); // huddle detectado: a sessão já existe
+  if (!s.report?.events?.length) noteEvent(s, "start", { platform: s.platform, version: chrome.runtime.getManifest().version });
+  const had = s.entries.length;
   for (const ev of msg.events) {
     if ((ev.kind === "caption" || ev.kind === "chat") && ev.text) ev.text = applyGlossary(ev.text, glossaryRules);
     didChange = applyEvent(s, ev) || didChange;
   }
+  if (!had && s.entries.length) noteEvent(s, "first-caption", { source: s.entries[0].source, afterMs: Date.now() - s.startedAt });
   if (!didChange) return;
   setBadge(tabId, s);
   await changed(s);
@@ -359,11 +375,12 @@ function setBadge(tabId, s) {
   chrome.action.setBadgeBackgroundColor({ tabId, color: s.paused ? "#6b7280" : "#d93025" }).catch(() => {});
 }
 
-async function endSession(tabId) {
+async function endSession(tabId, reason = "unknown") {
   const active = await activeFor(tabId);
   if (!active) return;
   const s = await getSession(active.id);
   if (s && !s.endedAt) {
+    noteEvent(s, "end", { reason, entries: s.entries.length, asr: s.asr.length });
     // Primeiro o Whisper termina o que tinha na fila (os resultados chegam por mensagem e precisam
     // encontrar a sessão ainda aberta); só depois a sessão fecha. Antes, esses últimos trechos se perdiam.
     await Promise.race([stopHq(tabId), new Promise((r) => setTimeout(r, 25_000))]);
@@ -646,6 +663,8 @@ async function startHq(tabId) {
   }
   await ensureOffscreen();
   broadcastHq(tabId, { state: "starting" });
+  const hs = await activeFor(tabId);
+  if (hs) noteEvent(await getSession(hs.id), "hq-start", { model: modelKey, mic: !!settings.hqMic, diarize: !!settings.diarize });
   const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: settings.hqMic, diarize: settings.diarize && (await isPro()) });
   if (r && r.error) {
     broadcastHq(tabId, { state: "error", message: r.error });
@@ -656,6 +675,8 @@ async function startHq(tabId) {
 
 async function stopHq(tabId) {
   if (!hqStatus.has(tabId) || hqStatus.get(tabId).state === "idle") return;
+  const hs = await activeFor(tabId);
+  if (hs) noteEvent(await getSession(hs.id), "hq-stop");
   await toOffscreen({ type: "stop" }).catch(() => {});
   broadcastHq(tabId, { state: "idle" });
 }
@@ -802,7 +823,17 @@ async function handle(msg, sender) {
       return run;
     }
     case "meeting-left":
-      return endSession(senderTab);
+      return endSession(senderTab, msg.reason || "meeting-left");
+    case "session-report": {
+      // eventos do offscreen (com tabId), do gravador e da página da reunião (aba remetente)
+      const tabId = msg.tabId ?? senderTab;
+      if (tabId == null) return false;
+      const a = await activeFor(tabId);
+      const rs = a ? await getSession(a.id) : null;
+      if (!rs) return false;
+      noteEvent(rs, String(msg.kind || "event").slice(0, 40), msg.detail && typeof msg.detail === "object" ? msg.detail : {});
+      return true;
+    }
     case "consent-get": {
       const { consent = {} } = await chrome.storage.session.get("consent");
       return consent[msg.key] ?? null;
@@ -841,7 +872,7 @@ async function handle(msg, sender) {
       await chrome.tabs.create({ url: chrome.runtime.getURL("src/app/gravar.html") });
       return true;
     case "recorder-stop":
-      await endSession(senderTab);
+      await endSession(senderTab, "recorder-stop");
       return true;
     case "hq-status":
       // vindo do documento offscreen
@@ -943,8 +974,9 @@ async function handle(msg, sender) {
       if (tabId != null) {
         const viaTab = await chrome.tabs.sendMessage(tabId, { type: "end-session" }).then(() => true, () => false);
         if (viaTab) await waitUntil(async () => !!(await getSession(s.id))?.endedAt, 4000);
-        if (!(await getSession(s.id))?.endedAt) await endSession(tabId);
+        if (!(await getSession(s.id))?.endedAt) await endSession(tabId, "stop-panel");
       } else {
+        noteEvent(s, "end", { reason: "stop-panel", entries: s.entries.length, asr: s.asr.length });
         s.endedAt = s.updatedAt;
         await changed(s, { now: true });
       }
@@ -958,6 +990,7 @@ async function handle(msg, sender) {
       const ok = tabId != null && (await chrome.tabs.sendMessage(tabId, { type: "resume-session" }).then(() => true, () => false));
       if (!ok) return { error: "A aba da reunião já foi fechada; não dá para retomar." };
       s.endedAt = null;
+      noteEvent(s, "resume-after-end", { via: "panel" });
       sessionTab.set(s.id, tabId);
       await chrome.storage.session.set({ [`active:${tabId}`]: { id: s.id, meetingKey: s.meetingKey } });
       setBadge(tabId, s);
@@ -967,6 +1000,7 @@ async function handle(msg, sender) {
     case "pause": {
       if (!s) return null;
       s.paused = typeof msg.paused === "boolean" ? msg.paused : !s.paused;
+      noteEvent(s, s.paused ? "pause" : "resume");
       const tabId = sessionTab.get(s.id);
       if (tabId != null) setBadge(tabId, s);
       await changed(s, { now: true });
@@ -1434,5 +1468,5 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabLocks.delete(tabId);
-  endSession(tabId);
+  endSession(tabId, "tab-removed");
 });

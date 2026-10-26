@@ -1,0 +1,5 @@
+{
+  "descricao": "Trecho real de 3,6 s (Wikipédia Falada, CC0) na faixa da aba; o mesmo clipe embutido na extensão para o autoteste do modelo.",
+  "faixas": { "aba": "../../../extension/src/asr/fala-teste.pcm", "mic": null },
+  "formato": "s16"
+}

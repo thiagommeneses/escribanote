@@ -252,9 +252,9 @@ function renderMeeting() {
   for (const b of document.querySelectorAll(".subtabs button")) b.setAttribute("aria-selected", b.dataset.tab === state.tab);
   const nv = (s.summaryHistory || []).length;
   $("c-ata").textContent = nv > 1 ? `v${nv}` : "";
-  for (const p of ["transcript", "highlights", "notes", "ata", "ai", "stats"]) $(`pane-${p}`).hidden = p !== state.tab;
+  for (const p of ["transcript", "highlights", "notes", "ata", "ai", "stats", "diag"]) $(`pane-${p}`).hidden = p !== state.tab;
 
-  ({ transcript: renderTranscript, highlights: renderHighlights, notes: renderNotes, ata: renderAta, ai: renderAI, stats: renderStats })[state.tab]();
+  ({ transcript: renderTranscript, highlights: renderHighlights, notes: renderNotes, ata: renderAta, ai: renderAI, stats: renderStats, diag: renderDiag })[state.tab]();
 }
 
 function renderHqButton() {
@@ -1382,6 +1382,72 @@ $("quick").addEventListener("click", (e) => {
 });
 
 // ----- Análise -----
+// ---------------- Diagnóstico (relatório de sessão) ----------------
+const EVENT_LABELS = {
+  start: "Reunião detectada",
+  "first-caption": "Primeira legenda",
+  "captions-stuck": "Legendas não ligaram",
+  "hq-start": "Alta precisão ligada",
+  "hq-stop": "Alta precisão desligada",
+  "capture-started": "Captura de áudio iniciada",
+  "capture-stopped": "Captura de áudio encerrada",
+  "source-added": "Fonte de áudio ligada",
+  "source-replaced": "Fonte de áudio trocada",
+  "mic-denied": "Microfone negado",
+  "mic-ended": "Microfone desconectado",
+  "mic-reacquired": "Microfone reconectado",
+  "mic-lost": "Microfone perdido",
+  "engine-loaded": "Modelo carregado",
+  "engine-fallback": "Placa de vídeo falhou; passou ao processador",
+  "speakers-loaded": "Modelos de voz carregados",
+  "speakers-error": "Modelos de voz falharam",
+  "transcribe-error": "Erro ao transcrever",
+  pause: "Pausado",
+  resume: "Retomado",
+  "resume-after-end": "Transcrição retomada",
+  end: "Encerrada",
+};
+const END_REASONS = {
+  "leave-button": "botão Sair da chamada",
+  "connections-closed": "conexões da chamada fechadas",
+  "rejoin-screen": "tela de pós-chamada",
+  "call-ui-gone": "interface da chamada sumiu",
+  "tab-closed": "aba fechada ou recarregada",
+  "tab-removed": "aba fechada",
+  "stop-widget": "botão Parar do widget",
+  "stop-panel": "botão Parar do painel",
+  "recorder-stop": "gravador parado",
+  "meeting-left": "saída da reunião",
+};
+function detailText(kind, d) {
+  if (!d) return "";
+  if (kind === "end") return [END_REASONS[d.reason] || d.reason, d.entries != null ? `${d.entries} legendas` : "", d.asr != null && d.asr ? `${d.asr} trechos do Whisper` : ""].filter(Boolean).join(" · ");
+  if (kind === "engine-loaded") return `${d.model} · ${d.device === "webgpu" ? "placa de vídeo" : "processador"} · ${((d.loadMs || 0) / 1000).toFixed(1)} s`;
+  if (kind === "capture-stopped") return `${d.segments || 0} trechos · ${Math.round((d.audioMs || 0) / 1000)} s de fala · ${d.rtf != null ? d.rtf + "x o tempo real" : ""}${d.coalesced ? ` · ${d.coalesced} juntados por atraso` : ""}`;
+  if (kind === "capture-started") return `${(d.sources || []).map((x) => ({ tab: "aba", mic: "microfone", system: "computador" })[x] || x).join(" + ")} · ${d.model || ""}${d.diarize ? " · falantes pela voz" : ""}`;
+  if (kind === "hq-start") return `${d.model}${d.mic ? " · com microfone" : ""}${d.diarize ? " · falantes pela voz" : ""}`;
+  if (kind === "first-caption") return `${((d.afterMs || 0) / 1000).toFixed(0)} s depois do início · ${d.source === "dom" ? "pela tela" : "pelo canal de dados"}`;
+  if (kind === "start") return `${PLATFORM[d.platform] || d.platform} · Escribanote ${d.version || ""}`;
+  if (kind === "captions-stuck") return d.captionsOn === "unavailable" ? "o Meet avisou que a legenda está indisponível" : "o botão de legendas não respondeu";
+  return Object.entries(d).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ");
+}
+function renderDiag() {
+  const s = state.session;
+  const events = (s.report && s.report.events) || [];
+  const rows = events
+    .map((e) => `<tr><td class="t">${clock(Math.max(0, e.at - s.startedAt))}</td><td>${esc(EVENT_LABELS[e.kind] || e.kind)}</td><td class="muted">${esc(detailText(e.kind, e.detail))}</td></tr>`)
+    .join("");
+  $("pane-diag").innerHTML = `
+    <p class="muted tiny">Registro do que aconteceu nesta reunião: dispositivos, modelo, pausas e encerramento. Não guarda o que foi dito. Útil para entender por que algo não foi captado.</p>
+    ${events.length ? `<table class="diag"><tbody>${rows}</tbody></table>` : `<div class="list-empty">Nenhum evento registrado nesta reunião.</div>`}
+    <div class="row" style="margin-top:10px"><button type="button" class="btn sm" id="diag-copy">Copiar diagnóstico</button></div>`;
+  $("diag-copy").addEventListener("click", async () => {
+    const payload = { app: "escribanote", version: chrome.runtime.getManifest().version, id: s.id, title: s.title, platform: s.platform, startedAt: s.startedAt, endedAt: s.endedAt, entries: s.entries.length, asr: s.asr.length, report: s.report };
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    toast("Diagnóstico copiado");
+  });
+}
+
 function renderStats() {
   const s = state.session;
   const st = computeStats(s);

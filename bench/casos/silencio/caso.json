@@ -1,0 +1,4 @@
+{
+  "descricao": "Vinte segundos sem nenhuma fala nas duas faixas. Não pode sair texto nenhum.",
+  "faixas": { "aba": "gerar:silencio:20", "mic": "gerar:silencio:20" }
+}
