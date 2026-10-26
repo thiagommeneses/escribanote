@@ -698,3 +698,72 @@ test("exportações levam os parágrafos com o horário do segundo em diante", (
   const md = toMarkdown(s);
   assert.ok(md.includes("Começo.\n\n`00:00:11` Depois da pausa."), md);
 });
+
+test("segmentador: microfone ruidoso mantém a fala (margem adaptativa) e a aba usa barra fixa", async () => {
+  const { Segmenter } = await import("../src/asr/segmenter.js");
+  const SR = 16000;
+  let seed = 7;
+  const rand = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff - 0.5; };
+  // 20 s de ruído (rms ~0,006) com uma "fala" de 1,5 s (tom a rms ~0,02) aos 12 s
+  const n = SR * 20;
+  const audio = new Float32Array(n);
+  for (let i = 0; i < n; i++) audio[i] = rand() * 0.006 * 3.46;
+  for (let i = SR * 12; i < SR * 13.5; i++) audio[i] += Math.sin((2 * Math.PI * 220 * i) / SR) * 0.028;
+  const got = [];
+  const seg = new Segmenter({ sampleRate: SR, profile: "mic", onSegment: (s) => got.push(s) });
+  for (let off = 0; off < n; off += SR) seg.push(audio.subarray(off, Math.min(n, off + SR)), off);
+  seg.flush();
+  assert.equal(got.length, 1, "um trecho de fala no microfone ruidoso: " + got.length);
+  assert.ok(Math.abs(got[0].startSample / SR - 12) < 0.5, "começa perto dos 12 s: " + got[0].startSample / SR);
+  assert.ok(got[0].speechRms > 0.015 && got[0].levels.length === got[0].speechMask.length, "nível de fala e máscaras no trecho");
+  // a mesma gravação sem fala não produz nada
+  const quiet = new Float32Array(n);
+  for (let i = 0; i < n; i++) quiet[i] = rand() * 0.006 * 3.46;
+  const none = [];
+  const seg2 = new Segmenter({ sampleRate: SR, profile: "mic", onSegment: (s) => none.push(s) });
+  for (let off = 0; off < n; off += SR) seg2.push(quiet.subarray(off, Math.min(n, off + SR)), off);
+  seg2.flush();
+  assert.equal(none.length, 0, "ruído constante não vira fala");
+});
+
+test("filtro de eco por energia: fala própria passa, vazamento da caixa de som cai", async () => {
+  const { ownSpeechRatio, ECHO_KEEP_RATIO } = await import("../src/asr/segmenter.js");
+  const frames = 40;
+  const seg = { levels: Float32Array.from({ length: frames }, () => 0.01), speechMask: new Uint8Array(frames).fill(1) };
+  const t = [], rms = [];
+  for (let i = 0; i < frames; i++) { t.push(5000 + i * 30); rms.push(0.05); } // os outros falando alto ao mesmo tempo
+  assert.ok(ownSpeechRatio(seg, 5000, { t, rms }) < ECHO_KEEP_RATIO, "mic baixo durante fala alta dos outros é eco");
+  const loud = { levels: Float32Array.from({ length: frames }, () => 0.04), speechMask: new Uint8Array(frames).fill(1) };
+  assert.ok(ownSpeechRatio(loud, 5000, { t, rms }) >= ECHO_KEEP_RATIO, "mic com energia comparável é fala própria");
+  assert.equal(ownSpeechRatio(seg, 60000, { t, rms }), 1, "sem áudio dos outros no momento, tudo é fala própria");
+});
+
+test("eco por texto (trigramas), nivelamento e frases prontas", async () => {
+  const { textEchoRatio } = await import("../src/lib/transcript.js");
+  const { levelSamples, isStockPhrase, isNoiseMarker, cleanTranscript } = await import("../src/asr/segmenter.js");
+  assert.ok(textEchoRatio("a gente precisa fechar o orçamento até sexta", ["Então a gente precisa fechar o orçamento até sexta, certo?"]) >= 0.5);
+  assert.ok(textEchoRatio("eu discordo completamente dessa proposta", ["a gente precisa fechar o orçamento até sexta"]) < 0.5);
+  assert.ok(textEchoRatio("ok", ["ok, combinado"]) >= 0.5, "frase curta: sequência inteira");
+  const quiet = Float32Array.from({ length: 1600 }, (_, i) => Math.sin(i / 10) * 0.01);
+  const out = levelSamples(quiet, 0.007);
+  assert.ok(Math.max(...out) > 0.05 && Math.max(...out) <= 0.95, "fala baixa é amplificada sem estourar");
+  assert.ok(isStockPhrase("Obrigado.") && isStockPhrase("Thank you") && !isStockPhrase("Obrigado pela proposta, vamos analisar."));
+  assert.ok(isNoiseMarker("[música]") && isNoiseMarker("(risos)") && isNoiseMarker("...") && !isNoiseMarker("música ao fundo"));
+  assert.equal(cleanTranscript("*aplausos*"), "");
+  assert.equal(cleanTranscript("Obrigado."), "Obrigado.", "frase pronta não cai só pelo texto: depende do nível de áudio");
+});
+
+test("addAsrSegment: eco por texto vale para a aba (Meet) e remove o eco que chegou antes", () => {
+  const s = createSession({ id: "e1", platform: "meet", url: "https://meet.google.com/abc-defg-hij", title: "T", startedAt: 1_000_000 });
+  s.asr = [];
+  const { addAsrSegment } = globalThis.__tx || {};
+  // importado estaticamente no topo do arquivo? usa import dinâmico para não mexer no cabeçalho
+  return import("../src/lib/transcript.js").then(({ addAsrSegment }) => {
+    assert.ok(addAsrSegment(s, { start: 1_000_000, end: 1_003_000, text: "vamos começar pelo backlog da sprint", source: "mic" }, "me"));
+    assert.ok(addAsrSegment(s, { start: 1_000_200, end: 1_003_200, text: "Então vamos começar pelo backlog da sprint de hoje.", source: "tab" }, "me"));
+    assert.deepEqual(s.asr.map((a) => a.source), ["tab"], "o eco do microfone que chegou antes foi removido");
+    assert.equal(addAsrSegment(s, { start: 1_010_000, end: 1_012_000, text: "pode ser, o deploy ficou pendente", source: "tab" }, "me"), true);
+    assert.equal(addAsrSegment(s, { start: 1_010_300, end: 1_012_300, text: "pode ser o deploy ficou pendente", source: "mic" }, "me"), false, "eco do microfone que chega depois é descartado");
+    assert.equal(addAsrSegment(s, { start: 1_010_300, end: 1_012_300, text: "eu discordo, o deploy não era prioridade", source: "mic" }, "me"), true, "fala própria diferente entra");
+  });
+});

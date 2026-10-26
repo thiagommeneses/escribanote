@@ -217,6 +217,7 @@
               <select name="hq" id="hq-select"></select></label>
             <p class="muted tiny" id="hq-info">Ouve o áudio da reunião e transcreve de novo, com mais precisão para fala rápida ou pouco clara. O modelo é baixado uma vez; o áudio não sai do computador.</p>
             <label class="switch"><input type="checkbox" name="hqMic"><span></span>Incluir o meu microfone (sua própria voz não vem no áudio da aba)</label>
+            <label class="switch"><input type="checkbox" name="echoFilter"><span></span>Filtrar o eco da caixa de som no microfone (desligue se a sua própria fala estiver sendo cortada)</label>
             <label class="switch" id="diarize-row"><input type="checkbox" name="diarize"><span></span>Identificar falantes pela voz <span class="badge" title="Recurso do Escribanote Pro">Pro</span></label>
             <p class="muted tiny" id="diarize-info">Na alta precisão e no gravador do computador, separa quem fala comparando as vozes (modelos pyannote e WeSpeaker, ~32 MB, baixados uma vez; nada sai do computador). Quando as legendas trazem os nomes, o Escribanote aprende de quem é cada voz; sem legendas, mostra "Falante 1", "Falante 2"… que você pode renomear.</p>
             <div class="row"><button type="button" class="btn sm ghost" id="mic-perm">Permitir microfone</button><button type="button" class="btn sm ghost" id="hq-test">Testar o modelo</button><span class="muted tiny" id="hq-test-out"></span></div>

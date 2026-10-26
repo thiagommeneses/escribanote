@@ -1,0 +1,5 @@
+{
+  "descricao": "Caixa de som: a fala dos outros (aba) vaza para o microfone 60 ms depois, a 30% do volume. O microfone não pode produzir linha nenhuma.",
+  "faixas": { "aba": "../../../extension/src/asr/fala-teste.pcm", "mic": "gerar:eco:../../../extension/src/asr/fala-teste.pcm:0.3:60" },
+  "formato": "s16"
+}

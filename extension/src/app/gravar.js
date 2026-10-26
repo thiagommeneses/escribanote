@@ -212,6 +212,7 @@ async function start() {
   rec.startedAt = Date.now();
   rec.heard = { system: 0, mic: 0 };
   rec.pipe = createPipeline({
+    echo: settings.echoFilter !== false,
     onResult: (seg) => send({ type: "asr-result", seg }).catch(() => {}),
     onEvent: (kind, detail) => send({ type: "session-report", kind, detail }).catch(() => {}),
     onStatus: (s) => {
