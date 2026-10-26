@@ -344,18 +344,40 @@ function shortId(id) {
 
 // Agrupa falas consecutivas do mesmo falante (até `gapMs` de distância) em blocos.
 // Cada bloco carrega os ids das falas e a união das tags de destaque delas.
-export function toBlocks(session, { gapMs = 60_000, includeChat = true } = {}) {
+// Dentro do bloco, o texto é dividido em parágrafos (`paras`, cada um com o horário em que começou):
+// um parágrafo novo começa depois de uma pausa de PARA_GAP_MS, ou quando o parágrafo já está longo e a
+// fala anterior terminou a frase. Um monólogo longo também vira blocos novos (com o cabeçalho de novo)
+// a cada BLOCK_MAX_MS, no fim de uma frase, ou a cada BLOCK_HARD_MS de qualquer jeito.
+export const PARA_GAP_MS = 2_500;
+export const PARA_CHARS = 400;
+export const BLOCK_MAX_MS = 30_000;
+export const BLOCK_HARD_MS = 60_000;
+const endsSentence = (t) => /[.!?…]["”)]?\s*$/.test(t || "");
+
+export function toBlocks(session, { gapMs = 60_000, includeChat = true, maxMs = BLOCK_MAX_MS } = {}) {
   const hl = session.highlights || {};
   const blocks = [];
   for (const e of effectiveEntries(session)) {
     if (!includeChat && e.kind === "chat") continue;
     const last = blocks[blocks.length - 1];
+    const lastText = last && last.texts[last.texts.length - 1];
+    const dur = last ? e.at - last.startAt : 0;
     if (
       last &&
       last.speakerId === e.speakerId &&
       last.kind === e.kind &&
-      e.at - last.endAt <= gapMs
+      e.at - last.endAt <= gapMs &&
+      !(dur > maxMs && endsSentence(lastText)) &&
+      dur <= Math.max(maxMs * 2, BLOCK_HARD_MS)
     ) {
+      const para = last.paras[last.paras.length - 1];
+      const paraLen = para.texts.join(" ").length;
+      if (e.at - last.endAt >= PARA_GAP_MS || (paraLen >= PARA_CHARS && endsSentence(lastText))) {
+        last.paras.push({ at: e.at, texts: [e.text], originals: [e.original] });
+      } else {
+        para.texts.push(e.text);
+        para.originals.push(e.original);
+      }
       last.texts.push(e.text);
       last.originals.push(e.original);
       last.ids.push(e.id, ...(e.coveredIds || []));
@@ -372,6 +394,7 @@ export function toBlocks(session, { gapMs = 60_000, includeChat = true } = {}) {
       endAt: e.updatedAt,
       texts: [e.text],
       originals: [e.original],
+      paras: [{ at: e.at, texts: [e.text], originals: [e.original] }],
       ids: [e.id, ...(e.coveredIds || [])],
       fixed: !!e.fixed,
       hq: e.source === "whisper",
@@ -380,8 +403,9 @@ export function toBlocks(session, { gapMs = 60_000, includeChat = true } = {}) {
   return blocks.map((b) => ({
     ...b,
     key: b.ids[0],
-    text: b.texts.join(" "),
-    original: b.originals.join(" "),
+    paras: b.paras.map((p) => ({ at: p.at, text: p.texts.join(" "), original: p.originals.join(" ") })),
+    text: b.paras.map((p) => p.texts.join(" ")).join("\n\n"),
+    original: b.paras.map((p) => p.originals.join(" ")).join("\n\n"),
     tags: [...new Set(b.ids.flatMap((id) => hl[id] || []))],
   }));
 }

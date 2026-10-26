@@ -11,6 +11,7 @@ import { accountBase, accountFetch, accountStream, getAccount, setAccount, Accou
 import { mergeDocs, sameContent } from "./lib/sync.js";
 import { streamClaude, ataRequest, chatRequest, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
+import { compileGlossary, applyGlossary, glossaryForPrompt } from "./lib/glossary.js";
 import { computeStats, findMe } from "./lib/stats.js";
 
 const SESSION_GAP_MS = 30 * 60 * 1000;
@@ -57,9 +58,18 @@ async function adoptSyncedSettings() {
   } catch {}
 }
 
+// Vocabulário da equipe: as formas erradas são corrigidas em toda fala que chega (legendas e Whisper).
+let glossaryRules = [];
+async function refreshGlossary() {
+  try { glossaryRules = compileGlossary((await getSettings()).glossary); } catch { glossaryRules = []; }
+}
+refreshGlossary();
+const promptGlossary = (settings) => glossaryForPrompt(settings.glossary, settings.teamContext);
+
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area === "sync" && Object.keys(changes).some((k) => k.startsWith("settings"))) return adoptSyncedSettings();
   if (area !== "local" || !changes.settings) return;
+  refreshGlossary();
   const next = changes.settings.newValue;
   if (!next?._at) return; // só mudanças feitas pelo usuário
   queueBackup(["settings"]);
@@ -334,7 +344,10 @@ async function onEvents(msg, tabId) {
   if (s.paused) return;
   if (msg.meeting.title && (!s.title || s.title === "Reunião sem título")) s.title = msg.meeting.title;
   let didChange = msg.events.some((ev) => ev.kind === "meeting-start" && !s.entries.length); // huddle detectado: a sessão já existe
-  for (const ev of msg.events) didChange = applyEvent(s, ev) || didChange;
+  for (const ev of msg.events) {
+    if ((ev.kind === "caption" || ev.kind === "chat") && ev.text) ev.text = applyGlossary(ev.text, glossaryRules);
+    didChange = applyEvent(s, ev) || didChange;
+  }
   if (!didChange) return;
   setBadge(tabId, s);
   await changed(s);
@@ -524,31 +537,31 @@ async function runAta(ai, s, settings, { onDelta, signal } = {}) {
   const template = await templateFor(s, settings);
   const instructions = ataInstructions(s, settings);
   if (ai.kind === "key") {
-    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...ataRequest(s, settings.tags, settings.glossary, template, instructions), onDelta, signal });
+    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...ataRequest(s, settings.tags, promptGlossary(settings), template, instructions), onDelta, signal });
   }
   const done = await accountCall(() =>
-    accountStream("/ai/summary", { meeting: forAccount(s), tags: settings.tags, glossary: settings.glossary, template, instructions }, { onDelta, signal }),
+    accountStream("/ai/summary", { meeting: forAccount(s), tags: settings.tags, glossary: promptGlossary(settings), template, instructions }, { onDelta, signal }),
   );
   return { text: done.text, model: done.model, stopReason: "end_turn", createdAt: Date.now(), via: "account" };
 }
 
 async function runChat(ai, s, messages, settings, { previous, onDelta, signal } = {}) {
   if (ai.kind === "key") {
-    const reqBody = chatRequest(s, messages, { tags: settings.tags, previous, glossary: settings.glossary });
+    const reqBody = chatRequest(s, messages, { tags: settings.tags, previous, glossary: promptGlossary(settings) });
     return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...reqBody, maxTokens: 8000, onDelta, signal });
   }
   const done = await accountCall(() =>
-    accountStream("/ai/ask", { meeting: forAccount(s), history: messages.map((m) => ({ role: m.role, text: m.text })), tags: settings.tags, glossary: settings.glossary }, { onDelta, signal }),
+    accountStream("/ai/ask", { meeting: forAccount(s), history: messages.map((m) => ({ role: m.role, text: m.text })), tags: settings.tags, glossary: promptGlossary(settings) }, { onDelta, signal }),
   );
   return { text: done.text, model: done.model };
 }
 
 async function runReview(ai, s, items, context, settings) {
   if (ai.kind === "key") {
-    const res = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...reviewRequest(items, { glossary: settings.glossary, context }), maxTokens: 8000 });
+    const res = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...reviewRequest(items, { glossary: promptGlossary(settings), context }), maxTokens: 8000 });
     return parseReview(res.text, items);
   }
-  const r = await accountCall(() => accountFetch("/ai/review", { method: "POST", body: { meetingId: s.id, items, context, glossary: settings.glossary } }));
+  const r = await accountCall(() => accountFetch("/ai/review", { method: "POST", body: { meetingId: s.id, items, context, glossary: promptGlossary(settings) } }));
   return r.fixes || {};
 }
 
@@ -667,6 +680,7 @@ async function onAsrResult(msg) {
   if (!s || s.paused || s.endedAt) return;
   const settings = await getSettings();
   s.myName = settings.myName || "";
+  if (msg.seg && msg.seg.text) msg.seg.text = applyGlossary(msg.seg.text, glossaryRules);
   if (addAsrSegment(s, msg.seg, meIdFor(s, settings.myName))) {
     await changed(s);
     scheduleReview(s);
