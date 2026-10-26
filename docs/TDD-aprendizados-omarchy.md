@@ -6,9 +6,9 @@
 | Time             | Thiago Meneses (produto e código), Claude Code (implementação assistida)                |
 | Épico            | ClickUp, espaço Escribanote, lista "01" (a criar a partir deste documento)              |
 | Referências      | github.com/jankeesvw/omarchy-meeting-recorder · github.com/illegalstudio/omarchy-call-recorder |
-| Status           | Em execução                                                                                   |
+| Status           | Fases 1–6 entregues (3.0.0–3.5.0); pendências listadas em "Situação"                                                                                   |
 | Criado           | 2026-10-26                                                                              |
-| Última atualização | 2026-10-26                                                                            |
+| Última atualização | 2026-10-26 (fim do dia)                                                               |
 
 ## Contexto
 
@@ -221,6 +221,30 @@ Fases intercaladas, como decidido: cada versão leva um item de qualidade e um d
 **Total estimado**: cerca de 36 dias de trabalho.
 
 **Dependências entre fases**: a fase 2 precisa do benchmark da fase 1 para medir; as fases 3 e 4 precisam do relógio único da fase 1; a fase 5 não depende das anteriores e pode ser adiantada; a fase 6 depende do manifesto definido na fase 3.
+
+
+## Situação em 2026-10-26
+
+Entregue e publicado em escribanote.com (uma versão por fase):
+
+| Versão | Fase | Entregue |
+| ------ | ---- | -------- |
+| 3.0.0 | 1 | Relatório de sessão com aba Diagnóstico; silêncio preenchido quando a fonte some; microfone readquirido ao trocar de dispositivo; benchmark (`bench/`) com runner, métricas, limiares e workflow do GitHub Actions |
+| 3.1.0 | 2 | VAD por faixa com margem adaptativa; filtro de eco por energia e por texto (agora também no Meet); nivelamento; filtros de alucinação por nível, marcadores e frases prontas; ajuste para desligar o filtro de eco |
+| 3.2.0 | 3 | Cofre de áudio no OPFS em duas faixas (Opus), cota e retenção, "manter", apagar por reunião e tudo; player com clique no horário do bloco e do parágrafo, destaque da fala em reprodução; indicador no widget |
+| 3.3.0 | 4 | Transcrever de novo a partir do áudio guardado; importar arquivo de áudio/vídeo; eco por voz com identificação de falantes |
+| 3.4.0 | 5 | Capítulos por IA (chave própria ou 1 crédito Pro), na transcrição e nas exportações; correção manual por bloco (texto, falante, apagar) com desfazer |
+| 3.5.0 | 6 | Exportação em pasta por reunião (`Reuniões/`), com manifesto; documentação em `docs/exportacao-em-pasta.md` |
+
+**Ficou de fora, por decisão ou limite técnico:**
+
+- **Horário por palavra.** O transformers.js empacotado expõe `return_timestamps: "word"` só para modelos com cabeças de alinhamento e com custo alto de memória; não foi validado. O horário continua por segmento (trecho de até 14 s, com o parágrafo começando no primeiro deles). O player tolera isso.
+- **Dividir uma fala em duas.** A edição manual cobre texto, falante e apagar. Dividir exige criar ids novos e reconciliar destaques e revisão; adiado.
+- **Casos reais do benchmark.** A estrutura está pronta e roda no CI com quatro casos (dois gerados a partir do clipe real embutido). Os oito casos previstos dependem das gravações reais da equipe (`bench/README.md` explica como gravar).
+- **Gravador com ajudante nativo.** Quando o áudio do computador chega pelo ajudante do Windows, não há `MediaStream`, então só o microfone é guardado.
+- **Endpoint próprio de capítulos no servidor Pro.** Os capítulos pela conta usam o endpoint de perguntas (1 crédito), com a resposta em JSON extraída do texto; um endpoint dedicado com esquema é melhoria futura.
+- **Perfil reaproveitado nos testes.** O Chromium guarda o service worker antigo em perfis reaproveitados; `test/e2e-import.mjs` e o benchmark usam `bench/.perfil`, que precisa ser apagado quando o código do service worker muda e a versão não.
+- **Validação manual no Edge** da gravação Opus, do OPFS persistente e da troca de fone Bluetooth ainda não foi feita pelo dono do produto.
 
 ## Considerações de Segurança e Privacidade
 

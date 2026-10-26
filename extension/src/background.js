@@ -6,7 +6,9 @@ import { mergeSpeakers,
   addAsrSegment, effectiveEntries, toBlocks, speakerName,
 } from "./lib/transcript.js";
 import { getSettings, DEFAULTS, HQ_MODELS, pushSyncedSettings, pullSyncedSettings } from "./lib/settings.js";
-import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, writeSettingsFile, internalBackupDir, backupFileName, sessionFileText, settingsFileText, SETTINGS_FILE, readBackupFolder } from "./lib/backup.js";
+import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, writeSettingsFile, internalBackupDir, backupFileName, sessionFileText, settingsFileText, SETTINGS_FILE, readBackupFolder, writeMeetingFolder, removeMeetingFolder, meetingManifest } from "./lib/backup.js";
+import { toMarkdown } from "./lib/format.js";
+import { readTrack } from "./lib/audiovault.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
 import { streamClaude, ataRequest, chatRequest, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS } from "./lib/ai.js";
@@ -265,14 +267,16 @@ async function flushBackup() {
     if ((await backupPermission(dir)) !== "granted") {
       Object.assign(next, { pending: ids, paused: true });
     } else {
+      const settings = await getSettings();
       for (const id of ids) {
         if (id === "settings") {
-          await writeSettingsFile(dir, await getSettings());
+          await writeSettingsFile(dir, settings);
           continue;
         }
         const s = await getSession(id);
         if (s) await writeSessionFile(dir, s);
         else await removeSessionFile(dir, id);
+        await exportMeetingFolder(dir, id, s, settings).catch((err) => console.warn("exportar pasta:", err));
       }
       Object.assign(next, { pending: [], paused: false, error: null, at: Date.now() });
     }
@@ -282,6 +286,28 @@ async function flushBackup() {
   await chrome.storage.local.set({ backup: next });
   chrome.runtime.sendMessage({ type: "backup-updated" }).catch(() => {});
   return next;
+}
+
+// Pasta legível por reunião (ajuste "folderExport"): só reuniões encerradas; renomear move a pasta;
+// apagar a reunião apaga a pasta. Os nomes usados ficam em chrome.storage.local "folderExport".
+async function exportMeetingFolder(dir, id, s, settings) {
+  const { folderExport = { names: {} } } = await chrome.storage.local.get("folderExport");
+  const names = folderExport.names || {};
+  if (!s) {
+    if (names[id]) { await removeMeetingFolder(dir, names[id]); delete names[id]; await chrome.storage.local.set({ folderExport: { names } }); }
+    return;
+  }
+  if (!settings.folderExport || !s.endedAt) return;
+  const audio = [];
+  for (const source of s.audio?.tracks || []) {
+    const f = await readTrack(s.id, source).catch(() => null);
+    if (f && f.size) audio.push({ name: `${{ tab: "outros", system: "computador", mic: "microfone", import: "gravacao" }[source] || source}.${(f.name.split(".").pop() || "webm")}`, file: f });
+  }
+  const manifest = meetingManifest(s, { participants: participantNames(s), audioFiles: audio.map((a) => a.name), version: chrome.runtime.getManifest().version });
+  const name = await writeMeetingFolder(dir, s, { markdown: toMarkdown(s, { tags: settings.tags }), manifest, audio });
+  if (names[id] && names[id] !== name) await removeMeetingFolder(dir, names[id]);
+  names[id] = name;
+  await chrome.storage.local.set({ folderExport: { names } });
 }
 
 // Cota e retenção do cofre de áudio: apaga o que passou do prazo e, se ainda não couber, as mais

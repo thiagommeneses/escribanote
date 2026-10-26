@@ -110,7 +110,7 @@ try {
     const { getBackupDir } = await import("/src/lib/backup.js");
     const dir = await getBackupDir();
     const out = {};
-    for await (const [name, h] of dir.entries()) out[name] = await (await h.getFile()).text();
+    for await (const [name, h] of dir.entries()) if (h.kind === "file") out[name] = await (await h.getFile()).text();
     return out;
   })()`);
 
@@ -130,6 +130,32 @@ try {
   const sessionFile = Object.keys(f).find((n) => n.endsWith("_teste-bk-1.json"));
   check(!!sessionFile && JSON.parse(f[sessionFile]).sessions[0].entries.length === 2, `reunião gravada na pasta Escribanote (${sessionFile})`);
   check(!!f["escribanote-ajustes.json"], "ajustes gravados na pasta");
+
+  // Pasta legível por reunião (ajuste folderExport): Reuniões/<data hora título>/transcricao.md + reuniao.json
+  await evalIn(app, `(async () => { const { setSettings } = await import("/src/lib/settings.js"); await setSettings({ folderExport: true }); })()`);
+  await msg(app, { type: "backup-flush", all: true });
+  const folder = await evalIn(app, `(async () => {
+    const { getBackupDir, EXPORT_FOLDER } = await import("/src/lib/backup.js");
+    const base = await (await getBackupDir()).getDirectoryHandle(EXPORT_FOLDER);
+    const out = {};
+    for await (const [name, h] of base.entries()) {
+      out[name] = {};
+      for await (const [fn, fh] of h.entries()) out[name][fn] = await (await fh.getFile()).text();
+    }
+    return out;
+  })()`);
+  const folderName = Object.keys(folder).find((n) => n.endsWith("Reunião de teste do backup"));
+  check(!!folderName && /^\d{4}-\d{2}-\d{2} \d{4} /.test(folderName), `pasta da reunião em Reuniões/ (${Object.keys(folder)})`);
+  const man = folderName && JSON.parse(folder[folderName]["reuniao.json"]);
+  check(man && man.titulo === "Reunião de teste do backup" && man.participantes.join() === "Ana,Bruno" && man.duracaoSegundos === 120 && man.fim, "manifesto reuniao.json");
+  check(folderName && folder[folderName]["transcricao.md"].includes("**Ana**") && folder[folderName]["transcricao.md"].includes("Trouxe os números"), "transcricao.md com as falas");
+  // renomear move a pasta
+  await msg(app, { type: "update", id: "teste-bk-1", title: "Backup renomeado" });
+  await msg(app, { type: "backup-flush", all: true });
+  const after = await evalIn(app, `(async () => { const { getBackupDir, EXPORT_FOLDER } = await import("/src/lib/backup.js"); const base = await (await getBackupDir()).getDirectoryHandle(EXPORT_FOLDER); const names = []; for await (const [name] of base.entries()) names.push(name); return names; })()`);
+  check(after.length === 1 && after[0].endsWith("Backup renomeado"), `renomear move a pasta (${after})`);
+  await msg(app, { type: "update", id: "teste-bk-1", title: "Reunião de teste do backup" });
+  await msg(app, { type: "backup-flush", all: true });
 
   // Ajuste alterado vai para a conta do Chrome (chrome.storage.sync).
   await evalIn(app, `(async () => { const { setSettings } = await import("/src/lib/settings.js"); await setSettings({ myName: "Pessoa de Teste" }); })()`);

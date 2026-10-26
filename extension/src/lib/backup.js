@@ -101,6 +101,67 @@ export async function readBackupFolder(dir) {
   return { sessions: [...byId.values()], settings };
 }
 
+// ---------- Exportação em pasta legível (uma pasta por reunião) ----------
+// Dentro da pasta de backup já autorizada, a subpasta "Reuniões" recebe, para cada reunião encerrada,
+// "AAAA-MM-DD HHMM Título/" com transcricao.md, reuniao.json (manifesto) e o áudio guardado, quando
+// houver. É o que scripts externos devem observar; o JSON de backup continua sendo o formato de
+// restauração. Ver docs/exportacao-em-pasta.md.
+export const EXPORT_FOLDER = "Reuniões";
+const safeName = (t) => String(t || "Reunião").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim().replace(/\.+$/, "").slice(0, 80) || "Reunião";
+export function exportFolderName(s) {
+  const d = new Date(s.startedAt);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())} ${safeName(s.title)}`;
+}
+async function writeFileIn(dir, name, data) {
+  const fh = await dir.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(data);
+  await w.close();
+}
+export function meetingManifest(s, { participants = [], audioFiles = [], version = "" } = {}) {
+  const clock = (ms) => { const sec = Math.max(0, Math.round(ms / 1000)); return [Math.floor(sec / 3600), Math.floor((sec % 3600) / 60), sec % 60].map((n) => String(n).padStart(2, "0")).join(":"); };
+  return {
+    app: "escribanote",
+    versao: 1,
+    escribanote: version,
+    id: s.id,
+    titulo: s.title,
+    plataforma: s.platform,
+    inicio: new Date(s.startedAt).toISOString(),
+    fim: s.endedAt ? new Date(s.endedAt).toISOString() : null,
+    duracaoSegundos: Math.max(0, Math.round(((s.endedAt || s.updatedAt) - s.startedAt) / 1000)),
+    idioma: s.uiLang || null,
+    participantes: participants,
+    falas: s.entries.length,
+    trechosWhisper: (s.asr || []).length,
+    modeloWhisper: s.audio?.model || null,
+    capitulos: (s.chapters || []).map((c) => ({ inicio: clock(c.startAt - s.startedAt), titulo: c.title })),
+    temAta: !!(s.summary && s.summary.text),
+    audio: audioFiles,
+    exportadoEm: new Date().toISOString(),
+  };
+}
+// Grava (ou regrava) a pasta da reunião. `markdown` já vem pronto; `audio` é [{name, file}].
+export async function writeMeetingFolder(root, s, { markdown, manifest, audio = [] }) {
+  const base = await root.getDirectoryHandle(EXPORT_FOLDER, { create: true });
+  const name = exportFolderName(s);
+  const dir = await base.getDirectoryHandle(name, { create: true });
+  await writeFileIn(dir, "transcricao.md", markdown);
+  await writeFileIn(dir, "reuniao.json", JSON.stringify(manifest, null, 2));
+  for (const a of audio) {
+    // só copia se ainda não existe com o mesmo tamanho (o áudio não muda depois de encerrado)
+    const existing = await dir.getFileHandle(a.name).then((h) => h.getFile()).catch(() => null);
+    if (existing && existing.size === a.file.size) continue;
+    await writeFileIn(dir, a.name, a.file);
+  }
+  return name;
+}
+export async function removeMeetingFolder(root, name) {
+  if (!name) return;
+  const base = await root.getDirectoryHandle(EXPORT_FOLDER).catch(() => null);
+  if (base) await base.removeEntry(name, { recursive: true }).catch(() => {});
+}
+
 // Área interna do Chrome (Origin Private File System): pasta "backup" privada da extensão,
 // gravada no disco dentro do perfil. Não pede permissão nem pasta; some se a extensão for removida.
 export async function internalBackupDir() {

@@ -68,7 +68,8 @@ export const DEFAULTS = {
   recorderPlatform: "slack",
   recorderMic: true,
   syncSettings: true, // ajustes na conta do Chrome (chrome.storage.sync)
-  backupAuto: "downloads", // backup automático sem escolher pasta: "downloads" (Downloads\Escribanote\backup) | "opfs" (área interna do Chrome) | "off"
+  backupAuto: "downloads",
+  folderExport: false, // além do JSON de backup, uma pasta legível por reunião em <pasta de backup>/Reuniões // backup automático sem escolher pasta: "downloads" (Downloads\Escribanote\backup) | "opfs" (área interna do Chrome) | "off"
   tags: DEFAULT_TAGS,
   notifyMessage:
     "Olá! Estou transcrevendo esta reunião com o Escribanote para gerar a ata. A transcrição fica salva só no meu computador.",
