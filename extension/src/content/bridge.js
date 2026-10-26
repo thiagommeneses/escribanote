@@ -157,6 +157,7 @@
     if (ev.kind === "protocol-health") {
       lastProtocolCaption = Math.max(lastProtocolCaption, ev.lastProtocolCaption || 0);
       if ("connections" in ev) state.protocol = { connections: ev.connections || 0, connectionsSeen: !!ev.connectionsSeen, lastConnectionAt: ev.lastConnectionAt || 0 };
+      if (ev.channels) diag.channels = ev.channels;
       return;
     }
     if (ev.kind === "status") return;
@@ -319,7 +320,10 @@
       if (now - leftAt >= grace) {
         state.stage = "left";
         leftAt = null;
-        if (platform === "meet") complementFromScreen();
+        if (platform === "meet") {
+          complementFromScreen();
+          writeDiag("left");
+        }
         flush();
         state.ended = true;
         pending = [];
@@ -425,6 +429,35 @@
     }
   }
 
+  // ---------- Diagnóstico da chamada ----------
+  // Enquanto está na chamada, grava a cada 5 s em chrome.storage.local ("meetDiag") o que a extensão
+  // enxerga: canais de dados, botões, regiões de legenda e um trecho do texto. Sem conteúdo da reunião
+  // além de um trecho curto da legenda visível. Serve para entender por que nada foi captado.
+  const diag = { channels: {}, domEmitted: 0 };
+  let diagTimer = 0;
+  function ariaLive() {
+    return [...document.querySelectorAll("[aria-live]")].slice(0, 10).map((el) => ({
+      tag: el.tagName.toLowerCase(), live: el.getAttribute("aria-live"), label: el.getAttribute("aria-label") || "", role: el.getAttribute("role") || "",
+      text: (el.innerText || "").replace(/\s+/g, " ").trim().slice(0, 80),
+    }));
+  }
+  function writeDiag(reason) {
+    if (Date.now() - diagTimer < 5000 && reason !== "left") return;
+    diagTimer = Date.now();
+    const region = document.querySelector(CAPTION_REGION);
+    const snap = {
+      at: Date.now(), reason, version: chrome.runtime.getManifest().version, path: location.pathname,
+      stage: state.stage, uiLang: state.uiLang, captionsOn: state.captionsOn, captionsSeen: state.captionsSeen, consent: state.consent, ended: state.ended,
+      lastCaptionAt, lastProtocolCaption, protocol: state.protocol, channels: diag.channels, domEmitted: diag.domEmitted,
+      regionFound: !!region, regionText: region ? (region.innerText || "").replace(/\s+/g, " ").trim().slice(0, 200) : "",
+      regions: [...document.querySelectorAll("[role=region]")].slice(0, 20).map((el) => el.getAttribute("aria-label") || "(sem rótulo)"),
+      ariaLive: ariaLive(),
+      buttons: [...document.querySelectorAll("button[aria-label]")].slice(0, 40).map((b) => b.ariaLabel),
+      selfName: selfName(), tiles: document.querySelectorAll("[data-participant-id]").length,
+    };
+    chrome.storage.local.set({ meetDiag: snap }).catch(() => {});
+  }
+
   const blockIds = new WeakMap();
   const blockVersions = new WeakMap();
   let blockSeq = 0;
@@ -447,6 +480,7 @@
       if (!blockIds.has(block)) blockIds.set(block, `dom/${Date.now()}/${++blockSeq}`);
       if (blockVersions.get(block) === text) continue;
       blockVersions.set(block, text);
+      diag.domEmitted++;
       enqueue({
         kind: "caption",
         platform: "meet",
@@ -488,6 +522,7 @@
     trackStage(ui);
     tryEnableCaptions(ui);
     trackCaptionsStuck();
+    if (state.stage === "meeting") writeDiag("tick");
     // Só usa o DOM se o protocolo nunca entregou legendas nesta página (evita duplicatas).
     if (state.consent !== false && state.settings.domFallback && lastProtocolCaption === 0) scrapeDom();
     // Com o protocolo ativo, a tela serve para descobrir nomes que o protocolo não trouxe e para
