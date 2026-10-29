@@ -40,6 +40,7 @@ export const WHISPER_LANG = { pt: "portuguese", en: "english", es: "spanish", fr
 
 export const DEFAULTS = {
   mode: "always", // "always" | "ask" | "off"
+  theme: "auto", // "auto" (segue o sistema) | "light" | "dark"
   widget: true,
   hideCaptions: true,
   autoCaptions: true,

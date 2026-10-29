@@ -6,6 +6,7 @@
   <title>Escribanote</title>
   <link rel="icon" href="../../icons/icon48.png">
   <link rel="stylesheet" href="app.css">
+  <script src="theme.js"></script>
 </head>
 <body>
   <div class="shell">
@@ -210,6 +211,16 @@
       <!-- Ajustes -->
       <section id="view-settings" class="view settings-view" hidden>
         <form id="settings" class="settings" autocomplete="off">
+          <div class="card">
+            <h3>Aparência</h3>
+            <div class="seg" role="radiogroup" aria-label="Tema">
+              <label><input type="radio" name="theme" value="auto"><span>Automático</span></label>
+              <label><input type="radio" name="theme" value="light"><span>Claro</span></label>
+              <label><input type="radio" name="theme" value="dark"><span>Escuro</span></label>
+            </div>
+            <p class="muted tiny">O automático acompanha o tema do sistema. Vale para o painel, a aba do Escribanote e o gravador; o widget dentro da reunião continua escuro.</p>
+          </div>
+
           <div class="card">
             <h3>Transcrição</h3>
             <div class="seg" role="radiogroup" aria-label="Quando transcrever">

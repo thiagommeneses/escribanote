@@ -777,7 +777,7 @@ function blockHtml(s, b, q) {
   // Texto diferente do transcrito (revisão da IA ou correção à mão): as palavras mudadas ficam marcadas.
   const changed = (b.fixed || b.edited) && b.original !== b.text;
   const badges =
-    (b.hq ? '<span class="badge-hq" title="Transcrito pela alta precisão (Whisper local)">${icon("hq")}</span>' : "") +
+    (b.hq ? `<span class="badge-hq" title="Transcrito pela alta precisão (Whisper local)">${icon("hq")}</span>` : "") +
     (b.fixed ? `<span class="badge-fix" data-act="orig" title="Revisado pela IA — clique para ver o original">${icon("ok")}revisado</span>` : "") +
     (b.edited ? `<span class="badge-edit"${changed ? ' data-act="orig"' : ""} title="Corrigido à mão${changed ? " — clique para ver o original" : ""}">${icon("editar")}editado</span>` : "");
   // Um <p> por parágrafo; do segundo em diante, o horário em que ele começou.

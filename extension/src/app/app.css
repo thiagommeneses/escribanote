@@ -19,8 +19,9 @@
   --radius: 12px;
   color-scheme: light;
 }
+/* Tema: data-theme="light" ou "dark" no <html> vem do ajuste Aparência (src/app/theme.js); sem ele, segue o sistema. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #111317;
     --bg-soft: #171a1f;
     --surface: #1b1e24;
@@ -40,6 +41,26 @@
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #111317;
+  --bg-soft: #171a1f;
+  --surface: #1b1e24;
+  --border: #2a2e36;
+  --border-strong: #3a3f49;
+  --text: #e9ebef;
+  --text-2: #c2c7d0;
+  --muted: #8b92a0;
+  --accent: #7ea6ff;
+  --accent-2: #a3c0ff;
+  --accent-soft: #1e2a44;
+  --danger: #ff7a70;
+  --ok: #4ade80;
+  --mark: #5a4d00;
+  --note: #2a2516;
+  --note-border: #5a4b1f;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -87,7 +108,8 @@ body.wide .meeting-view > * { max-width: 920px; margin-left: auto; margin-right:
 .btn.sm { padding: 5px 11px; font-size: 13px; border-radius: 8px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn.primary:hover { background: var(--accent-2); }
-@media (prefers-color-scheme: dark) { .btn.primary { color: #0b1530; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.primary { color: #0b1530; } }
+:root[data-theme="dark"] .btn.primary { color: #0b1530; }
 .btn.ghost { border-color: transparent; background: none; color: var(--text-2); }
 .btn.danger { border-color: var(--danger); color: var(--danger); }
 .btn.danger:hover { background: var(--danger); color: #fff; }
@@ -275,7 +297,8 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; }
 .chat-log { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; margin: 6px 0; }
 .msg { max-width: 92%; padding: 8px 12px; border-radius: 12px; }
 .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
-@media (prefers-color-scheme: dark) { .msg.user { color: #0b1530; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .msg.user { color: #0b1530; } }
+:root[data-theme="dark"] .msg.user { color: #0b1530; }
 .msg.assistant { align-self: flex-start; background: var(--bg-soft); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
 .chip { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 999px; padding: 3px 11px; font-size: 12.5px; cursor: pointer; color: var(--text-2); }
@@ -340,7 +363,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; border-r
 /* reconhecimento */
 .banner { border-radius: 10px; padding: 9px 12px; margin-bottom: 10px; font-size: 13px; background: var(--accent-soft); color: var(--text); }
 .banner.warn { background: #fff4d6; color: #5c4400; border: 1px solid #f3d98b; }
-@media (prefers-color-scheme: dark) { .banner.warn { background: #3a3014; color: #fde293; border-color: #5a4b1f; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .banner.warn { background: #3a3014; color: #fde293; border-color: #5a4b1f; } }
+:root[data-theme="dark"] .banner.warn { background: #3a3014; color: #fde293; border-color: #5a4b1f; }
 .badge-hq, .badge-fix { font-size: 11px; border-radius: 999px; padding: 0 7px; border: 1px solid var(--border); color: var(--text-2); cursor: default; }
 .badge-fix { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); cursor: pointer; }
 .blk p ins { text-decoration: none; background: linear-gradient(transparent 60%, var(--mark) 60%); }
@@ -478,7 +502,8 @@ select.sm { font-size: 12.5px; padding: 5px 8px; max-width: 190px; }
 .dcell { padding: 2px 10px; border-right: 1px solid var(--border); white-space: pre-wrap; word-break: break-word; min-width: 0; }
 .dcell:last-child { border-right: 0; }
 .dgap { text-align: center; color: var(--muted); background: var(--bg-soft); font-size: 12px; letter-spacing: .2em; }
-@media (prefers-color-scheme: dark) { .plus { color: #4ade80; } .minus { color: #f87171; } .ver .vk.edit { color: #fbbf24; } .ver .vk.restore { color: #2dd4bf; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .plus { color: #4ade80; } :root:not([data-theme="light"]) .minus { color: #f87171; } :root:not([data-theme="light"]) .ver .vk.edit { color: #fbbf24; } :root:not([data-theme="light"]) .ver .vk.restore { color: #2dd4bf; } }
+:root[data-theme="dark"] .plus { color: #4ade80; } :root[data-theme="dark"] .minus { color: #f87171; } :root[data-theme="dark"] .ver .vk.edit { color: #fbbf24; } :root[data-theme="dark"] .ver .vk.restore { color: #2dd4bf; }
 
 /* ===== Aba IA ===== */
 .ai-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-soft); margin-bottom: 12px; }
