@@ -1,6 +1,7 @@
 {
-  "version": "3.7.0",
-  "file": "escribanote-3.7.0.zip",
-  "sha256": "48143cf3ad67c612d271b8cf87212f06355ca42bdfc9ddead253b8ad89700979",
-  "bytes": 5548005
+  "version": "0.9.37",
+  "label": "0.9.37 beta",
+  "file": "escribanote-0.9.37.zip",
+  "sha256": "05b14dfd992a2bfb35e5ea0469660c845ec5984c4eea4211f3a5c8219388049f",
+  "bytes": 5602482
 }
