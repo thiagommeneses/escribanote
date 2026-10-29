@@ -47,7 +47,8 @@ body { background: var(--bg-soft); }
 .feed .who time { color: var(--muted); font-weight: 400; font-size: 12px; font-variant-numeric: tabular-nums; }
 .feed .blk p { margin: 2px 0 0; }
 .feed .av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700; }
-.feed .tag { font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--mark); color: var(--text); font-weight: 600; }
+.feed .tag { font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--mark); color: var(--text); font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+.feed .tag .ic { width: 11px; height: 11px; }
 .feed-empty { color: var(--muted); padding: 28px 12px; text-align: center; border: 1px dashed var(--border-strong); border-radius: 10px; }
 
 .done { padding: 24px; }

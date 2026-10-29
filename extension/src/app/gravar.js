@@ -8,8 +8,12 @@ import { startKeeping } from "../asr/keep.js";
 import { nativePermission, probeNative, openNative, HELPER_URL } from "../lib/native.js";
 import { hasWebGPU, saveDiag } from "../asr/engine.js";
 import { HQ_MODELS, getSettings, setSettings } from "../lib/settings.js";
+import "../lib/icons.js";
+
+const { icon, tagIcon } = globalThis.EsIcons;
 
 const $ = (id) => document.getElementById(id);
+for (const el of document.querySelectorAll("i[data-ic]")) el.outerHTML = icon(el.dataset.ic);
 const PALETTE = ["#2f6bff", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#dc2626", "#65a30d"];
 const SILENCE_WARN_MS = 25_000;
 
@@ -373,8 +377,8 @@ function renderStatus() {
 
 function renderPause() {
   $("pause").innerHTML = rec.paused
-    ? '<svg viewBox="0 0 24 24"><path d="m7 4 13 8-13 8z"/></svg>Retomar'
-    : '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>Pausar';
+    ? icon("tocar") + "Retomar"
+    : icon("pausar") + "Pausar";
   document.body.classList.toggle("paused", rec.paused);
 }
 
@@ -386,7 +390,7 @@ function renderFeed(view) {
     ? view.blocks
         .map((b) => {
           const time = mmss(b.startAt - rec.startedAt);
-          const tagHtml = (b.tags || []).map((id) => (tags[id] ? `<span class="tag">${tags[id].emoji} ${esc(tags[id].label)}</span>` : "")).join("");
+          const tagHtml = (b.tags || []).map((id) => (tags[id] ? `<span class="tag" style="color:${tags[id].color}">${icon(tagIcon(tags[id]))}${esc(tags[id].label)}</span>` : "")).join("");
           return `<div class="blk"><span class="av" style="background:${colorFor(b.speaker)}">${esc(initials(b.speaker))}</span>
             <div><div class="who">${esc(b.speaker)}<time>${time}</time>${tagHtml}</div><p>${esc(b.text)}</p></div></div>`;
         })

@@ -401,6 +401,24 @@ try {
   await waitFor(() => evaluate(app, `document.querySelectorAll('#timeline li.blk').length === ${nBlocks} && document.querySelector('#timeline li.blk p').innerText === ${JSON.stringify(firstText)}`), "desfazer junta a fala de novo");
   step("dividir uma fala em duas pelo painel, com outro falante na segunda parte, e desfazer");
 
+  // Leitura limpa: some "ahn" e a repetição colada na tela, o texto guardado continua literal; ✎ pede para desligar
+  const cleanIds = await evaluate(app, "document.querySelector('#timeline li.blk').dataset.ids");
+  const cleanKey = await evaluate(app, "document.querySelector('#timeline li.blk').dataset.key");
+  await sw({ type: "edit-block", id, ids: JSON.parse(cleanIds), text: "Ahn, eu eu acho que dá.", label: "texto" });
+  await waitFor(() => evaluate(app, `document.querySelector('#timeline li.blk[data-key="${cleanKey}"] p')?.innerText === 'Ahn, eu eu acho que dá.'`), "texto com hesitação no painel");
+  await evaluate(app, "document.querySelector('#t-clean').click()");
+  await waitFor(() => evaluate(app, `document.querySelector('#timeline li.blk[data-key="${cleanKey}"] p')?.innerText === 'Eu acho que dá.'`), "leitura limpa no painel");
+  assert.equal(await evaluate(app, "document.querySelector('#t-clean').getAttribute('aria-pressed')"), "true");
+  assert.ok((await sw({ type: "get", id })).edits[JSON.parse(cleanIds)[0]].text.startsWith("Ahn"), "texto guardado continua literal");
+  await evaluate(app, `document.querySelector('#timeline li.blk[data-key="${cleanKey}"] [data-act="edit"]').click()`);
+  await waitFor(() => evaluate(app, "/Desligue a leitura limpa/.test(document.querySelector('#toast').textContent)"), "aviso para desligar antes de corrigir");
+  assert.ok(!(await evaluate(app, "!!document.querySelector('.ask')")), "caixa de correção não abre na leitura limpa");
+  await evaluate(app, "document.querySelector('#t-clean').click()");
+  await waitFor(() => evaluate(app, `document.querySelector('#timeline li.blk[data-key="${cleanKey}"] p')?.innerText === 'Ahn, eu eu acho que dá.'`), "leitura literal de volta");
+  await evaluate(app, "document.querySelector('#m-undo').click()");
+  await waitFor(async () => !(await sw({ type: "get", id })).edits[JSON.parse(cleanIds)[0]]?.text, "desfazer a correção do teste");
+  step("leitura limpa: tela sem hesitações, texto guardado intacto, correção pede o modo literal");
+
   // Mesclagem pelo app: um terceiro falante sem nome vira "Ana Teste" → confirma → vira a Ana
   const TERCEIRO = "spaces/e2e/devices/10";
   await evaluate(meet, `__say(601, 1, "Eu concordo com a Ana sobre o orçamento.", ${JSON.stringify(TERCEIRO)})`);
@@ -540,7 +558,7 @@ try {
     await evaluate(app, `document.querySelector('[data-tab="transcript"]').click()`);
     await sleep(500);
     const html = await evaluate(app, "document.getElementById('timeline').innerHTML");
-    assert.match(html, /✓ revisado/);
+    assert.match(html, /class="badge-fix"[^>]*>.*revisado/);
     assert.match(html, /<ins>Q4<\/ins>/);
     await screenshot(app, "10-revisao.png");
     step("revisão por IA corrige 'quiu quatro' → 'Q4' usando o glossário (API simulada)");
@@ -711,6 +729,18 @@ try {
   await screenshot(app, "9-ajustes.png");
   step("layout de painel lateral e Ajustes");
 
+  // Tags: o ícone sai de uma paleta própria; o emoji equivalente vai junto para as exportações em texto
+  await evaluate(app, `document.querySelector('#tag-editor [data-pick="4"]').scrollIntoView({ block: "center" }); document.querySelector('#tag-editor [data-pick="4"]').click()`);
+  assert.equal(await evaluate(app, `document.querySelectorAll('#tag-editor .tag-row:nth-child(5) .ic-grid button').length`), 20);
+  await screenshot(app, "9b-tags.png");
+  await evaluate(app, `document.querySelector('#tag-editor .tag-row:nth-child(5) [data-ic-pick="raio"]').click()`);
+  await waitFor(() => evaluate(app, `!!document.querySelector('#tag-editor [data-pick="4"] .ic') && document.querySelectorAll('#tag-editor .ic-grid:not([hidden])').length === 0`), "paleta fechada após escolher");
+  const tagsSaved = (await evaluate(app, `chrome.storage.local.get("settings").then((r) => JSON.stringify(r.settings.tags || []))`));
+  const risco = JSON.parse(tagsSaved).find((t) => t.id === "risco");
+  assert.ok(risco && risco.icon === "raio" && risco.emoji === "⚡", "tag salva com ícone e emoji: " + tagsSaved);
+  await evaluate(app, `document.getElementById('tag-reset').click()`);
+  step("tag escolhe o ícone numa paleta e guarda o emoji para exportar");
+
   // 10) Sair da chamada: o Meet fecha as conexões WebRTC e tira o botão de sair; a página continua.
   //     A sessão termina sozinha em poucos segundos, a última fala (cortada pelo protocolo) é
   //     completada pela legenda que ainda estava na tela, o selo REC some e, com o ajuste
@@ -848,7 +878,7 @@ try {
   await send("Page.navigate", { url: `chrome-extension://${extId}/src/app/app.html?id=${id}` }, app);
   await waitFor(() => evaluate(app, "!document.querySelector('#player').hidden && !!document.querySelector('#timeline time.seek')"), "player visível e horários clicáveis");
   await evaluate(app, "document.querySelector('#timeline time.seek').click()");
-  await waitFor(() => evaluate(app, "!!document.querySelector('#timeline .blk.playing') && document.querySelector('#p-play').textContent !== '▶'"), "tocar destaca o bloco", 8000).catch(async (err) => {
+  await waitFor(() => evaluate(app, "!!document.querySelector('#timeline .blk.playing') && document.querySelector('#p-play').dataset.playing === '1'"), "tocar destaca o bloco", 8000).catch(async (err) => {
     console.log("player:", await evaluate(app, "JSON.stringify({ play: document.querySelector('#p-play').textContent, toast: document.querySelector('#toast').textContent, time: document.querySelector('#p-time').textContent, dur: document.querySelector('#p-dur').textContent, blocks: document.querySelectorAll('#timeline li.blk[data-start]').length, starts: [...document.querySelectorAll('#timeline li.blk[data-start]')].slice(0,3).map(l => l.dataset.start), audioStart: " + sEnd.startedAt + " })"));
     throw err;
   });

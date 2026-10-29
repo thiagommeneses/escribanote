@@ -21,7 +21,7 @@ const doc = document.getElementById("doc");
   const institutional = ONLY_ATA || settings.exportAta === true;
   doc.innerHTML = (ONLY_ATA
     ? (session.summary?.text ? mdToHtml(session.summary.text) : "<p>Esta reunião ainda não tem ata.</p>")
-    : toHtml(session, { tags: settings.tags, shotUrls: shotUrls || {}, ata: institutional })) +
+    : toHtml(session, { tags: settings.tags, shotUrls: shotUrls || {}, ata: institutional, clean: settings.cleanSpeech === true })) +
     (institutional ? `<p class="foot">Gerado pelo Escribanote em ${new Date().toLocaleString("pt-BR")}</p>` : "");
   document.getElementById("print").addEventListener("click", () => print());
   await Promise.all([...doc.querySelectorAll("img")].map((img) => img.decode().catch(() => {})));

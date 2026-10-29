@@ -885,3 +885,69 @@ test("capítulos: parseChapters valida, ajusta ao bloco mais próximo e limita; 
   assert.ok(toText(s).includes("--- 2. Orçamento do trimestre ---"));
   function clockOf(ms) { const sec = Math.round(ms / 1000); return [Math.floor(sec / 3600), Math.floor((sec % 3600) / 60), sec % 60].map((n) => String(n).padStart(2, "0")).join(":"); }
 });
+
+test("leitura limpa: tira hesitações e repetições coladas, mantém o que tem sentido", async () => {
+  const { cleanSpeech } = await import("../src/lib/clean.js");
+  assert.equal(cleanSpeech("Ahn, eu acho que sim."), "Eu acho que sim.");
+  assert.equal(cleanSpeech("Então, ahn, a gente vai eu eu eu vou ver."), "Então, a gente vai eu vou ver.");
+  assert.equal(cleanSpeech("Eu acho, ahn."), "Eu acho.");
+  assert.equal(cleanSpeech("Certo. Ahn, vamos lá."), "Certo. Vamos lá.");
+  assert.equal(cleanSpeech("O que que é isso? Éé, sei lá."), "O que é isso? Sei lá.");
+  assert.equal(cleanSpeech("Hum."), "");
+  // ficam: repetição com vírgula, "ah", "né", "um" (artigo), números repetidos
+  assert.equal(cleanSpeech("Não, não, não é isso."), "Não, não, não é isso.");
+  assert.equal(cleanSpeech("Ah, entendi, né?"), "Ah, entendi, né?");
+  assert.equal(cleanSpeech("um processo e um recurso"), "um processo e um recurso");
+  assert.equal(cleanSpeech("Foram 10 10 casos"), "Foram 10 10 casos");
+});
+
+test("leitura limpa nos blocos e nas exportações; o texto guardado não muda", () => {
+  const s = createSession({ id: "c", platform: "meet", url: "", title: "T", startedAt: 1_000_000 });
+  s.speakers = { a: "Ana", b: "Bruno" };
+  s.entries.push(
+    { id: "x", kind: "caption", speakerId: "a", text: "Ahn, eu acho que sim.", at: 1_001_000, updatedAt: 1_002_000 },
+    { id: "y", kind: "caption", speakerId: "b", text: "Hum.", at: 1_003_000, updatedAt: 1_003_500 },
+    { id: "z", kind: "caption", speakerId: "a", text: "Então, ahn, fechado.", at: 1_004_000, updatedAt: 1_005_000 },
+  );
+  assert.equal(toBlocks(s).length, 3);
+  const clean = toBlocks(s, { clean: true });
+  assert.deepEqual(clean.map((b) => b.text), ["Eu acho que sim. Então, fechado."], "fala só de hesitação some e as vizinhas se juntam");
+  assert.equal(s.entries[0].text, "Ahn, eu acho que sim.");
+  assert.ok(!/ahn|Hum/i.test(toMarkdown(s, { clean: true })) && /Ahn/.test(toMarkdown(s)));
+  assert.ok(!/ahn/i.test(toText(s, { clean: true })));
+  assert.ok(!/ahn|Hum/i.test(toSrt(s, { clean: true })) && toSrt(s, { clean: true }).includes("Eu acho que sim."));
+  assert.ok(/Hum/.test(toVtt(s)));
+});
+
+test("glossário: grafias parecidas com os termos e com os nomes dos participantes", async () => {
+  const { fuzzyTargets, applyFuzzy } = await import("../src/lib/glossary.js");
+  const T = fuzzyTargets("Maria Quitéria\nDomenico Failutti\nCásper Líbero\nóleo sobre tela\nMinistério Público\nhabeas corpus\nAgno = argum", ["Leonardo Andrade", "André Souza", "Rosa Lima", "Participante 3f2a", "Falante 2"]);
+  const fix = (s) => applyFuzzy(s, T);
+  assert.equal(fix("Retrato de Maria Quitérria, de Domênico Failut, técnica Olho Sobre Tela."), "Retrato de Maria Quitéria, de Domenico Failutti, técnica Óleo sobre tela.");
+  assert.equal(fix("Faculdade Casper-Líbero."), "Faculdade Cásper Líbero.");
+  assert.equal(fix("o ministerio publico pediu habeas corpos"), "o Ministério Público pediu habeas corpus");
+  assert.equal(fix("Não faria sentido, né, Andre?"), "Não faria sentido, né, André?");
+  // conservador: palavra comum sem maiúscula, nome curto com outra grafia, termo atravessando pontuação
+  assert.equal(fix("a rosa é bonita, Rosa"), "a rosa é bonita, Rosa");
+  assert.equal(fix("Andres disse"), "Andres disse");
+  assert.equal(fix("leonarda e Failut, ponto. Domênico disse"), "leonarda e Failut, ponto. Domênico disse");
+  assert.equal(fix("Falantes"), "Falantes");
+  assert.equal(applyFuzzy("Quitérria", fuzzyTargets("", [])), "Quitérria");
+});
+
+test("ícones: conjunto duotone e paleta das tags com emoji para exportação", async () => {
+  await import("../src/lib/icons.js");
+  const { icon, tagIcon, TAG_ICONS, names } = globalThis.EsIcons;
+  const { DEFAULT_TAGS } = await import("../src/lib/settings.js");
+  for (const t of DEFAULT_TAGS) assert.equal(tagIcon(t), t.icon);
+  // Tag antiga, só com emoji: acha o desenho equivalente (com ou sem o seletor de variação), senão a etiqueta.
+  assert.equal(tagIcon({ emoji: "⚠" }), "risco");
+  assert.equal(tagIcon({ emoji: "💡" }), "ideia");
+  assert.equal(tagIcon({ emoji: "🍕" }), "tag");
+  assert.equal(TAG_ICONS.length, 20);
+  for (const [n] of TAG_ICONS) assert.ok(names.includes(n), n);
+  const svg = icon("decisao", { size: 14 });
+  assert.match(svg, /^<svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">/);
+  assert.match(svg, /fill-opacity:var\(--ic-fill,\.16\)/);
+  assert.equal(icon("nao-existe"), "");
+});

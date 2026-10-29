@@ -2,6 +2,8 @@
 // versões crescentes), remove duplicatas entre canais e guarda destaques, notas,
 // capturas de tela e conversas com a IA de cada reunião.
 
+import { cleanSpeech } from "./clean.js";
+
 const DUP_WINDOW_MS = 1500;
 
 export function createSession({ id, platform, url, title, startedAt }) {
@@ -405,11 +407,14 @@ export const BLOCK_MAX_MS = 30_000;
 export const BLOCK_HARD_MS = 60_000;
 const endsSentence = (t) => /[.!?…]["”)]?\s*$/.test(t || "");
 
-export function toBlocks(session, { gapMs = 60_000, includeChat = true, maxMs = BLOCK_MAX_MS } = {}) {
+// clean: leitura limpa (sem hesitações nem repetições coladas); fala que só tinha hesitação some.
+export function toBlocks(session, { gapMs = 60_000, includeChat = true, maxMs = BLOCK_MAX_MS, clean = false } = {}) {
   const hl = session.highlights || {};
   const blocks = [];
-  for (const e of effectiveEntries(session)) {
-    if (!includeChat && e.kind === "chat") continue;
+  for (const raw of effectiveEntries(session)) {
+    if (!includeChat && raw.kind === "chat") continue;
+    const e = clean && raw.kind !== "chat" ? { ...raw, text: cleanSpeech(raw.text), original: cleanSpeech(raw.original) } : raw;
+    if (clean && !e.text) continue;
     const last = blocks[blocks.length - 1];
     const lastText = last && last.texts[last.texts.length - 1];
     const dur = last ? e.at - last.startAt : 0;

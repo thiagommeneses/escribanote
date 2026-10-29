@@ -1,5 +1,6 @@
 // Exportação da reunião em vários formatos.
 import { toBlocks, speakerName, timeline, participantNames } from "./transcript.js";
+import { cleanSpeech } from "./clean.js";
 
 // Texto de um bloco com os parágrafos separados; do segundo em diante, o horário em que começou.
 // `wrap` formata o horário no estilo de cada saída (texto, Markdown, HTML).
@@ -35,8 +36,8 @@ function tagLabel(tags, id) {
   return t ? `${t.emoji} ${t.label}` : id;
 }
 
-function highlightsOf(session) {
-  return toBlocks(session).filter((b) => b.tags.length);
+function highlightsOf(session, opts) {
+  return toBlocks(session, opts).filter((b) => b.tags.length);
 }
 
 export function toText(session, opts = {}) {
@@ -66,7 +67,7 @@ export function toMarkdown(session, opts = {}) {
     "",
   ];
   if (opts.ata !== false && session.summary && session.summary.text) lines.push("## Ata", "", session.summary.text.trim(), "");
-  const hls = highlightsOf(session);
+  const hls = highlightsOf(session, opts);
   if (hls.length) {
     lines.push("## Destaques", "");
     for (const b of hls) {
@@ -122,15 +123,15 @@ export function mdToHtml(md) {
 }
 
 // HTML autocontido: usado na cópia formatada (Docs, Notion, e-mail) e no PDF.
-// shotUrls: mapa id -> dataURL das capturas (opcional). ata: false deixa a ata de fora.
-export function toHtml(session, { tags, shotUrls = {}, ata = true } = {}) {
+// shotUrls: mapa id -> dataURL das capturas (opcional). ata: false deixa a ata de fora. clean: leitura limpa.
+export function toHtml(session, { tags, shotUrls = {}, ata = true, clean = false } = {}) {
   const parts = [
     `<h1>${esc(session.title)}</h1>`,
     `<p><b>Plataforma:</b> ${esc(PLATFORM[session.platform] || session.platform)} · <b>Data:</b> ${esc(dateLabel(session.startedAt))}<br><b>Participantes:</b> ${esc(participantNames(session).join(", ") || "—")}</p>`,
   ];
   if (ata && session.summary && session.summary.text) parts.push("<h2>Ata</h2>", mdToHtml(session.summary.text));
   if (session.chapters && session.chapters.length) parts.push("<h2>Capítulos</h2><ul>", ...session.chapters.map((c) => `<li><span style="color:#888">${clock(c.startAt - session.startedAt)}</span> ${esc(c.title)}</li>`), "</ul>");
-  const hls = highlightsOf(session);
+  const hls = highlightsOf(session, { clean });
   if (hls.length) {
     parts.push("<h2>Destaques</h2><ul>");
     for (const b of hls) {
@@ -140,7 +141,7 @@ export function toHtml(session, { tags, shotUrls = {}, ata = true } = {}) {
   }
   if (session.notes.text.trim()) parts.push("<h2>Notas</h2>", mdToHtml(session.notes.text));
   parts.push("<h2>Transcrição</h2>");
-  for (const it of timeline(session)) {
+  for (const it of timeline(session, { clean })) {
     const t = clock(it.at - session.startedAt);
     if (it.type === "chapter") parts.push(`<h3>${it.chapter.n}. ${esc(it.chapter.title)}</h3>`);
     else if (it.type === "note") parts.push(`<blockquote>📝 <i>${t}</i> ${esc(it.note.text)}</blockquote>`);
@@ -159,26 +160,26 @@ export function toHtml(session, { tags, shotUrls = {}, ata = true } = {}) {
   return parts.join("\n");
 }
 
-function cues(session) {
+function cues(session, { clean = false } = {}) {
   // Uma legenda por fala (não agrupada), com duração mínima de 1 s.
   return session.entries
-    .filter((e) => e.kind === "caption")
+    .filter((e) => e.kind === "caption" && (!clean || cleanSpeech(e.text)))
     .map((e, i, all) => {
       const start = e.at - session.startedAt;
       const next = all[i + 1] ? all[i + 1].at - session.startedAt : Infinity;
       const end = Math.min(Math.max(e.updatedAt - session.startedAt, start + 1000), next);
-      return { start, end: Math.max(end, start + 1), speaker: speakerName(session, e.speakerId), text: e.text };
+      return { start, end: Math.max(end, start + 1), speaker: speakerName(session, e.speakerId), text: clean ? cleanSpeech(e.text) : e.text };
     });
 }
 
-export function toSrt(session) {
-  return cues(session)
+export function toSrt(session, opts) {
+  return cues(session, opts)
     .map((c, i) => `${i + 1}\n${cueTime(c.start, ",")} --> ${cueTime(c.end, ",")}\n${c.speaker}: ${c.text}\n`)
     .join("\n");
 }
 
-export function toVtt(session) {
-  const body = cues(session)
+export function toVtt(session, opts) {
+  const body = cues(session, opts)
     .map((c) => `${cueTime(c.start, ".")} --> ${cueTime(c.end, ".")}\n<v ${c.speaker}>${c.text}\n`)
     .join("\n");
   return `WEBVTT\n\n${body}`;

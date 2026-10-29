@@ -1,11 +1,11 @@
 // Configurações compartilhadas entre o service worker e as páginas da extensão.
 
 export const DEFAULT_TAGS = [
-  { id: "importante", label: "Importante", emoji: "⭐", color: "#f59e0b" },
-  { id: "decisao", label: "Decisão", emoji: "✅", color: "#16a34a" },
-  { id: "acao", label: "Ação", emoji: "📌", color: "#2563eb" },
-  { id: "pergunta", label: "Pergunta", emoji: "❓", color: "#9333ea" },
-  { id: "risco", label: "Risco", emoji: "⚠️", color: "#dc2626" },
+  { id: "importante", label: "Importante", emoji: "⭐", icon: "importante", color: "#f59e0b" },
+  { id: "decisao", label: "Decisão", emoji: "✅", icon: "decisao", color: "#16a34a" },
+  { id: "acao", label: "Ação", emoji: "📌", icon: "acao", color: "#2563eb" },
+  { id: "pergunta", label: "Pergunta", emoji: "❓", icon: "pergunta", color: "#9333ea" },
+  { id: "risco", label: "Risco", emoji: "⚠️", icon: "risco", color: "#dc2626" },
 ];
 
 export const MODELS = [
@@ -49,6 +49,7 @@ export const DEFAULTS = {
   aiModel: "claude-opus-5-5",
   talkTarget: 30, // % de fala desejada para "você"
   captionLang: "pt-BR",
+  glossaryFuzzy: true, // corrige grafias parecidas com os termos do glossário e os nomes dos participantes (lib/glossary.js)
   glossary: "", // vocabulário: um termo por linha; "Termo = forma errada, outra" corrige na hora (lib/glossary.js)
   teamContext: "", // sobre as reuniões (área, assuntos), para a revisão, a ata e o chat
   ataTemplate: "", // id do modelo de ata padrão ("" = formato do Escribanote)
@@ -71,6 +72,7 @@ export const DEFAULTS = {
   backupAuto: "downloads",
   folderExport: false, // além do JSON de backup, uma pasta legível por reunião em <pasta de backup>/Reuniões // backup automático sem escolher pasta: "downloads" (Downloads\Escribanote\backup) | "opfs" (área interna do Chrome) | "off"
   tags: DEFAULT_TAGS,
+  cleanSpeech: false, // leitura limpa: tela e exportações sem "ahn", "hum" e repetições coladas (o texto guardado não muda)
   exportAta: false, // ligado: exportações da reunião levam a ata (modelo institucional, assinatura) e o rodapé; padrão = só a reunião
   notifyMessage:
     "Olá! Estou transcrevendo esta reunião com o Escribanote. A transcrição fica salva no meu computador.",

@@ -7,6 +7,11 @@ import { LANG_NAMES } from "../lib/lang.js";
 import { diffDocument, diffStats, diffHtml as versionDiffHtml } from "../lib/diff.js";
 import { getBackupDir, setBackupDir, backupPermission, resolveBackupFolder, readBackupFolder } from "../lib/backup.js";
 import { readTrack, writeTrackFile } from "../lib/audiovault.js";
+import "../lib/icons.js";
+
+const { icon, tagIcon, TAG_ICONS } = globalThis.EsIcons;
+// Ícones fixos do HTML: <i data-ic="nome"> vira o SVG do conjunto.
+for (const el of document.querySelectorAll("i[data-ic]")) el.outerHTML = icon(el.dataset.ic);
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ["#2f6bff", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#0891b2", "#dc2626", "#65a30d"];
@@ -97,11 +102,16 @@ function diffHtml(original, fixed) {
   return out.join(" ").replace(/<\/ins> <ins>/g, " ");
 }
 
+// Leitura limpa (sem "ahn", "hum" e repetições coladas): vale para a tela e para as exportações.
+function clean() {
+  return state.settings.cleanSpeech === true;
+}
+
 function tags() {
   return state.settings.tags && state.settings.tags.length ? state.settings.tags : DEFAULT_TAGS;
 }
 function tagById(id) {
-  return tags().find((t) => t.id === id) || { id, label: id, emoji: "🏷", color: "#888" };
+  return tags().find((t) => t.id === id) || { id, label: id, emoji: "🏷", icon: "tag", color: "#888" };
 }
 function dayLabel(ts) {
   const d = new Date(ts);
@@ -221,6 +231,7 @@ function renderMeeting() {
   $("m-empty").hidden = !!s;
   $("m").hidden = !s;
   if (!s) return renderRecent();
+  syncClean();
 
   if (document.activeElement !== $("m-title")) $("m-title").value = s.title;
   const names = participantNames(s);
@@ -230,7 +241,7 @@ function renderMeeting() {
     `<span>${esc(dateLabel(s.startedAt))}</span>`,
     `<span>${fmtDuration(end - s.startedAt)}</span>`,
     `<span>${names.length} participante${names.length === 1 ? "" : "s"}</span>`,
-    isLive(s) ? `<span style="color:var(--danger);font-weight:600">● ${s.paused ? "pausado" : "gravando"}</span>` : "",
+    isLive(s) ? `<span class="live-dot" style="color:var(--danger);font-weight:600">${icon(s.paused ? "pausar" : "gravando")}${s.paused ? "pausado" : "gravando"}</span>` : "",
   ].join("");
   $("m-pause").hidden = !isLive(s);
   // Parar: fecha a reunião agora, mesmo continuando na chamada. Retomar: só logo depois de parar, com a aba aberta.
@@ -238,16 +249,16 @@ function renderMeeting() {
   $("m-stop").hidden = !(isLive(s) || resumable);
   $("m-stop").className = "btn sm danger" + (resumable ? " resume" : "");
   $("m-stop").innerHTML = resumable
-    ? '<svg viewBox="0 0 24 24"><path d="m7 4 13 8-13 8z"/></svg>Retomar transcrição'
-    : '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Parar';
+    ? icon("tocar") + "Retomar transcrição"
+    : icon("parar") + "Parar";
   $("m-stop").title = resumable ? "Voltar a transcrever esta reunião na aba da chamada" : "Parar a transcrição agora. A reunião fica salva e você pode continuar na chamada.";
   renderHqButton();
   renderPlayer(s);
   $("m-undo").hidden = !(s.undo && s.undo.length);
   renderBanner();
   $("m-pause").innerHTML = s.paused
-    ? '<svg viewBox="0 0 24 24"><path d="m7 4 13 8-13 8z"/></svg>Retomar'
-    : '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>Pausar';
+    ? icon("tocar") + "Retomar"
+    : icon("pausar") + "Pausar";
 
   const hlCount = toBlocks(s).filter((b) => b.tags.length).length;
   $("c-hl").textContent = hlCount || "";
@@ -266,13 +277,13 @@ function renderHqButton() {
   b.hidden = !isLive(s) || s.recorder; // o gravador do computador já transcreve com o Whisper
   const h = state.hq || { state: "idle" };
   const label = {
-    idle: "🎧 Alta precisão",
-    starting: "🎧 Iniciando…",
-    loading: `🎧 Baixando modelo ${h.progress || 0}%`,
-    running: `🎧 Alta precisão ativa${h.device === "webgpu" ? " · GPU" : ""}`,
-    error: "🎧 Tentar de novo",
-  }[h.state] || "🎧 Alta precisão";
-  b.textContent = label;
+    idle: "Alta precisão",
+    starting: "Iniciando…",
+    loading: `Baixando modelo ${h.progress || 0}%`,
+    running: `Alta precisão ativa${h.device === "webgpu" ? " · GPU" : ""}`,
+    error: "Tentar de novo",
+  }[h.state] || "Alta precisão";
+  b.innerHTML = icon("hq") + esc(label);
   b.classList.toggle("on", h.state === "running");
   b.title = h.state === "running"
     ? `Whisper rodando neste computador${h.rtf ? ` · ${h.rtf < 1 ? "mais rápido que" : "mais lento que"} o tempo real (${h.rtf}x)` : ""}. Clique para desligar.`
@@ -285,7 +296,7 @@ function renderBanner() {
   if (rt && state.session && rt.id === state.session.id) {
     const st = rt.status || {};
     const label = st.state === "decoding" ? "Lendo o áudio…" : st.state === "loading" ? `Baixando o modelo… ${st.progress || 0}%` : st.state === "error" ? `Falhou: ${st.message || ""}` : `Transcrevendo… ${st.progress || 0}%${st.segments ? ` · ${st.segments} trechos` : ""}`;
-    parts.push(`<div class="banner${st.state === "error" ? " warn" : ""}">🎧 <b>${esc(label)}</b> ${st.state === "error" ? "" : "A transcrição aparece aqui conforme avança; você pode continuar usando o Escribanote."}</div>`);
+    parts.push(`<div class="banner${st.state === "error" ? " warn" : ""}">${icon("hq")} <b>${esc(label)}</b> ${st.state === "error" ? "" : "A transcrição aparece aqui conforme avança; você pode continuar usando o Escribanote."}</div>`);
   }
   // Aberto sozinho ao sair da chamada (ajuste "Ao sair da reunião")
   if (params.get("fim") && state.session?.endedAt && params.get("id") === state.session.id) {
@@ -296,7 +307,7 @@ function renderBanner() {
     parts.push(`<div class="banner warn"><b>As legendas parecem estar em ${esc(LANG_NAMES[li.seen] || li.seen)}</b>, mas a reunião é em ${esc(LANG_NAMES[li.expected] || li.expected)}.
       Isso derruba a qualidade da transcrição. No Meet: <i>Mais opções › Configurações › Legendas › Idioma da reunião</i>.${state.hq.state === "running" ? "" : " Ou ligue a <b>Alta precisão</b>, que não depende das legendas."}</div>`);
   }
-  if (state.hq.state === "error" && state.hq.message) parts.push(`<div class="banner warn">🎧 ${esc(state.hq.message)}</div>`);
+  if (state.hq.state === "error" && state.hq.message) parts.push(`<div class="banner warn">${icon("hq")} ${esc(state.hq.message)}</div>`);
   if (state.hq.warning) parts.push(`<div class="banner">${esc(state.hq.warning)}</div>`);
   $("t-banner").innerHTML = parts.join("");
 }
@@ -397,17 +408,18 @@ $("m-delete").addEventListener("click", async () => {
 // ----- Exportar -----
 function buildExportMenu() {
   const items = [
-    ["rich", "📋", "Copiar formatado", "Docs, Notion, e-mail"],
-    ["plain", "📄", "Copiar como texto", ""],
-    ["pdf", "🖨️", "Salvar como PDF", "com capturas"],
+    ["rich", "copiar", "Copiar formatado", "Docs, Notion, e-mail"],
+    ["plain", "texto", "Copiar como texto", ""],
+    ["pdf", "pdf", "Salvar como PDF", "com capturas"],
     null,
-    ...Object.entries(FORMATS).map(([ext, f]) => [ext, "⬇", f.label, ""]),
+    ...Object.entries(FORMATS).map(([ext, f]) => [ext, "baixar", f.label, ""]),
   ];
   $("export-menu").innerHTML =
     // Uso institucional (MPGO), desligado por padrão: ligado, a ata no modelo da equipe vai junto.
-    `<label class="menu-opt"><input type="checkbox" id="exp-ata"${state.settings.exportAta === true ? " checked" : ""}>Incluir a ata e os textos institucionais</label><hr>` +
+    `<label class="menu-opt"><input type="checkbox" id="exp-ata"${state.settings.exportAta === true ? " checked" : ""}>Incluir a ata e os textos institucionais</label>` +
+    `<label class="menu-opt"><input type="checkbox" id="exp-clean"${clean() ? " checked" : ""}>Leitura limpa (sem “ahn”, “hum” e repetições)</label><hr>` +
     items
-      .map((it) => (it ? `<button data-exp="${it[0]}"><span>${it[1]}</span>${esc(it[2])}${it[3] ? `<small>${esc(it[3])}</small>` : ""}</button>` : "<hr>"))
+      .map((it) => (it ? `<button data-exp="${it[0]}"><span>${icon(it[1])}</span>${esc(it[2])}${it[3] ? `<small>${esc(it[3])}</small>` : ""}</button>` : "<hr>"))
       .join("");
 }
 buildExportMenu();
@@ -417,6 +429,7 @@ $("m-export").addEventListener("click", (e) => {
   menu.hidden = !menu.hidden;
   if (menu.hidden) return;
   $("exp-ata").checked = state.settings.exportAta === true;
+  $("exp-clean").checked = clean();
   // No painel lateral (estreito) o menu não cabe à direita do botão: ancora pela direita.
   menu.classList.remove("flip");
   const r = menu.getBoundingClientRect();
@@ -424,6 +437,7 @@ $("m-export").addEventListener("click", (e) => {
 });
 document.addEventListener("click", () => ($("export-menu").hidden = true));
 $("export-menu").addEventListener("change", async (e) => {
+  if (e.target.id === "exp-clean") return setClean(e.target.checked);
   if (e.target.id !== "exp-ata") return;
   state.settings = await setSettings({ exportAta: e.target.checked });
   const field = document.querySelector('#settings [name="exportAta"]');
@@ -437,21 +451,22 @@ $("export-menu").addEventListener("click", async (e) => {
   const s = state.session;
   const kind = b.dataset.exp;
   const ata = state.settings.exportAta === true;
+  const opts = { tags: tags(), ata, clean: clean() };
   try {
     if (kind === "rich") {
-      const html = toHtml(s, { tags: tags(), ata });
+      const html = toHtml(s, opts);
       await navigator.clipboard.write([
-        new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([toText(s, { tags: tags() })], { type: "text/plain" }) }),
+        new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([toText(s, opts)], { type: "text/plain" }) }),
       ]);
       toast("Copiado — cole no Google Docs, Notion ou e-mail");
     } else if (kind === "plain") {
-      await navigator.clipboard.writeText(toText(s, { tags: tags() }));
+      await navigator.clipboard.writeText(toText(s, opts));
       toast("Transcrição copiada");
     } else if (kind === "pdf") {
       chrome.tabs.create({ url: chrome.runtime.getURL(`src/app/print.html?id=${s.id}`) });
     } else {
       const f = FORMATS[kind];
-      const url = URL.createObjectURL(new Blob([f.render(s, { tags: tags(), ata })], { type: `${f.mime};charset=utf-8` }));
+      const url = URL.createObjectURL(new Blob([f.render(s, opts)], { type: `${f.mime};charset=utf-8` }));
       const a = Object.assign(document.createElement("a"), { href: url, download: fileName(s, kind) });
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
@@ -610,10 +625,10 @@ function renderChapters(s) {
   if (!list.length && !canMake) { el.hidden = true; return; }
   el.hidden = false;
   if (!list.length) {
-    el.innerHTML = `<button type="button" class="chip" id="ch-make" title="Divide a reunião por assunto com a IA (chave própria ou 1 crédito do Pro)">${state.chaptersBusy ? "⏳ Dividindo em capítulos…" : "📑 Dividir em capítulos"}</button>`;
+    el.innerHTML = `<button type="button" class="chip" id="ch-make" title="Divide a reunião por assunto com a IA (chave própria ou 1 crédito do Pro)">${state.chaptersBusy ? icon("aguarde") + "Dividindo em capítulos…" : icon("capitulos") + "Dividir em capítulos"}</button>`;
   } else {
     el.innerHTML = list.map((c, i) => `<button type="button" class="chip" data-ch="${i + 1}" title="${esc(c.title)}"><time>${clock(c.startAt - s.startedAt)}</time><span>${esc(c.title)}</span></button>`).join("") +
-      `<button type="button" class="chip" id="ch-make" title="Gerar os capítulos de novo">${state.chaptersBusy ? "⏳" : "↻"}</button><button type="button" class="chip" id="ch-clear" title="Remover os capítulos">✕</button>`;
+      `<button type="button" class="chip" id="ch-make" title="Gerar os capítulos de novo" aria-label="Gerar os capítulos de novo">${icon(state.chaptersBusy ? "aguarde" : "refazer")}</button><button type="button" class="chip" id="ch-clear" title="Remover os capítulos" aria-label="Remover os capítulos">${icon("fechar")}</button>`;
   }
   $("ch-make").addEventListener("click", async () => {
     if (state.chaptersBusy) return;
@@ -710,7 +725,7 @@ function renderSpeakers(s) {
   $("speakers").innerHTML = ids
     .map((id) => {
       const name = speakerName(s, id);
-      return `<span class="spk${state.hidden.has(id) ? " off" : ""}" data-id="${esc(id)}" title="Clique para mostrar ou ocultar as falas">${avatar(id, name)}${esc(name)}<button class="spk-edit" data-rename title="Renomear"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></span>`;
+      return `<span class="spk${state.hidden.has(id) ? " off" : ""}" data-id="${esc(id)}" title="Clique para mostrar ou ocultar as falas">${avatar(id, name)}${esc(name)}<button class="spk-edit" data-rename title="Renomear">${icon("editar")}</button></span>`;
     })
     .join("");
 }
@@ -755,16 +770,16 @@ function blockHtml(s, b, q) {
   const tagChips = b.tags
     .map((id) => {
       const t = tagById(id);
-      return `<span class="tag" style="color:${t.color};border-color:${t.color}">${t.emoji} ${esc(t.label)}</span>`;
+      return `<span class="tag" style="color:${t.color};border-color:${t.color}">${icon(tagIcon(t))}${esc(t.label)}</span>`;
     })
     .join("");
-  const acts = tags().map((t) => `<button data-tag="${t.id}" class="${b.tags.includes(t.id) ? "on" : ""}" title="${esc(t.label)}">${t.emoji}</button>`).join("");
+  const acts = tags().map((t) => `<button data-tag="${t.id}" class="${b.tags.includes(t.id) ? "on" : ""}" title="${esc(t.label)}" aria-label="${esc(t.label)}" style="--tc:${t.color}">${icon(tagIcon(t))}</button>`).join("");
   // Texto diferente do transcrito (revisão da IA ou correção à mão): as palavras mudadas ficam marcadas.
   const changed = (b.fixed || b.edited) && b.original !== b.text;
   const badges =
-    (b.hq ? '<span class="badge-hq" title="Transcrito pela alta precisão (Whisper local)">🎧</span>' : "") +
-    (b.fixed ? `<span class="badge-fix" data-act="orig" title="Revisado pela IA — clique para ver o original">✓ revisado</span>` : "") +
-    (b.edited ? `<span class="badge-edit"${changed ? ' data-act="orig"' : ""} title="Corrigido à mão${changed ? " — clique para ver o original" : ""}">✎ editado</span>` : "");
+    (b.hq ? '<span class="badge-hq" title="Transcrito pela alta precisão (Whisper local)">${icon("hq")}</span>' : "") +
+    (b.fixed ? `<span class="badge-fix" data-act="orig" title="Revisado pela IA — clique para ver o original">${icon("ok")}revisado</span>` : "") +
+    (b.edited ? `<span class="badge-edit"${changed ? ' data-act="orig"' : ""} title="Corrigido à mão${changed ? " — clique para ver o original" : ""}">${icon("editar")}editado</span>` : "");
   // Um <p> por parágrafo; do segundo em diante, o horário em que ele começou.
   const paras = b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text, original: b.original }];
   const body = paras
@@ -779,7 +794,7 @@ function blockHtml(s, b, q) {
     ${avatar(b.speakerId, b.speaker, 32)}
     <div><div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${highlight(b.speaker, q)}</b><time class="${hasAudio(s) ? "seek" : ""}" data-at="${b.startAt}" title="${hasAudio(s) ? "Ouvir a partir daqui" : ""}">${clock(b.startAt - s.startedAt)}</time>${wallClock(s, b.startAt)}${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
     ${body}${orig}</div>
-    <div class="acts">${acts}<button data-act="copy" title="Copiar"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button data-act="note" title="Nota neste ponto"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button data-act="edit" title="Corrigir o texto">✎</button><button data-act="split" title="Dividir esta fala em duas">✂</button><button data-act="move" title="Mover para outro falante">👤</button><button data-act="del" title="Apagar esta fala">🗑</button></div>
+    <div class="acts">${acts}<button data-act="copy" title="Copiar">${icon("copiar")}</button><button data-act="note" title="Nota neste ponto">${icon("nota")}</button><button data-act="edit" title="Corrigir o texto">${icon("editar")}</button><button data-act="split" title="Dividir esta fala em duas">${icon("dividir")}</button><button data-act="move" title="Mover para outro falante">${icon("falante")}</button><button data-act="del" title="Apagar esta fala">${icon("apagar")}</button></div>
   </li>`;
 }
 
@@ -789,7 +804,7 @@ function renderTranscript() {
   renderSpeakers(s);
   const q = state.query.trim().toLowerCase();
   renderChapters(s);
-  const items = timeline(s).filter((it) => {
+  const items = timeline(s, { clean: clean() }).filter((it) => {
     if (it.type !== "block") return !q;
     const b = it.block;
     return !state.hidden.has(b.speakerId) && (!q || b.text.toLowerCase().includes(q) || b.speaker.toLowerCase().includes(q));
@@ -799,9 +814,9 @@ function renderTranscript() {
       if (it.type === "block") return blockHtml(s, it.block, q);
       if (it.type === "chapter") return q ? "" : `<li class="tl-chapter" id="ch-${it.chapter.n}"><span class="n">${it.chapter.n}</span>${esc(it.chapter.title)}</li>`;
       const t = clock(it.at - s.startedAt);
-      if (it.type === "note") return `<li class="tl-note">📝 <time>${t}</time><span>${esc(it.note.text)}</span><button class="x" data-del-note="${esc(it.note.id)}" title="Apagar nota">✕</button></li>`;
+      if (it.type === "note") return `<li class="tl-note">${icon("nota")}<time>${t}</time><span>${esc(it.note.text)}</span><button class="x" data-del-note="${esc(it.note.id)}" title="Apagar nota" aria-label="Apagar nota">${icon("fechar")}</button></li>`;
       const url = state.shots[it.shot.id];
-      return `<li class="tl-shot"><time>📷 ${t}</time>${url ? `<img src="${url}" alt="Captura de tela" data-shot="${esc(it.shot.id)}">` : ""}</li>`;
+      return `<li class="tl-shot"><time>${icon("captura")}${t}</time>${url ? `<img src="${url}" alt="Captura de tela" data-shot="${esc(it.shot.id)}">` : ""}</li>`;
     })
     .join("");
   $("timeline").innerHTML =
@@ -834,6 +849,18 @@ $("jump").addEventListener("click", () => {
   state.follow = true;
   scrollToEnd(true);
 });
+async function setClean(on) {
+  state.settings = await setSettings({ cleanSpeech: on });
+  syncClean();
+  renderMeeting();
+  toast(on ? "Leitura limpa: sem “ahn”, “hum” e repetições, na tela e nas exportações" : "Leitura literal: o texto como foi transcrito");
+}
+function syncClean() {
+  $("t-clean").setAttribute("aria-pressed", String(clean()));
+  const m = document.getElementById("exp-clean");
+  if (m) m.checked = clean();
+}
+$("t-clean").addEventListener("click", () => setClean(!clean()));
 $("t-search").addEventListener("input", (e) => {
   state.query = e.target.value;
   renderTranscript();
@@ -875,6 +902,9 @@ $("timeline").addEventListener("click", async (e) => {
   if (act && act.dataset.act === "copy") {
     await navigator.clipboard.writeText([...blk.querySelectorAll("p:not(.orig)")].map((p) => p.innerText).join("\n\n"));
     toast("Trecho copiado");
+  } else if (act && (act.dataset.act === "edit" || act.dataset.act === "split") && clean()) {
+    // Corrigir e dividir trabalham sobre o texto literal: na leitura limpa o que se vê não é o que está guardado.
+    toast("Desligue a leitura limpa para corrigir ou dividir esta fala");
   } else if (act && act.dataset.act === "edit") {
     const ids = JSON.parse(blk.dataset.ids);
     const b = toBlocks(s).find((x) => x.key === blk.dataset.key);
@@ -929,10 +959,10 @@ $("lightbox").addEventListener("click", () => ($("lightbox").hidden = true));
 // ----- Destaques -----
 function renderHighlights() {
   const s = state.session;
-  const blocks = toBlocks(s).filter((b) => b.tags.length);
+  const blocks = toBlocks(s, { clean: clean() }).filter((b) => b.tags.length);
   if (!blocks.length) {
     $("pane-highlights").innerHTML = `<div class="list-empty"><b>Nenhum destaque ainda</b><br>
-      Passe o mouse sobre uma fala e escolha uma tag (⭐ ✅ 📌 ❓ ⚠️), use o botão ⭐ do widget
+      Passe o mouse sobre uma fala e escolha uma tag (${tags().map((t) => `<span style="color:${t.color}">${icon(tagIcon(t))}</span>`).join(" ")}), use o botão ${icon("importante")} do widget
       ou o atalho <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd> durante a reunião.</div>`;
     return;
   }
@@ -940,7 +970,7 @@ function renderHighlights() {
     .map((t) => {
       const list = blocks.filter((b) => b.tags.includes(t.id));
       if (!list.length) return "";
-      return `<div class="hl-group"><h4>${t.emoji} ${esc(t.label)} <span class="count">${list.length}</span></h4>${list
+      return `<div class="hl-group"><h4 style="--tc:${t.color}">${icon(tagIcon(t))}${esc(t.label)} <span class="count">${list.length}</span></h4>${list
         .map((b) => `<div class="hl-item" style="--c:${t.color}" data-goto="${esc(b.key)}"><div class="who"><b>${esc(b.speaker)}</b> · ${clock(b.startAt - s.startedAt)}</div>${esc(b.text)}</div>`)
         .join("")}</div>`;
     })
@@ -967,7 +997,7 @@ function renderNotes() {
     ? s.notes.items
         .slice()
         .sort((a, b) => a.at - b.at)
-        .map((n) => `<li><time>${clock(n.at - s.startedAt)}</time><span>${esc(n.text)}</span><button class="x" data-del-note="${esc(n.id)}" title="Apagar">✕</button></li>`)
+        .map((n) => `<li><time>${clock(n.at - s.startedAt)}</time><span>${esc(n.text)}</span><button class="x" data-del-note="${esc(n.id)}" title="Apagar" aria-label="Apagar">${icon("fechar")}</button></li>`)
         .join("")
     : `<li style="border:0;background:none" class="muted tiny">As notas com horário também aparecem na linha do tempo da transcrição.</li>`;
 }
@@ -1039,8 +1069,8 @@ async function renderAta() {
     else if (s.summary) $("ata-body").innerHTML = mdToHtml(s.summary.text);
     if (viewing || s.summary) decorateAta();
     else $("ata-body").innerHTML = s.entries.length
-      ? `<div class="ata-empty"><div class="ico">📝</div><b>Nenhuma ata ainda</b><p>Gere uma ata com resumo, decisões, itens de ação e pendências. Escolha um modelo acima se a sua equipe tem um formato próprio.</p></div>`
-      : `<div class="ata-empty"><div class="ico">🎙️</div><b>A ata nasce da transcrição</b><p>Quando a reunião tiver falas registradas, gere a ata por aqui.</p></div>`;
+      ? `<div class="ata-empty"><div class="ico">${icon("nota")}</div><b>Nenhuma ata ainda</b><p>Gere uma ata com resumo, decisões, itens de ação e pendências. Escolha um modelo acima se a sua equipe tem um formato próprio.</p></div>`
+      : `<div class="ata-empty"><div class="ico">${icon("mic")}</div><b>A ata nasce da transcrição</b><p>Quando a reunião tiver falas registradas, gere a ata por aqui.</p></div>`;
   }
   $("ata-doc").classList.toggle("empty", !s.summary && !viewing);
   if (!s.summary && !viewing) $("ata-tools").hidden = true;
@@ -1074,7 +1104,7 @@ async function renderAI() {
     const fixedCount = eff.filter((b) => b.fixed).length;
     $("review-run").textContent = fixedCount ? "Revisar de novo" : "Revisar com IA";
     $("review-info").innerHTML = fixedCount
-      ? `${fixedCount} trecho${fixedCount > 1 ? "s" : ""} corrigido${fixedCount > 1 ? "s" : ""}. As palavras alteradas aparecem marcadas na transcrição; clique em “✓ revisado” para ver o original.`
+      ? `${fixedCount} trecho${fixedCount > 1 ? "s" : ""} corrigido${fixedCount > 1 ? "s" : ""}. As palavras alteradas aparecem marcadas na transcrição; clique em “revisado” para ver o original.`
       : "Corrige palavras mal reconhecidas (fala rápida, nomes, siglas) usando o contexto e o seu glossário. O texto original fica guardado.";
   }
   $("review-run").disabled = !s.entries.length || (state.busy && state.busy !== "review");
@@ -1092,7 +1122,7 @@ async function renderAI() {
   if (!state.index.length) state.index = await send({ type: "list" });
   const prev = previousWithSame(s)[0];
   const quick = QUICK_PROMPTS.map((p) => `<button class="chip" data-q="${esc(p.text)}">${esc(p.label)}</button>`);
-  if (prev) quick.push(`<button class="chip" data-prev="${esc(prev.id)}">↩ Reunião anterior com estes participantes</button>`);
+  if (prev) quick.push(`<button class="chip" data-prev="${esc(prev.id)}">${icon("anterior")}Reunião anterior com estes participantes</button>`);
   $("quick").innerHTML = quick.join("");
 }
 
@@ -1230,7 +1260,7 @@ function renderVersions() {
   const opt = (sel) => hist.map((v) => `<option value="${esc(v.id)}" ${sel === v.id ? "selected" : ""}>v${v.n} · ${fmtWhen(v.createdAt)}</option>`).join("");
   $("cmp-a").innerHTML = opt(state.cmp.a);
   $("cmp-b").innerHTML = opt(state.cmp.b);
-  const kindIcon = { ai: "✦", edit: "✎", restore: "↺", sync: "⇅" };
+  const kindIcon = { ai: "ia", edit: "editar", restore: "desfazer", sync: "sync" };
   $("versions-list").innerHTML = hist.slice().reverse().map((v) => {
     const prev = hist.find((x) => x.id === v.parentId);
     const st = prev ? diffStats(diffDocument(prev.text, v.text)) : null;
@@ -1238,7 +1268,7 @@ function renderVersions() {
     const isViewing = state.viewing === v.id;
     const [what, detail] = v.label.split(" · ");
     return `<li class="ver ${isCur ? "current" : ""} ${isViewing ? "viewing" : ""}" data-v="${esc(v.id)}">
-      <span class="vk ${esc(v.source || "ai")}" title="${esc(what)}">${kindIcon[v.source] || "✦"}</span>
+      <span class="vk ${esc(v.source || "ai")}" title="${esc(what)}">${icon(kindIcon[v.source] || "ia")}</span>
       <span class="vmain"><span class="vtitle"><b>v${v.n}</b> ${esc(what)}${isCur ? '<i class="pill">atual</i>' : ""}${isViewing ? '<i class="pill view">vendo</i>' : ""}</span>
         <small>${fmtWhen(v.createdAt)}${detail ? ` · ${esc(detail)}` : ""}${v.model && v.model !== "manual" && !/modelo/.test(detail || "") ? ` · ${esc(v.model)}` : ""}</small></span>
       <span class="vs">${st ? `<b class="plus">+${st.added}</b><b class="minus">−${st.removed}</b>` : '<span class="muted">início</span>'}</span>
@@ -1597,12 +1627,19 @@ function fmtBytes(b) {
   return b >= 1024 * 1024 * 1024 ? (b / 1024 / 1024 / 1024).toFixed(2) + " GB" : b >= 1024 * 1024 ? (b / 1024 / 1024).toFixed(1) + " MB" : Math.round(b / 1024) + " KB";
 }
 const TRACK_NAMES = { tab: "os outros", system: "o computador", mic: "seu microfone", import: "gravação importada" };
+function setPlayIcon(playing) {
+  const b = $("p-play");
+  b.innerHTML = icon(playing ? "pausar" : "tocar");
+  b.dataset.playing = playing ? "1" : "";
+  b.title = playing ? "Pausar (espaço)" : "Ouvir (espaço)";
+  b.setAttribute("aria-label", playing ? "Pausar" : "Ouvir");
+}
 async function unloadPlayer() {
   const p = state.player;
   if (!p) return;
   for (const a of p.audios) { try { a.pause(); } catch {} URL.revokeObjectURL(a.src); }
   state.player = null;
-  $("p-play").textContent = "▶";
+  setPlayIcon(false);
   for (const el of document.querySelectorAll(".playing")) el.classList.remove("playing");
 }
 async function loadPlayer(s) {
@@ -1622,10 +1659,10 @@ async function loadPlayer(s) {
   p.duration = (s.audio.durationMs || 0) / 1000;
   p.master.addEventListener("loadedmetadata", () => { if (isFinite(p.master.duration)) p.duration = p.master.duration; renderPlayhead(); });
   p.master.addEventListener("timeupdate", renderPlayhead);
-  p.master.addEventListener("ended", () => { $("p-play").textContent = "▶"; });
-  p.master.addEventListener("play", () => { $("p-play").textContent = "❚❚"; for (const a of audios) if (a !== p.master) a.play().catch(() => {}); renderPlayhead(); });
+  p.master.addEventListener("ended", () => setPlayIcon(false));
+  p.master.addEventListener("play", () => { setPlayIcon(true); for (const a of audios) if (a !== p.master) a.play().catch(() => {}); renderPlayhead(); });
   p.master.addEventListener("seeked", renderPlayhead);
-  p.master.addEventListener("pause", () => { $("p-play").textContent = "▶"; for (const a of audios) if (a !== p.master) a.pause(); });
+  p.master.addEventListener("pause", () => { setPlayIcon(false); for (const a of audios) if (a !== p.master) a.pause(); });
   state.player = p;
   return p;
 }
@@ -1636,7 +1673,7 @@ function renderPlayer(s) {
   const dur = s.audio.durationMs ? fmtDuration(s.audio.durationMs) : "";
   $("p-dur").textContent = state.player && state.player.duration ? clock(state.player.duration * 1000) : s.audio.durationMs ? clock(s.audio.durationMs) : "--:--";
   $("p-info").textContent = `${s.audio.tracks.map((t) => TRACK_NAMES[t] || t).join(" + ")}${s.audio.bytes ? " · " + fmtBytes(s.audio.bytes) : ""}${dur ? "" : ""}`;
-  $("p-keep").textContent = s.audio.keep ? "★" : "☆";
+  $("p-keep").innerHTML = icon("manter");
   $("p-keep").classList.toggle("on", !!s.audio.keep);
   $("p-keep").title = s.audio.keep ? "Este áudio está marcado para manter: a limpeza automática não o apaga. Clique para desmarcar." : "Manter este áudio fora da limpeza automática";
   if (state.player && state.player.id !== s.id) unloadPlayer();
@@ -1903,14 +1940,14 @@ function cardHtml(m, snippet) {
   const sel = state.session && state.session.id === m.id ? " sel" : "";
   const live = !m.endedAt && Date.now() - m.updatedAt < 5 * 60 * 1000;
   return `<div class="mcard${sel}" role="button" tabindex="0" data-open="${esc(m.id)}">
-    <div class="mcard-top"><b>${live ? '<span style="color:var(--danger)">● </span>' : ""}<span class="mcard-name">${esc(m.title)}</span></b>
-      <button type="button" class="mcard-rename" data-rename="${esc(m.id)}" title="Renomear" aria-label="Renomear ${esc(m.title)}">✎</button></div>
+    <div class="mcard-top"><b>${live ? `<span class="live-dot" title="Gravando">${icon("gravando")}</span>` : ""}<span class="mcard-name">${esc(m.title)}</span></b>
+      <button type="button" class="mcard-rename" data-rename="${esc(m.id)}" title="Renomear" aria-label="Renomear ${esc(m.title)}">${icon("editar")}</button></div>
     <div class="sub"><span>${new Date(m.startedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
       <span>${esc(PLATFORM[m.platform] || m.platform)}</span>
       ${m.endedAt ? `<span>${fmtDuration(m.endedAt - m.startedAt)}</span>` : ""}
       <span class="avatars">${names.slice(0, 4).map((n) => avatar(n, n)).join("")}</span>
       ${m.part > 1 ? `<span class="badge" title="Mesmo link de reunião, retomado no mesmo dia">parte ${m.part}</span>` : ""}
-      ${m.hasSummary ? '<span class="badge ok">ata</span>' : ""}${m.highlights ? `<span class="badge">⭐ ${m.highlights}</span>` : ""}</div>
+      ${m.hasSummary ? '<span class="badge ok">ata</span>' : ""}${m.highlights ? `<span class="badge" title="Destaques">${icon("importante")}${m.highlights}</span>` : ""}</div>
     ${snippet ? `<div class="snippet">${highlight(snippet, state.listQuery.trim())}</div>` : ""}
   </div>`;
 }
@@ -2178,9 +2215,10 @@ $("edit-shortcuts").addEventListener("click", () => chrome.tabs.create({ url: "c
 
 function renderTagEditor() {
   $("tag-editor").innerHTML = tags()
-    .map((t, i) => `<div class="tag-row" data-i="${i}"><input value="${esc(t.emoji)}" data-k="emoji" maxlength="4" aria-label="Emoji">
+    .map((t, i) => `<div class="tag-row" data-i="${i}"><div class="menu-wrap"><button type="button" class="tag-ic" data-pick="${i}" style="color:${esc(t.color)}" title="Escolher o ícone" aria-label="Ícone da tag ${esc(t.label)}" aria-expanded="false">${icon(tagIcon(t))}</button>
+      <div class="menu ic-grid" hidden>${TAG_ICONS.map(([n]) => `<button type="button" data-ic-pick="${n}" aria-pressed="${tagIcon(t) === n}" title="${n}" style="color:${esc(t.color)}">${icon(n)}</button>`).join("")}</div></div>
       <input value="${esc(t.label)}" data-k="label" maxlength="30" aria-label="Nome"><input type="color" value="${esc(t.color)}" data-k="color" aria-label="Cor">
-      <button type="button" class="x" data-rm="${i}" title="Remover">✕</button></div>`)
+      <button type="button" class="x" data-rm="${i}" title="Remover" aria-label="Remover">${icon("fechar")}</button></div>`)
     .join("");
 }
 async function saveTags(list) {
@@ -2195,13 +2233,34 @@ $("tag-editor").addEventListener("change", (e) => {
   saveTags(list);
 });
 $("tag-editor").addEventListener("click", (e) => {
+  // Paleta de ícones: o emoji equivalente vai junto, para as exportações em texto.
+  const pick = e.target.closest("[data-pick]");
+  if (pick) {
+    const grid = pick.nextElementSibling;
+    for (const g of $("tag-editor").querySelectorAll(".ic-grid")) if (g !== grid) g.hidden = true;
+    grid.hidden = !grid.hidden;
+    pick.setAttribute("aria-expanded", String(!grid.hidden));
+    return;
+  }
+  const chosen = e.target.closest("[data-ic-pick]");
+  if (chosen) {
+    const i = Number(chosen.closest(".tag-row").dataset.i);
+    const list = tags().map((t) => ({ ...t }));
+    const [name, emoji] = TAG_ICONS.find(([n]) => n === chosen.dataset.icPick);
+    Object.assign(list[i], { icon: name, emoji });
+    return saveTags(list);
+  }
   const rm = e.target.closest("[data-rm]");
   if (!rm) return;
   const list = tags().filter((_, i) => i !== Number(rm.dataset.rm));
   if (!list.length) return toast("Mantenha pelo menos uma tag");
   saveTags(list);
 });
-$("tag-add").addEventListener("click", () => saveTags([...tags(), { id: "t" + Date.now().toString(36), label: "Nova tag", emoji: "🏷", color: "#64748b" }]));
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".tag-row .menu-wrap")) return;
+  for (const g of document.querySelectorAll("#tag-editor .ic-grid")) g.hidden = true;
+});
+$("tag-add").addEventListener("click", () => saveTags([...tags(), { id: "t" + Date.now().toString(36), label: "Nova tag", emoji: "🏷", icon: "tag", color: "#64748b" }]));
 $("tag-reset").addEventListener("click", () => saveTags(DEFAULT_TAGS));
 
 // ---------------- Conta Escribanote Pro ----------------
