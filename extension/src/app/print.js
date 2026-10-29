@@ -16,10 +16,13 @@ const doc = document.getElementById("doc");
   const session = normalize(raw);
   const [settings, shotUrls] = await Promise.all([getSettings(), chrome.runtime.sendMessage({ type: "get-shots", id })]);
   document.title = ONLY_ATA ? `Ata — ${session.title}` : session.title;
+  // "Incluir a ata e os textos institucionais" (desligado por padrão): sem ela, só a reunião, sem a ata e sem o rodapé.
+  // O PDF "só a ata" (aba Ata) é pedido explícito e não muda.
+  const institutional = ONLY_ATA || settings.exportAta === true;
   doc.innerHTML = (ONLY_ATA
     ? (session.summary?.text ? mdToHtml(session.summary.text) : "<p>Esta reunião ainda não tem ata.</p>")
-    : toHtml(session, { tags: settings.tags, shotUrls: shotUrls || {} })) +
-    `<p class="foot">Gerado pelo Escribanote em ${new Date().toLocaleString("pt-BR")}</p>`;
+    : toHtml(session, { tags: settings.tags, shotUrls: shotUrls || {}, ata: institutional })) +
+    (institutional ? `<p class="foot">Gerado pelo Escribanote em ${new Date().toLocaleString("pt-BR")}</p>` : "");
   document.getElementById("print").addEventListener("click", () => print());
   await Promise.all([...doc.querySelectorAll("img")].map((img) => img.decode().catch(() => {})));
   setTimeout(() => print(), 300);

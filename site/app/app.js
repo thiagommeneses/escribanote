@@ -520,7 +520,7 @@ function ataPane() {
   return `${body}
     <div class="row" style="margin-top:10px">
       <button class="btn sm" data-act="copy-ata">Copiar</button>
-      <button class="btn sm" data-act="copy-ata" data-k="editor" title="HTML no formato do editor do Atena (TinyMCE): cole direto no editor">Copiar p/ Atena</button>
+      <button class="btn sm" data-act="copy-ata" data-k="editor" title="HTML no formato do Editor (TinyMCE): cole direto no editor">Copiar p/ Atena</button>
       <button class="btn sm" data-act="copy-ata" data-k="html" title="Código HTML para o 'Código-fonte' do editor">Copiar HTML</button>
       <button class="btn sm" data-act="dl-ata" data-f="txt">Baixar .txt</button>
       <button class="btn sm" data-act="dl-ata" data-f="md">Baixar .md</button>

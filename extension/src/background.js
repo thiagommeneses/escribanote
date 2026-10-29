@@ -304,7 +304,7 @@ async function exportMeetingFolder(dir, id, s, settings) {
     if (f && f.size) audio.push({ name: `${{ tab: "outros", system: "computador", mic: "microfone", import: "gravacao" }[source] || source}.${(f.name.split(".").pop() || "webm")}`, file: f });
   }
   const manifest = meetingManifest(s, { participants: participantNames(s), audioFiles: audio.map((a) => a.name), version: chrome.runtime.getManifest().version });
-  const name = await writeMeetingFolder(dir, s, { markdown: toMarkdown(s, { tags: settings.tags }), manifest, audio });
+  const name = await writeMeetingFolder(dir, s, { markdown: toMarkdown(s, { tags: settings.tags, ata: settings.exportAta === true }), manifest, audio });
   if (names[id] && names[id] !== name) await removeMeetingFolder(dir, names[id]);
   names[id] = name;
   await chrome.storage.local.set({ folderExport: { names } });
@@ -441,9 +441,15 @@ async function endSession(tabId, reason = "unknown") {
   enforceAudioQuota().catch(() => {});
   // a tela pós-reunião abre já; revisão e ata continuam em segundo plano e aparecem nela
   openAfterCall(s, settings).catch((err) => console.warn("abrir após a chamada:", err));
-  if (settings.autoReview) await reviewPending(s).catch(() => {});
-  maybeAutoAta(s);
-  maybeAutoChapters(s);
+  // revisão, ata e capítulos rodam depois do fim: uma atualização pendente espera por eles
+  afterCallWork.add(s.id);
+  try {
+    if (settings.autoReview) await reviewPending(s).catch(() => {});
+    await Promise.allSettled([maybeAutoAta(s), maybeAutoChapters(s)]);
+  } finally {
+    afterCallWork.delete(s.id);
+    checkUpdate().catch(() => {});
+  }
 }
 
 // Slack (Pro): com "publicar sozinho" ligado na conta, a ata automática vai para o canal padrão.
@@ -734,6 +740,13 @@ async function startHq(tabId) {
   // Sem modelo escolhido (ex.: huddle do Slack, que só tem o áudio), usa o do gravador ou o rápido.
   const modelKey = settings.hq !== "off" ? settings.hq : settings.recorderModel || "base";
   if (!HQ_MODELS[modelKey]) throw new Error("Modelo de reconhecimento inválido.");
+  // O documento offscreen tem um só pipeline do Whisper: uma reunião pelo áudio por vez.
+  // (Pelas legendas, várias abas transcrevem em paralelo, cada uma com a sua sessão.)
+  const busy = (await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] })).length
+    ? await toOffscreen({ type: "status" }).catch(() => null)
+    : null;
+  if (busy && busy.tabId != null && busy.tabId !== tabId && (await chrome.tabs.get(busy.tabId).then(() => true, () => false)))
+    throw new Error("O áudio de outra reunião já está sendo transcrito. Pare a transcrição pelo áudio nela para usar aqui; as legendas continuam funcionando nas duas.");
   let streamId;
   try {
     streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
@@ -757,7 +770,7 @@ async function stopHq(tabId) {
   if (!hqStatus.has(tabId) || hqStatus.get(tabId).state === "idle") return;
   const hs = await activeFor(tabId);
   if (hs) noteEvent(await getSession(hs.id), "hq-stop");
-  await toOffscreen({ type: "stop" }).catch(() => {});
+  await toOffscreen({ type: "stop", tabId }).catch(() => {});
   broadcastHq(tabId, { state: "idle" });
 }
 
@@ -1670,3 +1683,80 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   tabLocks.delete(tabId);
   endSession(tabId, "tab-removed");
 });
+
+// ---------------- Atualização sem interromper reunião ----------------
+// A extensão é instalada descompactada: a versão nova chega trocando os arquivos da pasta. O ⟳ de
+// chrome://extensions recarrega na hora e derruba a reunião em andamento (o widget fica órfão e as
+// legendas param de chegar). Aqui ela percebe o manifest novo no disco e se recarrega sozinha só
+// quando nada está acontecendo: nenhuma aba em reunião ou na sala de espera, nenhuma gravação, nada
+// do Whisper rodando e nada pendente depois da última reunião (revisão, ata, salvamento, backup).
+// Pela loja ou por política, a atualização chega por onUpdateAvailable e segue a mesma regra.
+const RUNNING_VERSION = chrome.runtime.getManifest().version;
+const UPDATE_QUIET_MS = 2 * 60 * 1000; // folga depois da última atividade
+const afterCallWork = new Set();
+let pendingVersion = null;
+
+const newerVersion = (a, b) => {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d > 0;
+  }
+  return false;
+};
+
+async function diskVersion() {
+  try {
+    const r = await fetch(chrome.runtime.getURL("manifest.json"), { cache: "no-store" });
+    return (await r.json()).version || null;
+  } catch {
+    return null;
+  }
+}
+
+async function somethingRunning() {
+  if (afterCallWork.size || asrInflight.size || reviewing.size || reviewTimers.size || saveTimer || backupTimer || autoTimer) return true;
+  const all = await chrome.storage.session.get(null);
+  for (const key of Object.keys(all)) {
+    if (key.startsWith("active:") && (await chrome.tabs.get(Number(key.slice(7))).then(() => true, () => false))) return true;
+  }
+  const pages = await chrome.runtime.getContexts({ contextTypes: ["TAB"] });
+  if (pages.some((c) => c.documentUrl.includes("/src/app/gravar.html"))) return true;
+  if ((await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] })).length) {
+    const st = await toOffscreen({ type: "status" }).catch(() => null);
+    if (st && (st.tabId != null || st.retrans)) return true;
+  }
+  // abas de reunião ainda sem sessão (sala de espera, consentimento pendente): só a ponte da aba sabe
+  for (const tab of await chrome.tabs.query({})) {
+    if (await chrome.tabs.sendMessage(tab.id, { type: "busy?" }).catch(() => false)) return true;
+  }
+  return false;
+}
+
+async function checkUpdate() {
+  if (!pendingVersion) {
+    const v = await diskVersion();
+    if (!v || !newerVersion(v, RUNNING_VERSION)) return;
+    pendingVersion = v;
+  }
+  const now = Date.now();
+  const { lastBusyAt = 0 } = await chrome.storage.session.get("lastBusyAt");
+  if (await somethingRunning()) {
+    await chrome.storage.session.set({ lastBusyAt: now });
+    for (const tab of await chrome.tabs.query({})) chrome.tabs.sendMessage(tab.id, { type: "update-pending", version: pendingVersion }).catch(() => {});
+    chrome.runtime.sendMessage({ type: "update-pending", version: pendingVersion }).catch(() => {});
+    return;
+  }
+  if (now - lastBusyAt < UPDATE_QUIET_MS) return;
+  await saveDirty().catch(() => {});
+  console.info(`Escribanote: aplicando a versão ${pendingVersion} (rodando ${RUNNING_VERSION}).`);
+  chrome.runtime.reload();
+}
+
+chrome.runtime.onUpdateAvailable.addListener((details) => {
+  pendingVersion = details.version;
+  checkUpdate().catch(() => {});
+});
+setTimeout(() => checkUpdate().catch(() => {}), 10_000);
+setInterval(() => checkUpdate().catch(() => {}), 60_000);

@@ -235,6 +235,7 @@ Entregue e publicado em escribanote.com (uma versão por fase):
 | 3.3.0 | 4 | Transcrever de novo a partir do áudio guardado; importar arquivo de áudio/vídeo; eco por voz com identificação de falantes |
 | 3.4.0 | 5 | Capítulos por IA (chave própria ou 1 crédito Pro), na transcrição e nas exportações; correção manual por bloco (texto, falante, apagar) com desfazer |
 | 3.5.0 | 6 | Exportação em pasta por reunião (`Reuniões/`), com manifesto; documentação em `docs/exportacao-em-pasta.md` |
+| 3.6.0 | — | Depois do plano: teclas digitadas no widget não chegam aos atalhos do Meet; aviso enviado direto no chat; uma reunião pelo áudio por vez; versão nova na pasta só entra quando não há reunião; ata e textos institucionais nas exportações viram opção (desligada por padrão); "Para o Atena" vira "Para o Editor" |
 
 **Ficou de fora, por decisão ou limite técnico:**
 

@@ -403,9 +403,12 @@ function buildExportMenu() {
     null,
     ...Object.entries(FORMATS).map(([ext, f]) => [ext, "⬇", f.label, ""]),
   ];
-  $("export-menu").innerHTML = items
-    .map((it) => (it ? `<button data-exp="${it[0]}"><span>${it[1]}</span>${esc(it[2])}${it[3] ? `<small>${esc(it[3])}</small>` : ""}</button>` : "<hr>"))
-    .join("");
+  $("export-menu").innerHTML =
+    // Uso institucional (MPGO), desligado por padrão: ligado, a ata no modelo da equipe vai junto.
+    `<label class="menu-opt"><input type="checkbox" id="exp-ata"${state.settings.exportAta === true ? " checked" : ""}>Incluir a ata e os textos institucionais</label><hr>` +
+    items
+      .map((it) => (it ? `<button data-exp="${it[0]}"><span>${it[1]}</span>${esc(it[2])}${it[3] ? `<small>${esc(it[3])}</small>` : ""}</button>` : "<hr>"))
+      .join("");
 }
 buildExportMenu();
 $("m-export").addEventListener("click", (e) => {
@@ -413,20 +416,30 @@ $("m-export").addEventListener("click", (e) => {
   const menu = $("export-menu");
   menu.hidden = !menu.hidden;
   if (menu.hidden) return;
+  $("exp-ata").checked = state.settings.exportAta === true;
   // No painel lateral (estreito) o menu não cabe à direita do botão: ancora pela direita.
   menu.classList.remove("flip");
   const r = menu.getBoundingClientRect();
   if (r.right > document.documentElement.clientWidth - 8) menu.classList.add("flip");
 });
 document.addEventListener("click", () => ($("export-menu").hidden = true));
+$("export-menu").addEventListener("change", async (e) => {
+  if (e.target.id !== "exp-ata") return;
+  state.settings = await setSettings({ exportAta: e.target.checked });
+  const field = document.querySelector('#settings [name="exportAta"]');
+  if (field) field.checked = e.target.checked;
+  toast(e.target.checked ? "Exportações com a ata e os textos institucionais" : "Exportações só com a reunião, sem a ata");
+});
 $("export-menu").addEventListener("click", async (e) => {
+  if (e.target.closest(".menu-opt")) return void e.stopPropagation(); // marcar a opção não fecha o menu
   const b = e.target.closest("[data-exp]");
   if (!b || !state.session) return;
   const s = state.session;
   const kind = b.dataset.exp;
+  const ata = state.settings.exportAta === true;
   try {
     if (kind === "rich") {
-      const html = toHtml(s, { tags: tags() });
+      const html = toHtml(s, { tags: tags(), ata });
       await navigator.clipboard.write([
         new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([toText(s, { tags: tags() })], { type: "text/plain" }) }),
       ]);
@@ -438,7 +451,7 @@ $("export-menu").addEventListener("click", async (e) => {
       chrome.tabs.create({ url: chrome.runtime.getURL(`src/app/print.html?id=${s.id}`) });
     } else {
       const f = FORMATS[kind];
-      const url = URL.createObjectURL(new Blob([f.render(s, { tags: tags() })], { type: `${f.mime};charset=utf-8` }));
+      const url = URL.createObjectURL(new Blob([f.render(s, { tags: tags(), ata })], { type: `${f.mime};charset=utf-8` }));
       const a = Object.assign(document.createElement("a"), { href: url, download: fileName(s, kind) });
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
@@ -1138,7 +1151,7 @@ async function copyAta(md, kind) {
   if (kind === "plain") { await navigator.clipboard.writeText(ataPlainText(md)); return toast("Texto simples copiado"); }
   const html = kind === "editor" ? ataEditorHtml(md) : mdToHtml(md);
   await navigator.clipboard.write([new ClipboardItem({ "text/html": blob(html, "text/html"), "text/plain": blob(kind === "editor" ? ataPlainText(md) : md, "text/plain") })]);
-  toast(kind === "editor" ? "Ata copiada no formato do Atena. Cole no editor." : "Ata copiada");
+  toast(kind === "editor" ? "Ata copiada no formato do Editor. Cole no editor." : "Ata copiada");
 }
 
 // ----- Versões da ata (histórico + comparador) -----

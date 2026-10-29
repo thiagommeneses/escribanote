@@ -71,13 +71,21 @@ export const DEFAULTS = {
   backupAuto: "downloads",
   folderExport: false, // além do JSON de backup, uma pasta legível por reunião em <pasta de backup>/Reuniões // backup automático sem escolher pasta: "downloads" (Downloads\Escribanote\backup) | "opfs" (área interna do Chrome) | "off"
   tags: DEFAULT_TAGS,
+  exportAta: false, // ligado: exportações da reunião levam a ata (modelo institucional, assinatura) e o rodapé; padrão = só a reunião
   notifyMessage:
-    "Olá! Estou transcrevendo esta reunião com o Escribanote para gerar a ata. A transcrição fica salva só no meu computador.",
+    "Olá! Estou transcrevendo esta reunião com o Escribanote. A transcrição fica salva no meu computador.",
 };
+
+// Textos padrão antigos: quem nunca editou a mensagem passa a ver o padrão atual.
+const OLD_NOTIFY = [
+  "Olá! Estou transcrevendo esta reunião com o Escribanote para gerar a ata. A transcrição fica salva só no meu computador.",
+];
 
 export async function getSettings() {
   const { settings } = await chrome.storage.local.get("settings");
-  return { ...DEFAULTS, ...(settings || {}) };
+  const out = { ...DEFAULTS, ...(settings || {}) };
+  if (OLD_NOTIFY.includes(out.notifyMessage)) out.notifyMessage = DEFAULTS.notifyMessage;
+  return out;
 }
 
 // _at marca a última mudança feita pelo usuário: decide qual cópia vence ao sincronizar.

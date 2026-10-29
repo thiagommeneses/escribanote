@@ -65,7 +65,7 @@ export function toMarkdown(session, opts = {}) {
     `- **Participantes:** ${participantNames(session).join(", ") || "—"}`,
     "",
   ];
-  if (session.summary && session.summary.text) lines.push("## Ata", "", session.summary.text.trim(), "");
+  if (opts.ata !== false && session.summary && session.summary.text) lines.push("## Ata", "", session.summary.text.trim(), "");
   const hls = highlightsOf(session);
   if (hls.length) {
     lines.push("## Destaques", "");
@@ -122,13 +122,13 @@ export function mdToHtml(md) {
 }
 
 // HTML autocontido: usado na cópia formatada (Docs, Notion, e-mail) e no PDF.
-// shotUrls: mapa id -> dataURL das capturas (opcional).
-export function toHtml(session, { tags, shotUrls = {} } = {}) {
+// shotUrls: mapa id -> dataURL das capturas (opcional). ata: false deixa a ata de fora.
+export function toHtml(session, { tags, shotUrls = {}, ata = true } = {}) {
   const parts = [
     `<h1>${esc(session.title)}</h1>`,
     `<p><b>Plataforma:</b> ${esc(PLATFORM[session.platform] || session.platform)} · <b>Data:</b> ${esc(dateLabel(session.startedAt))}<br><b>Participantes:</b> ${esc(participantNames(session).join(", ") || "—")}</p>`,
   ];
-  if (session.summary && session.summary.text) parts.push("<h2>Ata</h2>", mdToHtml(session.summary.text));
+  if (ata && session.summary && session.summary.text) parts.push("<h2>Ata</h2>", mdToHtml(session.summary.text));
   if (session.chapters && session.chapters.length) parts.push("<h2>Capítulos</h2><ul>", ...session.chapters.map((c) => `<li><span style="color:#888">${clock(c.startAt - session.startedAt)}</span> ${esc(c.title)}</li>`), "</ul>");
   const hls = highlightsOf(session);
   if (hls.length) {
@@ -184,8 +184,11 @@ export function toVtt(session) {
   return `WEBVTT\n\n${body}`;
 }
 
-export function toJson(session) {
-  const { aliases, ...rest } = session;
+// ata: false tira a ata, o histórico dela e o modelo usado (o JSON fica só com a reunião).
+export function toJson(session, { ata = true } = {}) {
+  const { aliases, ...all } = session;
+  const { summary, summaryHistory, ataTemplateId, ataPrompt, ...noAta } = all;
+  const rest = ata ? all : noAta;
   return JSON.stringify({ ...rest, blocks: toBlocks(session).map(({ texts, ...b }) => b) }, null, 2);
 }
 

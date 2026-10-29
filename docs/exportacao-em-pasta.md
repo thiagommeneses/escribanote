@@ -10,7 +10,7 @@ encerrada, uma pasta dentro de `Reuniões/`:
 ├── escribanote-ajustes.json
 └── Reuniões/
     └── 2026-10-26 1430 Planejamento Q4/
-        ├── transcricao.md             ← Markdown com ata, destaques, notas, capítulos e transcrição
+        ├── transcricao.md             ← Markdown com destaques, notas, capítulos e transcrição (e a ata, se ligada)
         ├── reuniao.json               ← manifesto (abaixo)
         ├── outros.webm                ← áudio dos outros participantes (se o áudio foi guardado)
         └── microfone.webm             ← seu microfone (se o áudio foi guardado)
@@ -52,7 +52,7 @@ encerrada, uma pasta dentro de `Reuniões/`:
 ## `transcricao.md`
 
 Mesmo formato da exportação em Markdown do painel: título, plataforma, data, participantes;
-seções **Ata**, **Destaques**, **Notas** e **Capítulos** quando existem; e **Transcrição** com um
+seções **Ata** (só com "Incluir a ata e os textos institucionais" ligado em Ajustes › Modelos de ata, desligado por padrão), **Destaques**, **Notas** e **Capítulos** quando existem; e **Transcrição** com um
 parágrafo por fala (`**Nome** · `hh:mm:ss``), horário no início de cada parágrafo longo e títulos
 `### n. Capítulo` no ponto em que cada capítulo começa.
 

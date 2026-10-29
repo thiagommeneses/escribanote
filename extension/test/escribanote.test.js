@@ -212,6 +212,28 @@ test("exportações incluem destaques, notas e ata", () => {
   assert.match(toText(s), /Bruno Lima \[✅ Decisão\]: Sim, aprovado\./);
 });
 
+test("exportações sem a ata (uso fora do MPGO): reunião completa, sem ata nem modelo", async () => {
+  const { toJson } = await import("../src/lib/format.js");
+  const s = meeting();
+  setBlockTags(s, ["2/b"], ["decisao"]);
+  s.notes.text = "Pauta: orçamento";
+  s.summary = { text: "## Registro de reunião\nOrçamento aprovado.\n\nPromotor de Justiça" };
+  s.summaryHistory = [{ id: "v1", n: 1, text: s.summary.text }];
+  s.ataTemplateId = "tpl-atena";
+  const md = toMarkdown(s, { ata: false });
+  assert.doesNotMatch(md, /## Ata|Registro de reunião|Promotor/);
+  assert.match(md, /## Destaques[\s\S]*## Notas[\s\S]*## Transcrição[\s\S]*Sim, aprovado/);
+  const html = toHtml(s, { ata: false });
+  assert.doesNotMatch(html, /<h2>Ata<\/h2>|Promotor/);
+  assert.match(html, /<h2>Transcrição<\/h2>/);
+  const json = JSON.parse(toJson(s, { ata: false }));
+  assert.ok(!("summary" in json) && !("summaryHistory" in json) && !("ataTemplateId" in json));
+  assert.ok(json.entries.length && json.blocks.length, "a reunião continua inteira no JSON");
+  // padrão continua institucional
+  assert.match(toMarkdown(s), /## Ata[\s\S]*Promotor/);
+  assert.equal(JSON.parse(toJson(s)).ataTemplateId, "tpl-atena");
+});
+
 test("mdToHtml escapa HTML e renderiza tarefas", () => {
   const html = mdToHtml("## Itens\n- [ ] <script>x</script> tarefa\n- [x] feita");
   assert.ok(!html.includes("<script>"));
