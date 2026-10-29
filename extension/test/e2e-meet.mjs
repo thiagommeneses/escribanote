@@ -741,6 +741,24 @@ try {
   await evaluate(app, `document.getElementById('tag-reset').click()`);
   step("tag escolhe o ícone numa paleta e guarda o emoji para exportar");
 
+  // Aparência: escuro e claro fixos valem na hora; automático tira o atributo e volta a seguir o sistema
+  const bg = () => evaluate(app, "getComputedStyle(document.body).backgroundColor");
+  await evaluate(app, `document.querySelector('#settings input[name="theme"][value="dark"]').click()`);
+  await waitFor(async () => (await evaluate(app, "document.documentElement.dataset.theme")) === "dark", "tema escuro aplicado");
+  assert.equal(await bg(), "rgb(17, 19, 23)");
+  await evaluate(app, `document.querySelector('[data-nav="meeting"]').click()`);
+  await sleep(400);
+  await screenshot(app, "9c-tema-escuro.png");
+  assert.doesNotMatch(await evaluate(app, "document.getElementById('timeline').innerHTML"), /\$\{/, "nada de template sem interpolar na transcrição");
+  await evaluate(app, `document.querySelector('[data-nav="settings"]').click()`);
+  await evaluate(app, `document.querySelector('#settings input[name="theme"][value="light"]').click()`);
+  await waitFor(async () => (await evaluate(app, "document.documentElement.dataset.theme")) === "light", "tema claro aplicado");
+  assert.equal(await bg(), "rgb(255, 255, 255)");
+  await evaluate(app, `document.querySelector('#settings input[name="theme"][value="auto"]').click()`);
+  await waitFor(async () => !(await evaluate(app, "document.documentElement.hasAttribute('data-theme')")), "tema automático");
+  assert.equal((await evaluate(app, `chrome.storage.local.get("settings").then((r) => r.settings.theme)`)), "auto");
+  step("aparência: claro, escuro e automático trocam na hora");
+
   // 10) Sair da chamada: o Meet fecha as conexões WebRTC e tira o botão de sair; a página continua.
   //     A sessão termina sozinha em poucos segundos, a última fala (cortada pelo protocolo) é
   //     completada pela legenda que ainda estava na tela, o selo REC some e, com o ajuste
@@ -876,7 +894,7 @@ try {
   await sw({ type: "audio-meta", sessionId: id, meta: { ...kept.meta, startedAt: sEnd.startedAt } });
   assert.ok((await sw({ type: "get", id })).audio.done, "reunião sabe que tem áudio");
   await send("Page.navigate", { url: `chrome-extension://${extId}/src/app/app.html?id=${id}` }, app);
-  await waitFor(() => evaluate(app, "!document.querySelector('#player').hidden && !!document.querySelector('#timeline time.seek')"), "player visível e horários clicáveis");
+  await waitFor(() => evaluate(app, "!!document.querySelector('#player') && !document.querySelector('#player').hidden && !!document.querySelector('#timeline time.seek')"), "player visível e horários clicáveis");
   await evaluate(app, "document.querySelector('#timeline time.seek').click()");
   await waitFor(() => evaluate(app, "!!document.querySelector('#timeline .blk.playing') && document.querySelector('#p-play').dataset.playing === '1'"), "tocar destaca o bloco", 8000).catch(async (err) => {
     console.log("player:", await evaluate(app, "JSON.stringify({ play: document.querySelector('#p-play').textContent, toast: document.querySelector('#toast').textContent, time: document.querySelector('#p-time').textContent, dur: document.querySelector('#p-dur').textContent, blocks: document.querySelectorAll('#timeline li.blk[data-start]').length, starts: [...document.querySelectorAll('#timeline li.blk[data-start]')].slice(0,3).map(l => l.dataset.start), audioStart: " + sEnd.startedAt + " })"));

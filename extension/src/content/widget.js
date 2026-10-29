@@ -419,7 +419,7 @@
         .map((b) => `<div class="blk" data-ids="${esc(JSON.stringify(b.ids))}" data-tags="${esc(JSON.stringify(b.tags))}">
           <div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${esc(b.speaker)}</b>
             <time>${clock(b.startAt - session.startedAt)}</time>${b.kind === "chat" ? '<span class="muted">chat</span>' : ""}
-            ${b.hq ? '<span class="badge" title="Transcrito pelo modo de alta precisão">${svg("hq", 12)}</span>' : ""}${b.fixed ? `<span class="badge" title="Revisado pela IA. Original: ${esc(b.original)}">${svg("ok", 12)}</span>` : ""}
+            ${b.hq ? `<span class="badge" title="Transcrito pelo modo de alta precisão">${svg("hq", 12)}</span>` : ""}${b.fixed ? `<span class="badge" title="Revisado pela IA. Original: ${esc(b.original)}">${svg("ok", 12)}</span>` : ""}
             <span class="tags">${b.tags.map((id) => { const x = t.find((y) => y.id === id) || {}; return `<span style="color:${light(x.color)}" title="${esc(x.label || id)}">${svg(tagIcon(x), 14)}</span>`; }).join("")}</span></div>
           ${(b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text }]).map((p, i) => `<p>${i ? `<time class="pt">${clock(p.at - session.startedAt)}</time>` : ""}${esc(p.text)}</p>`).join("")}
           <div class="acts">${t.map((x) => `<button data-tag="${x.id}" class="${b.tags.includes(x.id) ? "on" : ""}" title="${esc(x.label)}" aria-label="${esc(x.label)}" style="color:${light(x.color)}">${svg(tagIcon(x), 15)}</button>`).join("")}</div>
