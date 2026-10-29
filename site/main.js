@@ -242,7 +242,7 @@
     .then((r) => (r.ok ? r.json() : null))
     .then((j) => {
       if (!j) return;
-      document.getElementById("dl-version").textContent = "v" + j.version;
+      document.getElementById("dl-version").textContent = "v" + (j.label || j.version);
       document.getElementById("download").href = "download/" + j.file;
     })
     .catch(() => {});

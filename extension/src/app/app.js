@@ -745,6 +745,12 @@ $("speakers").addEventListener("dblclick", (e) => {
   if (chip) renameSpeaker(chip.dataset.id, chip);
 });
 
+// Hora do relógio de um momento da reunião. Arquivo importado não tem: o início é o da importação.
+function wallClock(s, at) {
+  if (s.platform === "import") return "";
+  return `<span class="wall" title="Hora do relógio">${new Date(at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>`;
+}
+
 function blockHtml(s, b, q) {
   const tagChips = b.tags
     .map((id) => {
@@ -753,23 +759,25 @@ function blockHtml(s, b, q) {
     })
     .join("");
   const acts = tags().map((t) => `<button data-tag="${t.id}" class="${b.tags.includes(t.id) ? "on" : ""}" title="${esc(t.label)}">${t.emoji}</button>`).join("");
+  // Texto diferente do transcrito (revisão da IA ou correção à mão): as palavras mudadas ficam marcadas.
+  const changed = (b.fixed || b.edited) && b.original !== b.text;
   const badges =
     (b.hq ? '<span class="badge-hq" title="Transcrito pela alta precisão (Whisper local)">🎧</span>' : "") +
     (b.fixed ? `<span class="badge-fix" data-act="orig" title="Revisado pela IA — clique para ver o original">✓ revisado</span>` : "") +
-    (b.edited ? `<span class="badge-edit" title="Corrigido à mão">✎ editado</span>` : "");
+    (b.edited ? `<span class="badge-edit"${changed ? ' data-act="orig"' : ""} title="Corrigido à mão${changed ? " — clique para ver o original" : ""}">✎ editado</span>` : "");
   // Um <p> por parágrafo; do segundo em diante, o horário em que ele começou.
   const paras = b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text, original: b.original }];
   const body = paras
     .map((p, i) => {
       const t = i ? `<time class="pt${hasAudio(s) ? " seek" : ""}" data-at="${p.at}" title="${hasAudio(s) ? "Ouvir a partir daqui" : "Momento em que este trecho começou"}">${clock(p.at - s.startedAt)}</time>` : "";
-      const html = q ? highlight(p.text, q) : b.fixed ? diffHtml(p.original, p.text) : esc(p.text);
+      const html = q ? highlight(p.text, q) : changed && p.original !== p.text ? diffHtml(p.original, p.text) : esc(p.text);
       return `<p>${t}${html}</p>`;
     })
     .join("");
-  const orig = b.fixed && state.showOrig.has(b.key) ? `<p class="orig">${esc(b.original)}</p>` : "";
+  const orig = changed && state.showOrig.has(b.key) ? `<p class="orig">${esc(b.original)}</p>` : "";
   return `<li class="blk${b.kind === "chat" ? " chat" : ""}" data-key="${esc(b.key)}" data-ids="${esc(JSON.stringify(b.ids))}" data-tags="${esc(JSON.stringify(b.tags))}" data-start="${b.startAt}" data-at="${b.endAt}">
     ${avatar(b.speakerId, b.speaker, 32)}
-    <div><div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${highlight(b.speaker, q)}</b><time class="${hasAudio(s) ? "seek" : ""}" data-at="${b.startAt}" title="${hasAudio(s) ? "Ouvir a partir daqui" : ""}">${clock(b.startAt - s.startedAt)}</time>${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
+    <div><div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${highlight(b.speaker, q)}</b><time class="${hasAudio(s) ? "seek" : ""}" data-at="${b.startAt}" title="${hasAudio(s) ? "Ouvir a partir daqui" : ""}">${clock(b.startAt - s.startedAt)}</time>${wallClock(s, b.startAt)}${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
     ${body}${orig}</div>
     <div class="acts">${acts}<button data-act="copy" title="Copiar"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button data-act="note" title="Nota neste ponto"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button data-act="edit" title="Corrigir o texto">✎</button><button data-act="split" title="Dividir esta fala em duas">✂</button><button data-act="move" title="Mover para outro falante">👤</button><button data-act="del" title="Apagar esta fala">🗑</button></div>
   </li>`;

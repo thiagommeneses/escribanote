@@ -370,6 +370,11 @@ try {
   await evaluate(app, "document.querySelector('.ask [data-ok]').click()");
   await waitFor(() => evaluate(app, `document.querySelector('#timeline li.blk[data-key="${firstKey}"] p')?.innerText === 'Texto corrigido à mão.'`), "texto corrigido no painel");
   assert.ok(await evaluate(app, `!!document.querySelector('#timeline li.blk[data-key="${firstKey}"] .badge-edit')`), "selo 'editado'");
+  assert.ok(await evaluate(app, `!!document.querySelector('#timeline li.blk[data-key="${firstKey}"] p ins')`), "palavras corrigidas à mão ficam marcadas");
+  await evaluate(app, `document.querySelector('#timeline li.blk[data-key="${firstKey}"] .badge-edit').click()`);
+  await waitFor(() => evaluate(app, `document.querySelector('#timeline li.blk[data-key="${firstKey}"] p.orig')?.innerText === ${JSON.stringify(before)}`), "selo 'editado' mostra o original");
+  await evaluate(app, `document.querySelector('#timeline li.blk[data-key="${firstKey}"] .badge-edit').click()`);
+  assert.match(await evaluate(app, "document.querySelector('#timeline li.blk .who .wall')?.textContent || ''"), /^\d\d:\d\d$/, "hora do relógio junto do tempo");
   assert.equal((await sw({ type: "get", id })).undo.length, 1, "pilha de desfazer");
   await evaluate(app, "document.querySelector('#m-undo').click()");
   await waitFor(() => evaluate(app, `document.querySelector('#timeline li.blk[data-key="${firstKey}"] p')?.innerText === ${JSON.stringify(before)}`), "desfazer devolve o texto");

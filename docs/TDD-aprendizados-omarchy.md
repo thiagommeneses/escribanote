@@ -237,6 +237,7 @@ Entregue e publicado em escribanote.com (uma versão por fase):
 | 3.5.0 | 6 | Exportação em pasta por reunião (`Reuniões/`), com manifesto; documentação em `docs/exportacao-em-pasta.md` |
 | 3.6.0 | — | Depois do plano: teclas digitadas no widget não chegam aos atalhos do Meet; aviso enviado direto no chat; uma reunião pelo áudio por vez; versão nova na pasta só entra quando não há reunião; ata e textos institucionais nas exportações viram opção (desligada por padrão); "Para o Atena" vira "Para o Editor" |
 | 3.7.0 | — | Pendências da fase 5: dividir uma fala em duas (✂ no painel; a segunda parte vira a fala derivada `<id>~n`, com o falante escolhido e o horário pela proporção do texto, corrigível, divisível de novo e com desfazer); endpoint `POST /api/v1/ai/chapters` no Pro (esquema JSON, resposta validada no servidor; a extensão cai no endpoint de perguntas se o servidor responder 404); widget não religa a pausa com uma visão atrasada (falas logo depois de "Retomar" se perdiam) |
+| 0.9.37 beta | — | Renumeração: o produto ainda não foi lançado, então a série 3.x vira beta 0.9.x (3.7 → 0.9.37) e o lançamento público será a 1.0.0; a atualização adiada passa a valer para qualquer número diferente, não só maior. Correção à mão marcada nas palavras como a revisão da IA (o selo “✎ editado” mostra o original); hora do relógio ao lado do tempo de cada fala (fora de arquivos importados) |
 
 **Ficou de fora, por decisão ou limite técnico:**
 

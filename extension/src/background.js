@@ -1718,16 +1718,6 @@ const UPDATE_QUIET_MS = 2 * 60 * 1000; // folga depois da última atividade
 const afterCallWork = new Set();
 let pendingVersion = null;
 
-const newerVersion = (a, b) => {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] || 0) - (pb[i] || 0);
-    if (d) return d > 0;
-  }
-  return false;
-};
-
 async function diskVersion() {
   try {
     const r = await fetch(chrome.runtime.getURL("manifest.json"), { cache: "no-store" });
@@ -1759,7 +1749,8 @@ async function somethingRunning() {
 async function checkUpdate() {
   if (!pendingVersion) {
     const v = await diskVersion();
-    if (!v || !newerVersion(v, RUNNING_VERSION)) return;
+    // Qualquer número diferente conta, não só maior: a numeração já desceu (3.7.0 → 0.9.37) e pode voltar atrás.
+    if (!v || v === RUNNING_VERSION) return;
     pendingVersion = v;
   }
   const now = Date.now();
