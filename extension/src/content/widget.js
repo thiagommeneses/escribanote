@@ -142,6 +142,8 @@
     .pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: rgba(24,25,29,.96);
       color: #e8eaed; border: 1px solid rgba(255,255,255,.1); box-shadow: 0 6px 20px rgba(0,0,0,.4); font-size: 13px; cursor: pointer; }
     .muted { color: #9aa0a6; }
+    .upd { padding: 5px 14px; font-size: 11px; color: #9aa0a6; border-top: 1px solid rgba(255,255,255,.06); }
+    .upd[hidden] { display: none; }
     .badge { font-size: 11px; opacity: .8; }
     .hqchip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: rgba(129,201,149,.16); color: #81c995; }
     .banner { margin: 4px 10px 6px 0; padding: 7px 10px; border-radius: 10px; background: rgba(138,180,248,.1); color: #d2e3fc; font-size: 12px; }
@@ -172,6 +174,7 @@
       <div class="input"><input id="ai-input" placeholder="Pergunte sobre a reunião…" maxlength="2000">
         <button class="ib" id="ai-send" title="Perguntar">${svg("send")}</button></div>
     </div>
+    <div class="upd" id="upd" hidden></div>
     <footer>
       <button class="ib" id="hl" title="Destacar o último bloco (Alt+Shift+H)">${svg("star")}</button>
       <button class="ib" id="note" title="Adicionar nota">${svg("note")}</button>
@@ -185,6 +188,16 @@
     <div class="toast" id="toast"></div>
   </div>`;
   const $ = (id) => root.getElementById(id);
+
+  // O shadow root é fechado: para a página, a tecla digitada num campo do widget vem do
+  // <escribanote-widget>, não de um campo editável, e o Meet a trata como atalho
+  // ("c" desliga as legendas, "d" o microfone...). Nada digitado aqui sai do widget.
+  for (const type of ["keydown", "keyup", "keypress"]) {
+    root.addEventListener(type, (e) => {
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) e.stopPropagation();
+    });
+  }
 
   let session = null; // visão calculada pelo service worker (my-view)
   let minimized = false;
@@ -316,6 +329,13 @@
       shown = false;
     }
     if (!visible) return;
+
+    // Versão nova esperando o fim da reunião, ou extensão recarregada à força (script órfão).
+    const upd = state.orphaned
+      ? "O Escribanote foi recarregado. Recarregue esta aba para voltar a transcrever."
+      : state.update ? `Versão ${state.update} pronta. Entra sozinha quando não houver reunião.` : "";
+    $("upd").hidden = !upd;
+    $("upd").textContent = upd;
 
     const live = state.consent && !state.paused;
     const elapsed = session ? clock(Date.now() - session.startedAt) : "";
@@ -616,13 +636,65 @@
     toast(hide ? "Legendas nativas ocultas (a transcrição continua)" : "Legendas nativas visíveis");
   });
 
-  $("notify").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(state.settings.notifyMessage || "Estou transcrevendo esta reunião com o Escribanote.");
-      toast("Aviso copiado — cole no chat da reunião");
-    } catch {
-      toast("Não foi possível copiar o aviso");
+  // ---------- Aviso no chat da reunião ----------
+  // Os rótulos mudam por idioma e por versão; procura pelo sentido ("chat", "mensagem", "enviar").
+  // No Slack o campo visível é o do canal, não o da huddle: lá só copia.
+  const CHAT_OPEN = /^(chat|conversar|bate-papo|abrir (o )?chat|open (the )?chat|show (the )?chat|mostrar (o )?chat|chat (with|com|con|avec|mit) )/i;
+  const CHAT_FIELD = /(mensag|message|mensaje|nachricht|messaggio|escrev|digit|type a|scrivi)/i;
+  const CHAT_SEND = /^(enviar|send|envoyer|senden|invia)/i;
+  const visible = (el) => !!el && el.getClientRects().length > 0;
+  const label = (el) => el.getAttribute("aria-label") || el.getAttribute("placeholder") || el.getAttribute("data-placeholder") || el.title || "";
+
+  function chatField() {
+    const fields = document.querySelectorAll('textarea, [contenteditable="true"][role="textbox"], div[contenteditable="true"]');
+    return [...fields].find((el) => visible(el) && CHAT_FIELD.test(label(el))) || null;
+  }
+  async function waitFor(fn, ms) {
+    for (let t = 0; t < ms; t += 100) {
+      const v = fn();
+      if (v) return v;
+      await new Promise((r) => setTimeout(r, 100));
     }
+    return null;
+  }
+  const fieldText = (el) => (el.tagName === "TEXTAREA" ? el.value : el.innerText).trim();
+
+  async function sendToChat(text) {
+    if (state.platform === "slack") return false;
+    let field = chatField();
+    let opener = null;
+    if (!field) {
+      opener = [...document.querySelectorAll("button[aria-label], [role=button][aria-label]")].find((b) => visible(b) && CHAT_OPEN.test(b.getAttribute("aria-label")));
+      if (!opener) return false;
+      opener.click();
+      field = await waitFor(chatField, 3000);
+      if (!field) return false;
+    }
+    if (fieldText(field)) return false; // há um rascunho da pessoa no chat: não mexe nele
+    field.focus();
+    // insertText passa pelo editor da página (textarea do Meet, CKEditor do Teams) como digitação.
+    if (!document.execCommand("insertText", false, text) || !fieldText(field)) {
+      if (field.tagName !== "TEXTAREA") return false;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(field, text);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    const scope = field.closest("form, [role=complementary], [role=dialog], aside, section") || document;
+    const sendBtn = await waitFor(() => [...scope.querySelectorAll("button[aria-label], [role=button][aria-label]")]
+      .find((b) => visible(b) && CHAT_SEND.test(b.getAttribute("aria-label")) && !b.disabled && b.getAttribute("aria-disabled") !== "true"), 1500);
+    if (sendBtn) sendBtn.click();
+    else field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
+    const sent = await waitFor(() => !fieldText(field), 2000);
+    if (sent && opener) setTimeout(() => opener.click(), 800); // devolve o painel como estava
+    return !!sent;
+  }
+
+  $("notify").addEventListener("click", async () => {
+    const text = state.settings.notifyMessage || "Olá! Estou transcrevendo esta reunião com o Escribanote.";
+    const copied = await navigator.clipboard.writeText(text).then(() => true, () => false);
+    const sent = await sendToChat(text).catch(() => false);
+    if (sent) toast("Aviso enviado no chat da reunião 💬");
+    else if (copied) toast("Aviso copiado. Cole no chat da reunião");
+    else toast("Não foi possível enviar nem copiar o aviso");
   });
 
   $("open").addEventListener("click", () => send({ type: "open-app", id: session && session.id }));

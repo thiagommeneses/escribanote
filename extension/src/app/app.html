@@ -149,7 +149,7 @@
               <div class="menu-wrap"><button class="btn sm" id="ata-copy"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>Copiar</button>
                 <div class="menu" id="ata-copy-menu" hidden>
                   <button data-copy="rich"><span>📋</span>Texto formatado<small>Docs, Word, e-mail</small></button>
-                  <button data-copy="editor"><span>🏛️</span>Para o Atena (TinyMCE)<small>colar no editor</small></button>
+                  <button data-copy="editor"><span>📝</span>Para o Editor<small>editores TinyMCE</small></button>
                   <button data-copy="html"><span>&lt;/&gt;</span>Código HTML<small>para o "Código-fonte"</small></button>
                   <button data-copy="plain"><span>Aa</span>Texto simples</button>
                 </div></div>
@@ -157,7 +157,7 @@
                 <div class="menu" id="ata-dl-menu" hidden>
                   <button data-ata="txt"><span>⬇</span>Texto (.txt)<small>para colar no sistema</small></button>
                   <button data-ata="md"><span>⬇</span>Markdown (.md)</button>
-                  <button data-ata="html"><span>⬇</span>HTML (.html)<small>formato do Atena</small></button>
+                  <button data-ata="html"><span>⬇</span>HTML (.html)<small>formato do Editor</small></button>
                   <button data-ata="pdf"><span>🖨️</span>PDF<small>só a ata</small></button>
                 </div></div>
               <button class="btn sm" id="ata-edit"><svg viewBox="0 0 24 24"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="m13 7 3 3"/></svg>Editar</button>
@@ -251,10 +251,11 @@
               <select name="ataTemplate" id="tpl-default"><option value="">Formato do Escribanote (resumo, decisões, ações)</option></select></label>
             <label class="field"><span>Instruções extras padrão para todas as atas (opcional; cada reunião pode ter as suas na aba Ata, que substituem estas)</span>
               <textarea name="ataInstructions" rows="3" maxlength="4000" placeholder="Ex.: conclusão em um parágrafo só; nunca abreviar nomes; chamar a equipe de 'Assessoria 2'."></textarea></label>
+            <label class="switch"><input type="checkbox" name="exportAta"><span></span>Incluir a ata e os textos institucionais ao exportar a reunião (PDF, cópia formatada, Markdown, JSON e pasta <b>Reuniões/</b>). Desligado, sai só a reunião: transcrição, destaques, notas e capítulos.</label>
             <div id="tpl-list" class="tpl-list"></div>
             <div class="row"><button type="button" class="btn sm" id="tpl-import">Importar de PDF ou texto</button><button type="button" class="btn sm ghost" id="tpl-new">Escrever um modelo</button><input type="file" id="tpl-file" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden><span class="muted tiny" id="tpl-status"></span></div>
             <div id="tpl-editor" class="tpl-editor" hidden>
-              <label class="field"><span>Nome do modelo</span><input id="tpl-name" maxlength="80" placeholder="Ex.: Registro de reunião (Atena)"></label>
+              <label class="field"><span>Nome do modelo</span><input id="tpl-name" maxlength="80" placeholder="Ex.: Registro de reunião"></label>
               <label class="field"><span>Modelo em Markdown. Use {{data}}, {{horario}}, {{participantes}}, {{resumo_por_participante}}, {{conclusao}}… onde a IA deve preencher; o resto fica como está.</span>
                 <textarea id="tpl-text" rows="16" spellcheck="false"></textarea></label>
               <div class="row"><button type="button" class="btn sm primary" id="tpl-save">Salvar modelo</button><button type="button" class="btn sm ghost" id="tpl-cancel">Cancelar</button></div>

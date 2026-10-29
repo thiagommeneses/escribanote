@@ -4,7 +4,7 @@
 //
 //   CHROME=/caminho/para/chrome node test/e2e-meet.mjs [pasta-para-screenshots]
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, cpSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, cpSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import assert from "node:assert/strict";
@@ -23,8 +23,17 @@ for (const d of ["manifest.json", "icons", "src", "vendor"]) cpSync(join(SRC, d)
 const manifest = JSON.parse(readFileSync(join(EXT, "manifest.json"), "utf8"));
 manifest.host_permissions = ["https://api.anthropic.com/*"];
 writeFileSync(join(EXT, "manifest.json"), JSON.stringify(manifest));
+// Atualização adiada: na cópia do teste, verifica a cada 2 s e espera 3 s de folga (em vez de 1 min e 2 min).
+const bgPath = join(EXT, "src", "background.js");
+const bg = readFileSync(bgPath, "utf8").replace("const UPDATE_QUIET_MS = 2 * 60 * 1000;", "const UPDATE_QUIET_MS = 3000;").replace("checkUpdate().catch(() => {}), 60_000);", "checkUpdate().catch(() => {}), 2000);");
+assert.ok(bg.includes("UPDATE_QUIET_MS = 3000;") && bg.includes("}), 2000);"), "ajuste dos tempos da atualização no teste");
+writeFileSync(bgPath, bg);
 const PORT = 9300 + Math.floor(Math.random() * 500);
 const profile = mkdtempSync(join(tmpdir(), "escribanote-e2e-"));
+// Modo do desenvolvedor ligado, como em quem instala pelo zip: sem ele o Chrome bloqueia a extensão
+// descompactada depois de chrome.runtime.reload() (usado na atualização adiada).
+mkdirSync(join(profile, "Default"));
+writeFileSync(join(profile, "Default", "Preferences"), JSON.stringify({ extensions: { ui: { developer_mode: true } } }));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const step = (t) => console.log("✓", t);
 
@@ -118,9 +127,10 @@ async function typeText(sid, text) {
   await send("Input.insertText", { text }, sid);
 }
 async function pressKey(sid, key) {
-  const vk = { Enter: 13, Escape: 27 }[key];
-  await send("Input.dispatchKeyEvent", { type: "keyDown", key, code: key, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }, sid);
-  await send("Input.dispatchKeyEvent", { type: "keyUp", key, code: key, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }, sid);
+  const vk = { Enter: 13, Escape: 27 }[key] || key.toUpperCase().charCodeAt(0);
+  const code = key.length === 1 ? `Key${key.toUpperCase()}` : key;
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key, code, text: key.length === 1 ? key : undefined, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }, sid);
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }, sid);
 }
 const rectOf = (sid, sel) => widgetCall(sid, sel, "function(){ const r = this.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } }");
 
@@ -272,6 +282,38 @@ try {
   step("botão ⭐ do widget destaca o último bloco");
 
   await click(meet, "#note");
+  // Atalhos de uma letra do Meet ("c" = legendas) não podem receber o que é digitado no widget.
+  await evaluate(meet, `window.__atalhos = []; for (const t of ["keydown", "keyup", "keypress"]) document.addEventListener(t, (e) => __atalhos.push(t + ":" + e.key)); true`);
+  await widgetCall(meet, "#note-input", "function(){ this.focus(); return true }");
+  await pressKey(meet, "c");
+  assert.equal(await widgetCall(meet, "#note-input", "function(){ return this.value }"), "c", "a letra deveria entrar no campo de nota");
+  assert.deepEqual(await evaluate(meet, "__atalhos"), [], "tecla digitada no widget vazou para a página");
+  step("tecla digitada na nota não chega aos atalhos do Meet");
+
+  // Aviso aos participantes: abre o chat do Meet (simulado), envia a mensagem e fecha o painel de novo.
+  await evaluate(meet, `(() => {
+    window.__chat = [];
+    const open = document.createElement("button");
+    open.setAttribute("aria-label", "Chat com todos");
+    const panel = document.createElement("aside");
+    panel.hidden = true;
+    panel.innerHTML = '<textarea aria-label="Enviar uma mensagem"></textarea><button aria-label="Enviar uma mensagem" disabled>➤</button>';
+    const [ta, go] = panel.children;
+    open.onclick = () => (panel.hidden = !panel.hidden);
+    ta.oninput = () => (go.disabled = !ta.value.trim());
+    go.onclick = () => { __chat.push(ta.value); ta.value = ""; go.disabled = true; };
+    document.body.append(open, panel);
+    return true;
+  })()`);
+  await send("Browser.grantPermissions", { permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"], origin: "https://meet.google.com" });
+  await click(meet, "#notify");
+  await waitFor(async () => (await evaluate(meet, "__chat.length")) === 1, "aviso enviado no chat");
+  const aviso = await evaluate(meet, "__chat[0]");
+  assert.match(aviso, /^Olá! Estou transcrevendo esta reunião com o Escribanote\. A transcrição fica salva no meu computador\.$/);
+  assert.doesNotMatch(aviso, /\bata\b/i);
+  await waitFor(() => evaluate(meet, "document.querySelector('aside').hidden"), "painel do chat fechado de novo");
+  assert.match(await widgetCall(meet, "#toast"), /enviado no chat/);
+  step("botão de aviso envia a mensagem no chat do Meet (e copia)");
   await widgetCall(meet, "#note-input", "function(v){ this.value = v; return true }", "Confirmar verba com o financeiro");
   await click(meet, "#note-send");
   await waitFor(async () => (await sw({ type: "get", id })).notes.items.length === 1, "nota salva");
@@ -519,6 +561,32 @@ try {
     assert.deepEqual(await evaluate(app, "[...document.querySelectorAll('#ata-copy-menu [data-copy]')].map(b => b.dataset.copy)"), ["rich", "editor", "html", "plain"]);
     step("modelo de ata importado de PDF, escolhido na reunião e usado na geração; download em txt/md/pdf");
 
+    // Ata e textos institucionais (MPGO) nas exportações: desligado por padrão; a opção do menu liga.
+    const pdfText = async () => {
+      const { targetId } = await send("Target.createTarget", { url: "about:blank" });
+      const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
+      await send("Page.addScriptToEvaluateOnNewDocument", { source: "window.print = () => {};" }, sessionId);
+      await send("Page.navigate", { url: `chrome-extension://${extId}/src/app/print.html?id=${id}` }, sessionId);
+      await waitFor(() => evaluate(sessionId, "document.getElementById('doc').innerText.length > 200"), "PDF montado");
+      const t = await evaluate(sessionId, "document.getElementById('doc').innerText");
+      await send("Target.closeTarget", { targetId });
+      return t;
+    };
+    const semAta = await pdfText();
+    assert.doesNotMatch(semAta, /Registro de Reunião|Gerado pelo Escribanote/, "padrão: PDF sem a ata e sem o rodapé");
+    assert.match(semAta, /Transcrição[\s\S]*orçamento/i, "a transcrição está no PDF");
+    await evaluate(app, "document.getElementById('m-export').click()");
+    assert.equal(await evaluate(app, "document.getElementById('exp-ata').checked"), false, "opção desligada por padrão");
+    await evaluate(app, "document.getElementById('exp-ata').click()");
+    await waitFor(async () => (await evaluate(app, `(async () => (await chrome.storage.local.get("settings")).settings.exportAta)()`)) === true, "opção ligada salva");
+    assert.equal(await evaluate(app, "document.getElementById('export-menu').hidden"), false, "marcar a opção não fecha o menu");
+    assert.match(await pdfText(), /Ata[\s\S]*Registro de Reunião[\s\S]*Gerado pelo Escribanote/, "ligada: PDF com a ata e o rodapé");
+    await evaluate(app, "document.getElementById('exp-ata').click()");
+    await waitFor(async () => (await evaluate(app, `(async () => (await chrome.storage.local.get("settings")).settings.exportAta)()`)) === false, "opção desligada de novo");
+    await evaluate(app, "document.body.click(); true");
+    await waitFor(() => evaluate(app, "document.getElementById('export-menu').hidden"), "menu fechado");
+    step("ata institucional nas exportações: desligada por padrão; a opção do menu põe a ata e o rodapé no PDF");
+
     // Versões da ata: a geração virou v1; uma edição à mão vira v2; o comparador mostra o diff; restaurar vira v3
     let sv = await sw({ type: "get", id });
     assert.equal(sv.summaryHistory.length, 1, "a geração vira a primeira versão");
@@ -764,6 +832,39 @@ try {
   await waitFor(async () => !(await sw({ type: "get", id })).audio, "áudio apagado pela reunião");
   assert.equal(await evaluate(app, `(async () => { const { audioInfo } = await import(chrome.runtime.getURL("src/lib/audiovault.js")); return await audioInfo(${JSON.stringify(id)}); })()`), null, "pasta do cofre removida");
   step("áudio guardado: faixa no cofre, player no painel, clique no horário toca e destaca, apagar limpa o cofre");
+
+  // Versão nova na pasta durante uma reunião: não recarrega; avisa no widget; aplica quando não há mais reunião.
+  const meetU = await openMeet("upd-test-abc", "Reunião durante a atualização");
+  await evaluate(meetU, `__say(950, 1, "Primeira fala antes da atualização.", ${JSON.stringify(ANA)})`);
+  await waitFor(async () => /Primeira fala antes/.test((await widgetCall(meetU, "#body")) || ""), "reunião ao vivo antes da atualização");
+  writeFileSync(join(EXT, "manifest.json"), JSON.stringify({ ...manifest, version: "9.9.9" }));
+  await waitFor(async () => /Versão 9\.9\.9 pronta/.test((await widgetCall(meetU, "#upd")) || ""), "aviso discreto da versão pendente", 15000);
+  await evaluate(meetU, `__say(951, 1, "Segunda fala com a atualização pendente.", ${JSON.stringify(ANA)})`);
+  await waitFor(async () => /Segunda fala com a atualização/.test((await widgetCall(meetU, "#body")) || ""), "transcrição continua com a versão pendente");
+  await sleep(5000); // mais que a folga: ainda assim não recarrega, porque há reunião
+  assert.equal(await evaluate(app, "chrome.runtime.getManifest().version"), manifest.version, "não pode recarregar durante a reunião");
+  step("versão nova durante a reunião: aviso discreto no widget e a transcrição continua");
+  const { targetInfos: pages } = await send("Target.getTargets");
+  for (const t of pages.filter((t) => t.type === "page" && t.url.startsWith("https://meet.google.com/"))) await send("Target.closeTarget", { targetId: t.targetId });
+  await waitFor(async () => {
+    const { targetInfos } = await send("Target.getTargets");
+    return !targetInfos.some((t) => t.targetId === appTarget); // recarregar fecha as páginas da extensão
+  }, "extensão recarregada sozinha depois da reunião", 60000);
+  // a página pode abrir antes de a extensão terminar de subir: recarrega até ela responder
+  const { targetId: appAfter } = await send("Target.createTarget", { url: "about:blank" });
+  const { sessionId: app2 } = await send("Target.attachToTarget", { targetId: appAfter, flatten: true });
+  await waitFor(async () => {
+    await send("Page.navigate", { url: `chrome-extension://${extId}/src/app/app.html?tab=1` }, app2);
+    await sleep(700);
+    return evaluate(app2, "chrome.runtime?.getManifest?.().version === '9.9.9'").catch(() => false);
+  }, "versão nova em uso", 20000).catch(async (err) => {
+    console.log("depois do reload:", await evaluate(app2, "JSON.stringify({ href: location.href, rt: typeof chrome.runtime, v: chrome.runtime?.getManifest?.().version, body: document.body?.innerText?.slice(0, 200) })").catch((e) => e.message));
+    console.log("alvos:", JSON.stringify((await send("Target.getTargets")).targetInfos.map((t) => [t.type, t.url])));
+    throw err;
+  });
+  const savedList = await evaluate(app2, `chrome.runtime.sendMessage({ type: "list" })`);
+  assert.ok(JSON.stringify(savedList).includes("Reunião durante a atualização"), "reunião salva antes de recarregar");
+  step("sem reunião, a versão nova entra sozinha e a reunião ficou salva");
 
   console.log("\nE2E OK");
 } finally {

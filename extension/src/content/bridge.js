@@ -107,7 +107,21 @@
     flush();
   };
 
-  chrome.runtime.onMessage.addListener((msg) => {
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    // O service worker só aplica uma versão nova quando nenhuma aba está numa reunião ou na sala de espera
+    // do Meet ("prejoin" também vale para a página inicial do Meet e para o Slack aberto, que não contam).
+    // Só responde quem está ocupado: as outras molduras da aba ficam em silêncio.
+    if (msg.type === "busy?") {
+      const lobby = platform === "meet" && state.stage === "prejoin" && /^\/[a-z]{3,4}-[a-z]{4}-[a-z]{3,4}\b/.test(location.pathname);
+      const busy = state.stage === "meeting" || lobby || !!(bus.inCall && bus.inCall());
+      if (!busy) return;
+      sendResponse(true);
+      return;
+    }
+    if (msg.type === "update-pending") {
+      state.update = msg.version;
+      emitState();
+    }
     if (msg.type === "session-updated" && typeof msg.paused === "boolean" && msg.paused !== state.paused) {
       state.paused = msg.paused;
       emitState();
@@ -274,7 +288,7 @@
 
   // Esconde as legendas do Meet sem desligá-las (elas continuam alimentando a transcrição).
   function applyCaptionVisibility() {
-    if (platform !== "meet") return;
+    if (platform !== "meet" || state.orphaned) return;
     const want = state.settings.hideCaptions && state.settings.widget && state.consent !== false;
     if (want && !hideStyle) {
       hideStyle = document.createElement("style");
@@ -287,6 +301,16 @@
       hideStyle = null;
     }
   }
+  // Extensão recarregada à força (⟳ em chrome://extensions) com a aba aberta: este script fica órfão.
+  // Devolve as legendas nativas e avisa no widget; a aba precisa ser recarregada para voltar a transcrever.
+  const orphanCheck = setInterval(() => {
+    if (chrome.runtime?.id) return;
+    clearInterval(orphanCheck);
+    if (hideStyle) hideStyle.remove();
+    hideStyle = null;
+    state.orphaned = true;
+    emitState();
+  }, 3000);
   bus.setCaptionsHidden = async (hidden) => {
     const { settings = {} } = await chrome.storage.local.get("settings");
     await chrome.storage.local.set({ settings: { ...settings, hideCaptions: hidden } });

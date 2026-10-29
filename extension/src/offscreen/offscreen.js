@@ -165,7 +165,8 @@ async function analyzeSpeakers({ clips }) {
   return { results: out, voices: sp.book.size };
 }
 
-async function stop() {
+async function stop({ tabId } = {}) {
+  if (tabId != null && state.tabId !== tabId) return; // a captura em andamento é de outra aba
   await stopCapture();
   // termina o que já estava na fila (inclusive o trecho que estava sendo transcrito) antes de avisar
   await Promise.race([pipe.drain(), new Promise((r) => setTimeout(r, 20_000))]);
@@ -188,12 +189,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   // object-url: o service worker não tem URL.createObjectURL; o backup automático grande passa por aqui.
   const objectUrl = async ({ text, mime }) => ({ url: URL.createObjectURL(new Blob([text], { type: mime || "application/json" })) });
   const revokeUrl = async ({ url }) => URL.revokeObjectURL(url);
-  const run = { start, stop, retranscribe, "transcribe-samples": transcribeSamples, "analyze-speakers": analyzeSpeakers, status: async () => state.status, "object-url": objectUrl, "revoke-url": revokeUrl }[msg.type];
+  const run = { start, stop, retranscribe, "transcribe-samples": transcribeSamples, "analyze-speakers": analyzeSpeakers, status: async () => ({ ...state.status, tabId: state.tabId, retrans: !!state.retrans }), "object-url": objectUrl, "revoke-url": revokeUrl }[msg.type];
   if (!run) return;
   run(msg)
     .then((r) => sendResponse(r ?? { ok: true }))
-    .catch((err) => {
+    .catch(async (err) => {
       report({ state: "error", message: err.message });
+      // início que falhou não pode deixar a aba como dona da captura
+      if (msg.type === "start") {
+        await stopCapture().catch(() => {});
+        state.tabId = null;
+      }
       sendResponse({ error: err.message });
     });
   return true;
