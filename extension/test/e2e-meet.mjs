@@ -656,6 +656,22 @@ try {
     assert.match(await evaluate(app, "document.getElementById('ata-viewing').innerText"), /Você está vendo a v1/);
     assert.doesNotMatch(await evaluate(app, "document.getElementById('ata-body').innerText"), /cronograma/);
     await screenshot(app, "11-ata-versoes.png");
+    // Ata longa rolada: abas grudadas no topo e ações no fundo da área que rola, sem texto passando nas frestas
+    const stick = JSON.parse(await evaluate(app, `(() => {
+      document.getElementById('ata-body').innerHTML = Array.from({ length: 40 }, (_, i) => '<p>Parágrafo ' + i + ' ' + 'conteúdo '.repeat(20) + '</p>').join('');
+      const versions = document.getElementById('ata-versions'), wasHidden = versions.hidden;
+      versions.hidden = true;
+      const m = document.getElementById('view-meeting');
+      m.scrollTop = 900;
+      const box = (sel) => document.querySelector(sel).getBoundingClientRect();
+      const out = { main: box('#view-meeting'), tabs: box('.subtabs'), acts: box('#ata-actions') };
+      versions.hidden = wasHidden;
+      return JSON.stringify(out);
+    })()`));
+    assert.ok(Math.abs(stick.tabs.top - stick.main.top) <= 1, "abas no topo: " + JSON.stringify(stick));
+    assert.ok(Math.abs(stick.acts.bottom - stick.main.bottom) <= 1, "ações no fundo: " + JSON.stringify(stick));
+    await screenshot(app, "11b-ata-rolada.png");
+    await evaluate(app, "document.getElementById('view-meeting').scrollTop = 0");
     await evaluate(app, "document.getElementById('ata-back').click()");
     await sleep(200);
     assert.equal(await evaluate(app, "document.getElementById('ata-viewing').hidden"), true);
