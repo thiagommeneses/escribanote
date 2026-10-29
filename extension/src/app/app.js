@@ -527,6 +527,47 @@ function askText(anchor, { label, value = "" }) {
     ta.focus();
   });
 }
+// Dividir uma fala: clique no texto onde a outra pessoa começa e escolha quem fala a segunda parte.
+// Resolve com {before, after, speakerId} (ou null).
+function askSplit(anchor, { text, options, current }) {
+  closeInline();
+  return new Promise((resolve) => {
+    const pop = document.createElement("div");
+    pop.className = "ask";
+    const other = options.find((o) => o.value !== current);
+    pop.innerHTML = `<label class="field-label">Clique onde a outra parte começa</label><textarea readonly></textarea>
+      <label class="field-label">A segunda parte é de</label><select>${options.map((o) => `<option value="${esc(o.value)}"${o.value === (other || options[0]).value ? " selected" : ""}>${esc(o.label)}${o.value === current ? " (mesmo falante)" : ""}</option>`).join("")}</select>
+      <p class="muted tiny" data-preview></p>
+      <div class="ask-acts"><button class="btn sm" data-cancel>Cancelar</button><button class="btn sm primary" data-ok disabled>Dividir</button></div>`;
+    document.body.appendChild(pop);
+    const ta = pop.querySelector("textarea");
+    ta.value = text;
+    const r = anchor.getBoundingClientRect();
+    const w = Math.min(420, document.documentElement.clientWidth - 24);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(12, Math.min(r.left, document.documentElement.clientWidth - w - 12)) + "px";
+    pop.style.top = Math.max(12, Math.min(r.bottom + 6, window.innerHeight - 300)) + "px";
+    const cut = () => {
+      const i = ta.selectionStart;
+      return { before: text.slice(0, i).trim(), after: text.slice(i).trim() };
+    };
+    const update = () => {
+      const { before, after } = cut();
+      const ok = !!(before && after);
+      pop.querySelector("[data-ok]").disabled = !ok;
+      pop.querySelector("[data-preview]").textContent = ok ? `Segunda parte: “${after.length > 60 ? after.slice(0, 60) + "…" : after}”` : "Escolha um ponto no meio do texto.";
+    };
+    const done = (v) => { pop.remove(); closeInline.current = null; resolve(v); };
+    closeInline.current = () => done(null);
+    for (const ev of ["click", "keyup", "select"]) ta.addEventListener(ev, update);
+    pop.querySelector("[data-ok]").addEventListener("click", () => done({ ...cut(), speakerId: pop.querySelector("select").value }));
+    pop.querySelector("[data-cancel]").addEventListener("click", () => done(null));
+    pop.addEventListener("keydown", (e) => { if (e.key === "Escape") done(null); });
+    ta.focus();
+    ta.setSelectionRange(0, 0);
+    update();
+  });
+}
 // Lista flutuante (escolher um falante). Resolve com o valor escolhido (ou null).
 function askSelect(anchor, { label, options }) {
   closeInline();
@@ -730,7 +771,7 @@ function blockHtml(s, b, q) {
     ${avatar(b.speakerId, b.speaker, 32)}
     <div><div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${highlight(b.speaker, q)}</b><time class="${hasAudio(s) ? "seek" : ""}" data-at="${b.startAt}" title="${hasAudio(s) ? "Ouvir a partir daqui" : ""}">${clock(b.startAt - s.startedAt)}</time>${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
     ${body}${orig}</div>
-    <div class="acts">${acts}<button data-act="copy" title="Copiar"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button data-act="note" title="Nota neste ponto"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button data-act="edit" title="Corrigir o texto">✎</button><button data-act="move" title="Mover para outro falante">👤</button><button data-act="del" title="Apagar esta fala">🗑</button></div>
+    <div class="acts">${acts}<button data-act="copy" title="Copiar"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button data-act="note" title="Nota neste ponto"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button data-act="edit" title="Corrigir o texto">✎</button><button data-act="split" title="Dividir esta fala em duas">✂</button><button data-act="move" title="Mover para outro falante">👤</button><button data-act="del" title="Apagar esta fala">🗑</button></div>
   </li>`;
 }
 
@@ -833,6 +874,18 @@ $("timeline").addEventListener("click", async (e) => {
     if (text != null && text.trim() && text.trim() !== (b && b.text)) {
       state.session = normalize(await send({ type: "edit-block", id: s.id, ids, text: text.trim(), label: "texto" }));
       toast("Fala corrigida");
+      renderMeeting();
+    }
+  } else if (act && act.dataset.act === "split") {
+    const b = toBlocks(s).find((x) => x.key === blk.dataset.key);
+    if (!b) return;
+    const known = [...new Set(effectiveEntries(s).filter((e) => e.kind === "caption").map((e) => e.speakerId))].filter((id) => id !== "desconhecido");
+    if (!known.includes(b.speakerId)) known.unshift(b.speakerId);
+    const options = known.map((id) => ({ value: id, label: speakerName(s, id) }));
+    const r = await askSplit(act, { text: b.text, options, current: b.speakerId });
+    if (r) {
+      state.session = normalize(await send({ type: "split-block", id: s.id, ids: JSON.parse(blk.dataset.ids), ...r, label: "dividir" }));
+      toast(r.speakerId === b.speakerId ? "Fala dividida" : "Fala dividida: a segunda parte é de " + speakerName(state.session, r.speakerId));
       renderMeeting();
     }
   } else if (act && act.dataset.act === "move") {

@@ -210,6 +210,20 @@ try {
   const call = srv.anthropic.calls.at(-1)?.params;
   check(call?.model === "claude-sonnet-5-5" && /orçamento do Q4/.test(call.messages[0].content), "a ata foi gerada com a transcrição enviada pela extensão");
 
+  // 6b) Capítulos pela conta: endpoint próprio (esquema JSON, 1 crédito), resposta já validada
+  const long = meeting("loc-3", "Reunião longa", {
+    updatedAt: t0 + 7 * 60_000, endedAt: t0 + 7 * 60_000,
+    entries: Array.from({ length: 6 }, (_, i) => ({ id: `loc-3-${i}`, at: t0 + (i + 1) * 60_000, updatedAt: t0 + (i + 1) * 60_000 + 3000, speakerId: i % 2 ? "b" : "a", text: `Assunto ${i} da pauta.`, kind: "caption" })),
+  });
+  await msg({ type: "import", sessions: [long] });
+  srv.anthropic.reviewText = JSON.stringify({ chapters: [{ start: "01:00", title: "Abertura da pauta" }, { start: "04:00", title: "Encaminhamentos" }] });
+  const withChapters = await msg({ type: "chapters", id: "loc-3" });
+  srv.anthropic.reviewText = null;
+  check(withChapters?.chapters?.map((c) => c.title).join() === "Abertura da pauta,Encaminhamentos" && withChapters.chaptersBy === "pro", `capítulos pela IA da conta${withChapters?.error ? ": " + withChapters.error : ""}`);
+  const chCall = srv.anthropic.calls.at(-1)?.params;
+  check(chCall?.output_config?.format?.type === "json_schema" && /Assunto 3 da pauta/.test(chCall.messages[0].content), "capítulos pelo endpoint próprio, com esquema e a transcrição da extensão");
+  check(!!(await waitFor(async () => ((await msg({ type: "account-state" })).account.balance === 13 ? true : null), "crédito dos capítulos")), "os capítulos consumiram 1 crédito");
+
   // 7) Apagada na conta: continua no computador e não volta para a conta
   await api("/meetings/loc-2", { method: "DELETE" });
   await msg({ type: "sync-now" });

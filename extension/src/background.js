@@ -2,7 +2,7 @@
 // (chrome.storage.local). Só fala com a rede quando o usuário usa a IA.
 import { commitSummary } from "./lib/diff.js";
 import { mergeSpeakers,
-  createSession, applyEvent, normalize, setBlockTags, toggleLastBlockTag, participantNames, editBlock, undoEdit,
+  createSession, applyEvent, normalize, setBlockTags, toggleLastBlockTag, participantNames, editBlock, undoEdit, splitBlock,
   addAsrSegment, effectiveEntries, toBlocks, speakerName,
 } from "./lib/transcript.js";
 import { getSettings, DEFAULTS, HQ_MODELS, pushSyncedSettings, pullSyncedSettings } from "./lib/settings.js";
@@ -495,15 +495,22 @@ async function openAfterCall(s, settings) {
 // Capítulos por IA: chave própria com esquema JSON; conta Pro pelo endpoint de perguntas (1 crédito),
 // com a resposta em JSON extraída do texto.
 async function runChapters(ai, s, settings) {
-  let text;
+  let chapters;
   if (ai.kind === "key") {
     const r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...chaptersRequest(s), maxTokens: 4000 });
-    text = r.text;
+    chapters = parseChapters(r.text, s);
   } else {
-    const done = await accountCall(() => accountStream("/ai/ask", { meeting: forAccount(s), history: [{ role: "user", text: chaptersQuestion() }], tags: settings.tags, glossary: promptGlossary(settings) }, {}));
-    text = done.text;
+    // Conta Pro: endpoint próprio, com esquema JSON e a resposta já validada no servidor (1 crédito).
+    // Servidor ainda sem ele (404): pergunta pelo endpoint de perguntas, como antes.
+    try {
+      const r = await accountCall(() => accountFetch("/ai/chapters", { method: "POST", body: { meeting: forAccount(s) } }));
+      chapters = Array.isArray(r.chapters) ? r.chapters.filter((c) => Number.isFinite(c?.startAt) && typeof c.title === "string") : [];
+    } catch (err) {
+      if (!(err instanceof AccountError && err.status === 404)) throw err;
+      const done = await accountCall(() => accountStream("/ai/ask", { meeting: forAccount(s), history: [{ role: "user", text: chaptersQuestion() }], tags: settings.tags, glossary: promptGlossary(settings) }, {}));
+      chapters = parseChapters(done.text, s);
+    }
   }
-  const chapters = parseChapters(text, s);
   if (chapters.length < 2) throw new Error("A IA não conseguiu dividir esta reunião em capítulos.");
   return { chapters, model: ai.kind === "key" ? settings.aiModel : "pro" };
 }
@@ -687,7 +694,7 @@ async function reviewPending(s, { force = false, onProgress } = {}) {
     const now = Date.now();
     const all = effectiveEntries(s).filter((e) => e.kind === "caption");
     // falas corrigidas à mão não passam pela revisão (a correção manual vence)
-    const todo = all.filter((e) => !s.reviewed[e.id] && !s.edits?.[e.id]?.text && (force || s.endedAt || now - e.updatedAt > 8000));
+    const todo = all.filter((e) => !s.reviewed[e.id] && !s.edits?.[e.id]?.text && !e.split && (force || s.endedAt || now - e.updatedAt > 8000));
     let changedCount = 0;
     for (let i = 0; i < todo.length; i += 40) {
       const batch = todo.slice(i, i + 40);
@@ -1010,6 +1017,21 @@ async function handle(msg, sender) {
       const patch = typeof msg.text === "string" ? { text: msg.text.slice(0, 20000) } : msg.speakerId ? { speakerId: String(msg.speakerId) } : msg.deleted ? { deleted: true } : null;
       if (!patch || !editBlock(s, ids, patch, msg.label)) throw new Error("Edição inválida.");
       noteEvent(s, "edit", { kind: Object.keys(patch)[0], n: ids.length });
+      await changed(s, { now: true });
+      return s;
+    }
+    case "split-block": {
+      // dividir uma fala em duas: {ids, before, after, speakerId}; o horário da segunda parte sai da proporção do texto
+      if (!s) return null;
+      const ids = Array.isArray(msg.ids) ? msg.ids.filter((x) => typeof x === "string") : [];
+      const before = String(msg.before || "").slice(0, 20000);
+      const after = String(msg.after || "").slice(0, 20000);
+      const b = toBlocks(s).find((x) => x.ids[0] === ids[0]);
+      if (!b || !before.trim() || !after.trim()) throw new Error("Escolha um ponto no meio do texto para dividir.");
+      const share = before.trim().length / (before.trim().length + after.trim().length);
+      const at = Math.min(b.endAt, Math.max(b.startAt + 1, Math.round(b.startAt + (b.endAt - b.startAt) * share)));
+      if (!splitBlock(s, ids, { before, after, speakerId: String(msg.speakerId || b.speakerId), at }, msg.label)) throw new Error("Divisão inválida.");
+      noteEvent(s, "edit", { kind: "split", n: ids.length });
       await changed(s, { now: true });
       return s;
     }

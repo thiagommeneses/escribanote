@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { refund, reserve } from "./credits.js";
 import { fail } from "./http.js";
-import { ataRequest, chatRequest, commitSummary, DEFAULT_TAGS, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
+import { ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
 import { cleanDoc, loadDoc, requirePro, saveMeeting } from "./meetings.js";
 
 // US$ por milhão de tokens (entrada, saída, leitura de cache, escrita de cache de 5 min).
@@ -241,6 +241,43 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
       const balance = await failed(req, call, 1, err);
       fail(502, "ai_failed", friendly(err), { balance });
     }
+  });
+
+  // Capítulos (sem streaming): 1 crédito, modelo rápido com esquema JSON; a resposta já sai validada e
+  // ajustada ao início das falas. Reunião da conta (app web): os capítulos ficam salvos nela.
+  app.post("/api/v1/ai/chapters", { ...auth, bodyLimit: 9 * 1024 * 1024 }, async (req) => {
+    await guard(req);
+    const doc = normalize(await meetingFrom(req));
+    if ((doc.endedAt || doc.updatedAt) - doc.startedAt < CHAPTERS_MIN_MS) fail(400, "too_short", "Capítulos só a partir de 3 minutos de reunião.");
+    const model = config.models.fast;
+    const call = { ...(await start(req, "chapters", model, 1, doc.id)), model };
+    const r = chaptersRequest(doc);
+    let chapters;
+    try {
+      const msg = await anthropic.messages.create({
+        model,
+        max_tokens: 4000,
+        system: r.system,
+        messages: r.messages,
+        output_config: { effort: r.effort, format: r.format },
+      });
+      if (msg.stop_reason === "refusal") throw new Error("O modelo recusou esta solicitação.");
+      chapters = parseChapters(msg.content.filter((b) => b.type === "text").map((b) => b.text).join(""), doc);
+      if (chapters.length < 2) throw new Error("A IA não conseguiu dividir esta reunião em capítulos");
+      await finish(call.id, model, msg.usage || {});
+    } catch (err) {
+      const balance = await failed(req, call, 1, err);
+      fail(502, "ai_failed", friendly(err), { balance });
+    }
+    let version;
+    if (!req.body?.meeting) {
+      const cur = await loadDoc(db, sealer, req.user.id, doc.id);
+      cur.doc.chapters = chapters;
+      cur.doc.chaptersBy = "pro";
+      cur.doc.updatedAt = Date.now();
+      version = (await saveMeeting(db, sealer, req.user.id, cur.doc, cur.version)).version;
+    }
+    return { chapters, model: "pro", balance: call.balance, credits: 1, ...(version ? { version } : {}) };
   });
 
   // Revisão (sem streaming): 1 crédito por reunião a cada 24 h, porque a extensão revisa em lotes.

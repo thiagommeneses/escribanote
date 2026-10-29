@@ -43,7 +43,7 @@ export function normalize(s) {
   s.report ||= { events: [] }; // relatório de sessão: {at, kind, detail} (dispositivos, modelo, pausas, encerramento)
   s.chapters ||= []; // capítulos por IA: {startAt, title}
   s.chaptersBy ??= null;
-  s.edits ||= {}; // correções manuais por fala: id -> {text?, speakerId?, deleted?, at}
+  s.edits ||= {}; // correções manuais por fala: id -> {text?, speakerId?, deleted?, splits?: [{id, at, text, speakerId}], at}
   s.undo ||= []; // pilha de desfazer: [{at, label, prev: {id -> edição anterior ou null}}]
   s.paused ??= false;
   s.endedAt ??= null;
@@ -348,21 +348,34 @@ export function effectiveEntries(session) {
   out.push(...asr);
   out.sort((a, b) => a.at - b.at);
   const edits = session.edits || {};
-  for (const e of out) {
-    e.original = e.text;
+  const derived = []; // falas nascidas de uma divisão manual (id "<fala>~n"); também podem ser corrigidas e divididas
+  const apply = (e) => {
+    e.original ??= e.text;
     if (fixes[e.id] && fixes[e.id] !== e.text) {
       e.text = fixes[e.id];
       e.fixed = true;
     }
     // Correção manual vence a revisão da IA; o original continua guardado para comparação.
     const ed = edits[e.id];
-    if (ed) {
-      if (typeof ed.text === "string") { e.text = ed.text; e.fixed = false; e.edited = true; }
-      if (ed.speakerId) { e.speakerId = canonicalSpeaker(session, ed.speakerId); e.edited = true; }
-    }
+    if (!ed) return;
+    if (typeof ed.text === "string") { e.text = ed.text; e.fixed = false; e.edited = true; }
+    if (ed.speakerId) { e.speakerId = canonicalSpeaker(session, ed.speakerId); e.edited = true; }
+    // ord desempata falas no mesmo horário: a parte nova fica logo depois da fala de onde saiu
+    (ed.splits || []).forEach((sp, k) => {
+      derived.push({ id: sp.id, kind: e.kind, speakerId: canonicalSpeaker(session, sp.speakerId), text: sp.text, original: sp.text,
+        at: Math.max(sp.at, e.at), updatedAt: Math.max(sp.at, e.updatedAt), source: e.source, coveredIds: [], edited: true, split: true,
+        ord: e.ord + (k + 1) * e.step, step: e.step / 100 });
+    });
+  };
+  out.forEach((e, i) => { e.ord = i; e.step = 0.01; });
+  for (const e of out) apply(e);
+  for (let i = 0; i < derived.length; i++) apply(derived[i]);
+  if (derived.length) {
+    out.push(...derived);
+    out.sort((a, b) => a.at - b.at || a.ord - b.ord);
   }
+  for (const e of out) delete e.ord, delete e.step;
   return out.filter((e) => !edits[e.id]?.deleted);
-  return out;
 }
 
 export function speakerName(session, speakerId) {
@@ -473,7 +486,7 @@ export function editBlock(session, ids, patch, label) {
   session.edits ||= {};
   session.undo ||= [];
   const prev = {};
-  for (const id of ids) prev[id] = session.edits[id] ? { ...session.edits[id] } : null;
+  for (const id of ids) prev[id] = session.edits[id] ? structuredClone(session.edits[id]) : null;
   const at = Date.now();
   if (typeof patch.text === "string") {
     const text = patch.text.replace(/\s+\n/g, "\n").trim();
@@ -489,6 +502,32 @@ export function editBlock(session, ids, patch, label) {
   if (session.undo.length > 50) session.undo.shift();
   session.updatedAt = Math.max(session.updatedAt, at);
   return true;
+}
+// Divide um bloco em dois: o texto antes do ponto fica na primeira fala do bloco (as outras somem) e o resto
+// vira uma fala derivada "<id>~n", do falante escolhido, com o horário estimado pela proporção do texto
+// (at). Um passo só na pilha de desfazer; destaques e notas continuam onde estavam.
+export function splitBlock(session, ids, { before, after, speakerId, at }, label) {
+  before = String(before || "").replace(/\s+\n/g, "\n").trim();
+  after = String(after || "").replace(/\s+\n/g, "\n").trim();
+  if (!ids.length || !before || !after || !speakerId || !Number.isFinite(at)) return null;
+  session.edits ||= {};
+  session.undo ||= [];
+  const head = ids[0];
+  const prev = {};
+  for (const id of ids) prev[id] = session.edits[id] ? structuredClone(session.edits[id]) : null;
+  let n = 2;
+  const taken = new Set(Object.values(session.edits).flatMap((ed) => (ed.splits || []).map((sp) => sp.id)));
+  while (taken.has(`${head}~${n}`)) n++;
+  const id = `${head}~${n}`;
+  const now = Date.now();
+  const ed = { ...(session.edits[head] || {}), text: before, at: now };
+  ed.splits = [...(ed.splits || []), { id, at, text: after, speakerId }];
+  session.edits[head] = ed;
+  for (const other of ids.slice(1)) session.edits[other] = { ...(session.edits[other] || {}), deleted: true, at: now };
+  session.undo.push({ at: now, label: label || "dividir", prev });
+  if (session.undo.length > 50) session.undo.shift();
+  session.updatedAt = Math.max(session.updatedAt, now);
+  return id;
 }
 export function undoEdit(session) {
   const step = (session.undo || []).pop();

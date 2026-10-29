@@ -208,7 +208,7 @@ sem CORS para o navegador; a extensão é liberada pelo ID fixo).
 | `/api/v1/meetings` | GET | Lista; `changedSince` para sincronizar (inclui apagadas) | cookie ou token |
 | `/api/v1/meetings/{id}` | GET / PUT / DELETE | Documento; grava com `baseVersion` (409 em conflito); lixeira de 30 dias | cookie ou token |
 | `/api/v1/search` | GET | Busca em todas as falas, notas, atas e títulos, com trecho | cookie ou token |
-| `/api/v1/ai/{summary,review,ask,ask_all}` | POST | IA inclusa; `summary` e `ask*` em streaming (SSE) | cookie ou token |
+| `/api/v1/ai/{summary,review,ask,ask_all,chapters}` | POST | IA inclusa; `summary` e `ask*` em streaming (SSE); `chapters` (1 crédito, esquema JSON, mínimo 3 min) devolve os capítulos validados e, com `meetingId`, salva na reunião | cookie ou token |
 | `/api/v1/shares` | POST / GET | Cria / lista links de uma reunião | cookie |
 | `/api/v1/shares/{id}` | DELETE | Revoga um link | cookie |
 | `/s/{token}` | GET | Página pública só leitura (`noindex`) | — |
