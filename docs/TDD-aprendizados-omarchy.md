@@ -223,7 +223,7 @@ Fases intercaladas, como decidido: cada versão leva um item de qualidade e um d
 **Dependências entre fases**: a fase 2 precisa do benchmark da fase 1 para medir; as fases 3 e 4 precisam do relógio único da fase 1; a fase 5 não depende das anteriores e pode ser adiantada; a fase 6 depende do manifesto definido na fase 3.
 
 
-## Situação em 2026-10-26
+## Situação em 2026-10-29
 
 Entregue e publicado em escribanote.com (uma versão por fase):
 
@@ -236,14 +236,13 @@ Entregue e publicado em escribanote.com (uma versão por fase):
 | 3.4.0 | 5 | Capítulos por IA (chave própria ou 1 crédito Pro), na transcrição e nas exportações; correção manual por bloco (texto, falante, apagar) com desfazer |
 | 3.5.0 | 6 | Exportação em pasta por reunião (`Reuniões/`), com manifesto; documentação em `docs/exportacao-em-pasta.md` |
 | 3.6.0 | — | Depois do plano: teclas digitadas no widget não chegam aos atalhos do Meet; aviso enviado direto no chat; uma reunião pelo áudio por vez; versão nova na pasta só entra quando não há reunião; ata e textos institucionais nas exportações viram opção (desligada por padrão); "Para o Atena" vira "Para o Editor" |
+| 3.7.0 | — | Pendências da fase 5: dividir uma fala em duas (✂ no painel; a segunda parte vira a fala derivada `<id>~n`, com o falante escolhido e o horário pela proporção do texto, corrigível, divisível de novo e com desfazer); endpoint `POST /api/v1/ai/chapters` no Pro (esquema JSON, resposta validada no servidor; a extensão cai no endpoint de perguntas se o servidor responder 404); widget não religa a pausa com uma visão atrasada (falas logo depois de "Retomar" se perdiam) |
 
 **Ficou de fora, por decisão ou limite técnico:**
 
 - **Horário por palavra.** O transformers.js empacotado expõe `return_timestamps: "word"` só para modelos com cabeças de alinhamento e com custo alto de memória; não foi validado. O horário continua por segmento (trecho de até 14 s, com o parágrafo começando no primeiro deles). O player tolera isso.
-- **Dividir uma fala em duas.** A edição manual cobre texto, falante e apagar. Dividir exige criar ids novos e reconciliar destaques e revisão; adiado.
 - **Casos reais do benchmark.** A estrutura está pronta e roda no CI com quatro casos (dois gerados a partir do clipe real embutido). Os oito casos previstos dependem das gravações reais da equipe (`bench/README.md` explica como gravar).
 - **Gravador com ajudante nativo.** Quando o áudio do computador chega pelo ajudante do Windows, não há `MediaStream`, então só o microfone é guardado.
-- **Endpoint próprio de capítulos no servidor Pro.** Os capítulos pela conta usam o endpoint de perguntas (1 crédito), com a resposta em JSON extraída do texto; um endpoint dedicado com esquema é melhoria futura.
 - **Perfil reaproveitado nos testes.** O Chromium guarda o service worker antigo em perfis reaproveitados; `test/e2e-import.mjs` e o benchmark usam `bench/.perfil`, que precisa ser apagado quando o código do service worker muda e a versão não.
 - **Validação manual no Edge** da gravação Opus, do OPFS persistente e da troca de fone Bluetooth ainda não foi feita pelo dono do produto.
 

@@ -837,6 +837,38 @@ test("edição manual: texto, falante e apagar com desfazer; a revisão da IA n�
   assert.equal(toBlocks(s)[0].text, "o deploy ficou pra sexta e o front end também");
 });
 
+test("dividir uma fala em duas: segunda parte com outro falante, corrigível, divisível de novo e com desfazer", async () => {
+  const { splitBlock, editBlock, undoEdit, effectiveEntries } = await import("../src/lib/transcript.js");
+  const s = createSession({ id: "sp1", platform: "meet", url: "https://meet.google.com/abc-defg-hij", title: "T", startedAt: 1_000_000 });
+  applyEvent(s, { kind: "speaker", speakerId: "a", name: "Ana" });
+  applyEvent(s, { kind: "speaker", speakerId: "b", name: "Bruno" });
+  applyEvent(s, { kind: "caption", id: "x", speakerId: "a", version: 1, text: "Podemos fechar hoje?" }, 1_001_000);
+  applyEvent(s, { kind: "caption", id: "y", speakerId: "a", version: 1, text: "Sim, fechamos hoje. E o contrato?" }, 1_003_000);
+  s.entries.at(-1).updatedAt = 1_009_000;
+  s.highlights = {};
+  const [b0] = toBlocks(s);
+  assert.equal(b0.text, "Podemos fechar hoje? Sim, fechamos hoje. E o contrato?");
+  const id = splitBlock(s, ["x", "y"], { before: "Podemos fechar hoje?", after: "Sim, fechamos hoje. E o contrato?", speakerId: "b", at: 1_003_000 }, "dividir");
+  assert.equal(id, "x~2");
+  let blocks = toBlocks(s);
+  assert.deepEqual(blocks.map((b) => [b.speaker, b.text]), [["Ana", "Podemos fechar hoje?"], ["Bruno", "Sim, fechamos hoje. E o contrato?"]]);
+  assert.ok(blocks[1].edited && blocks[1].ids[0] === "x~2");
+  // a segunda parte aceita as mesmas correções, inclusive outra divisão
+  assert.equal(splitBlock(s, ["x~2"], { before: "Sim, fechamos hoje.", after: "E o contrato?", speakerId: "a", at: 1_006_000 }), "x~2~2");
+  assert.deepEqual(toBlocks(s).map((b) => [b.speaker, b.text]), [["Ana", "Podemos fechar hoje?"], ["Bruno", "Sim, fechamos hoje."], ["Ana", "E o contrato?"]]);
+  assert.ok(editBlock(s, ["x~2~2"], { text: "E o contrato, já foi assinado?" }, "texto"));
+  assert.equal(toBlocks(s)[2].text, "E o contrato, já foi assinado?");
+  // dividir de novo a primeira fala não apaga a divisão anterior
+  assert.equal(splitBlock(s, ["x"], { before: "Podemos", after: "fechar hoje?", speakerId: "a", at: 1_002_000 }), "x~3");
+  assert.equal(effectiveEntries(s).length, 4);
+  assert.equal(s.undo.length, 4);
+  undoEdit(s); undoEdit(s); undoEdit(s);
+  assert.deepEqual(toBlocks(s).map((b) => [b.speaker, b.text]), [["Ana", "Podemos fechar hoje?"], ["Bruno", "Sim, fechamos hoje. E o contrato?"]]);
+  undoEdit(s);
+  assert.deepEqual(toBlocks(s).map((b) => b.text), ["Podemos fechar hoje? Sim, fechamos hoje. E o contrato?"], "desfazer tudo volta ao original");
+  assert.equal(splitBlock(s, ["x"], { before: "", after: "tudo", speakerId: "b", at: 1 }), null, "precisa de texto dos dois lados");
+});
+
 test("capítulos: parseChapters valida, ajusta ao bloco mais próximo e limita; exportações levam a seção", async () => {
   const { parseChapters, chapterLines } = await import("../src/lib/ai.js");
   const s = createSession({ id: "ch1", platform: "meet", url: "https://meet.google.com/abc-defg-hij", title: "T", startedAt: 1_000_000 });

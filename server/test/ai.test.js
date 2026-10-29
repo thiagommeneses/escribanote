@@ -88,6 +88,40 @@ test("revisão: 1 crédito por reunião a cada 24 h", async () => {
   assert.equal(ctx.anthropic.calls[0].params.output_config.format.type, "json_schema");
 });
 
+test("capítulos: endpoint próprio com esquema, 1 crédito, ajustados às falas e salvos na reunião da conta", async () => {
+  const t0 = Date.UTC(2026, 9, 20, 13, 0);
+  const entries = Array.from({ length: 6 }, (_, i) => ({ id: `c${i}`, at: t0 + (i + 1) * 60_000, updatedAt: t0 + (i + 1) * 60_000 + 4000, speakerId: i % 2 ? "b" : "a", text: `Assunto ${i} em discussão.`, kind: "caption" }));
+  await u.put("/api/v1/meetings/mt-ch", { doc: sampleMeeting("mt-ch", { startedAt: t0, updatedAt: t0 + 7 * 60_000, endedAt: t0 + 7 * 60_000, entries, highlights: {} }) });
+  ctx.anthropic.reviewText = JSON.stringify({ chapters: [{ start: "00:00", title: "Abertura" }, { start: "03:05", title: "\"Orçamento do trimestre\"" }, { start: "xx", title: "inválido" }] });
+  const before = await balance();
+  const r = await u.post("/api/v1/ai/chapters", { meetingId: "mt-ch" });
+  assert.equal(r.statusCode, 200, r.body);
+  assert.deepEqual(r.json().chapters.map((c) => [c.startAt - t0, c.title]), [[60_000, "Abertura"], [180_000, "Orçamento do trimestre"]]);
+  assert.equal(r.json().credits, 1);
+  assert.equal(await balance(), before - 1);
+  const p = ctx.anthropic.calls[0].params;
+  assert.equal(p.model, "claude-haiku-5-5");
+  assert.equal(p.output_config.format.type, "json_schema");
+  assert.match(p.messages[0].content, /\[00:03:00\] Ana: Assunto 2/);
+  const saved = (await u.get("/api/v1/meetings/mt-ch")).json().doc;
+  assert.deepEqual(saved.chapters.map((c) => c.title), ["Abertura", "Orçamento do trimestre"]);
+  assert.equal(saved.chaptersBy, "pro");
+  // reunião curta: recusa antes de cobrar ou chamar a IA
+  ctx.anthropic.calls.length = 0;
+  const short = await u.post("/api/v1/ai/chapters", { meetingId: "mt-1" });
+  assert.equal(short.statusCode, 400);
+  assert.equal(short.json().error, "too_short");
+  assert.equal(ctx.anthropic.calls.length, 0);
+  assert.equal(await balance(), before - 1);
+  // resposta sem capítulos suficientes: crédito devolvido
+  ctx.anthropic.reviewText = '{"chapters":[]}';
+  const bad = await u.post("/api/v1/ai/chapters", { meetingId: "mt-ch" });
+  assert.equal(bad.statusCode, 502);
+  assert.match(bad.json().message, /crédito foi devolvido/);
+  assert.equal(await balance(), before - 1);
+  ctx.anthropic.reviewText = null;
+});
+
 test("sem créditos: 402 com a data da renovação e sem chamar a IA", async () => {
   await ctx.db.query("UPDATE credit_balances SET balance = 0 WHERE user_id = $1", [u.me.id]);
   const r = await u.post("/api/v1/ai/ask", { meetingId: "mt-1", history: [{ role: "user", text: "Resumo?" }] });

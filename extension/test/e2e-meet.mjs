@@ -375,6 +375,27 @@ try {
   await waitFor(() => evaluate(app, `document.querySelector('#timeline li.blk[data-key="${firstKey}"] p')?.innerText === ${JSON.stringify(before)}`), "desfazer devolve o texto");
   step("correção manual de uma fala pelo painel e desfazer");
 
+  // Dividir uma fala: ✂ abre a caixa, clique no ponto de corte, outro falante na segunda parte; desfazer junta de novo
+  const nBlocks = await evaluate(app, "document.querySelectorAll('#timeline li.blk').length");
+  const firstText = await evaluate(app, "document.querySelector('#timeline li.blk p').innerText");
+  const cutAt = firstText.indexOf(" ", Math.floor(firstText.length / 2));
+  await evaluate(app, "document.querySelector('#timeline li.blk [data-act=\"split\"]').click()");
+  await waitFor(() => evaluate(app, "!!document.querySelector('.ask textarea[readonly]')"), "caixa de divisão aberta");
+  assert.equal(await evaluate(app, "document.querySelector('.ask [data-ok]').disabled"), true, "sem ponto escolhido, não divide");
+  await evaluate(app, `(() => { const t = document.querySelector('.ask textarea'); t.setSelectionRange(${cutAt}, ${cutAt}); t.dispatchEvent(new Event('select')); return true })()`);
+  assert.equal(await evaluate(app, "document.querySelector('.ask [data-ok]').disabled"), false);
+  const splitTo = await evaluate(app, "document.querySelector('.ask select').selectedOptions[0].textContent");
+  await evaluate(app, "document.querySelector('.ask [data-ok]').click()");
+  // a segunda parte pode se juntar ao bloco seguinte, se ele for do mesmo falante
+  await waitFor(() => evaluate(app, `document.querySelector('#timeline li.blk p').innerText === ${JSON.stringify(firstText.slice(0, cutAt).trim())}`), "fala dividida");
+  const parts = await evaluate(app, "[...document.querySelectorAll('#timeline li.blk')].slice(0, 2).map(b => [b.querySelector('[data-speaker]').innerText, b.querySelector('p').innerText])");
+  assert.ok(parts[1][1].startsWith(firstText.slice(cutAt).trim()), "segunda parte no bloco seguinte: " + JSON.stringify(parts));
+  assert.match(splitTo, new RegExp(parts[1][0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "a segunda parte ficou com o falante escolhido");
+  assert.notEqual(parts[0][0], parts[1][0], "por padrão, a segunda parte vai para outro falante");
+  await evaluate(app, "document.querySelector('#m-undo').click()");
+  await waitFor(() => evaluate(app, `document.querySelectorAll('#timeline li.blk').length === ${nBlocks} && document.querySelector('#timeline li.blk p').innerText === ${JSON.stringify(firstText)}`), "desfazer junta a fala de novo");
+  step("dividir uma fala em duas pelo painel, com outro falante na segunda parte, e desfazer");
+
   // Mesclagem pelo app: um terceiro falante sem nome vira "Ana Teste" → confirma → vira a Ana
   const TERCEIRO = "spaces/e2e/devices/10";
   await evaluate(meet, `__say(601, 1, "Eu concordo com a Ana sobre o orçamento.", ${JSON.stringify(TERCEIRO)})`);

@@ -256,12 +256,16 @@
 
   // ---------- Dados ----------
   let fetchTimer = null;
+  // Conta as vezes que a pausa mudou aqui. Uma visão pedida antes de "Retomar" e respondida depois
+  // traz paused: true; aplicada, religava a pausa e a ponte descartava as falas seguintes.
+  let pauseSeq = 0;
   function refresh() {
     clearTimeout(fetchTimer);
     fetchTimer = setTimeout(async () => {
+      const seq = pauseSeq;
       const s = await send({ type: "my-view" }).catch(() => null);
       session = s && !s.error ? s : null;
-      if (session) state.paused = session.paused;
+      if (session && seq === pauseSeq) state.paused = session.paused;
       render();
     }, 300);
   }
@@ -544,7 +548,9 @@
 
   $("pause").addEventListener("click", async () => {
     if (!session) return;
+    pauseSeq++;
     const r = await send({ type: "pause", id: session.id, paused: !state.paused });
+    pauseSeq++;
     state.paused = r.paused;
     refresh();
     toast(state.paused ? "Transcrição pausada" : "Transcrição retomada");
