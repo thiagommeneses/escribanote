@@ -13,7 +13,7 @@ import { accountBase, accountFetch, accountStream, getAccount, setAccount, Accou
 import { mergeDocs, sameContent } from "./lib/sync.js";
 import { streamClaude, ataRequest, chatRequest, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
-import { compileGlossary, applyGlossary, glossaryForPrompt } from "./lib/glossary.js";
+import { compileGlossary, applyGlossary, glossaryForPrompt, fuzzyTargets, applyFuzzy } from "./lib/glossary.js";
 import { deleteAudio, audioInfo, vaultUsage, listAudio, enforceQuota } from "./lib/audiovault.js";
 import { computeStats, findMe } from "./lib/stats.js";
 
@@ -63,8 +63,19 @@ async function adoptSyncedSettings() {
 
 // Vocabulário da equipe: as formas erradas são corrigidas em toda fala que chega (legendas e Whisper).
 let glossaryRules = [];
+let glossaryText = null; // null: grafias parecidas desligadas
 async function refreshGlossary() {
-  try { glossaryRules = compileGlossary((await getSettings()).glossary); } catch { glossaryRules = []; }
+  try {
+    const st = await getSettings();
+    glossaryRules = compileGlossary(st.glossary);
+    glossaryText = st.glossaryFuzzy === false ? null : st.glossary || "";
+  } catch { glossaryRules = []; glossaryText = null; }
+}
+// Formas erradas cadastradas e, depois, grafias parecidas com os termos e os nomes desta reunião.
+function fixSpelling(s, text) {
+  const out = applyGlossary(text, glossaryRules);
+  if (glossaryText == null) return out;
+  return applyFuzzy(out, fuzzyTargets(glossaryText, [...Object.values(s.speakers || {}), s.myName]));
 }
 refreshGlossary();
 const promptGlossary = (settings) => glossaryForPrompt(settings.glossary, settings.teamContext);
@@ -304,7 +315,7 @@ async function exportMeetingFolder(dir, id, s, settings) {
     if (f && f.size) audio.push({ name: `${{ tab: "outros", system: "computador", mic: "microfone", import: "gravacao" }[source] || source}.${(f.name.split(".").pop() || "webm")}`, file: f });
   }
   const manifest = meetingManifest(s, { participants: participantNames(s), audioFiles: audio.map((a) => a.name), version: chrome.runtime.getManifest().version });
-  const name = await writeMeetingFolder(dir, s, { markdown: toMarkdown(s, { tags: settings.tags, ata: settings.exportAta === true }), manifest, audio });
+  const name = await writeMeetingFolder(dir, s, { markdown: toMarkdown(s, { tags: settings.tags, ata: settings.exportAta === true, clean: settings.cleanSpeech === true }), manifest, audio });
   if (names[id] && names[id] !== name) await removeMeetingFolder(dir, names[id]);
   names[id] = name;
   await chrome.storage.local.set({ folderExport: { names } });
@@ -402,7 +413,7 @@ async function onEvents(msg, tabId) {
   if (!s.report?.events?.length) noteEvent(s, "start", { platform: s.platform, version: chrome.runtime.getManifest().version });
   const had = s.entries.length;
   for (const ev of msg.events) {
-    if ((ev.kind === "caption" || ev.kind === "chat") && ev.text) ev.text = applyGlossary(ev.text, glossaryRules);
+    if ((ev.kind === "caption" || ev.kind === "chat") && ev.text) ev.text = fixSpelling(s, ev.text);
     didChange = applyEvent(s, ev) || didChange;
   }
   if (!had && s.entries.length) noteEvent(s, "first-caption", { source: s.entries[0].source, afterMs: Date.now() - s.startedAt });
@@ -808,7 +819,7 @@ async function onAsrResult(msg) {
   }
   const settings = await getSettings();
   s.myName = settings.myName || "";
-  if (msg.seg && msg.seg.text) msg.seg.text = applyGlossary(msg.seg.text, glossaryRules);
+  if (msg.seg && msg.seg.text) msg.seg.text = fixSpelling(s, msg.seg.text);
   if (addAsrSegment(s, msg.seg, meIdFor(s, settings.myName))) {
     await changed(s);
     scheduleReview(s);

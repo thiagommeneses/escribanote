@@ -9,11 +9,11 @@
   const state = bus.state;
 
   const TAGS_FALLBACK = [
-    { id: "importante", label: "Importante", emoji: "⭐" },
-    { id: "decisao", label: "Decisão", emoji: "✅" },
-    { id: "acao", label: "Ação", emoji: "📌" },
-    { id: "pergunta", label: "Pergunta", emoji: "❓" },
-    { id: "risco", label: "Risco", emoji: "⚠️" },
+    { id: "importante", label: "Importante", emoji: "⭐", icon: "importante", color: "#f59e0b" },
+    { id: "decisao", label: "Decisão", emoji: "✅", icon: "decisao", color: "#16a34a" },
+    { id: "acao", label: "Ação", emoji: "📌", icon: "acao", color: "#2563eb" },
+    { id: "pergunta", label: "Pergunta", emoji: "❓", icon: "pergunta", color: "#9333ea" },
+    { id: "risco", label: "Risco", emoji: "⚠️", icon: "risco", color: "#dc2626" },
   ];
   const QUICK = [
     ["Pontos principais", "Quais são os pontos principais discutidos até agora?"],
@@ -23,24 +23,15 @@
   ];
   const COLORS = ["#60a5fa", "#4ade80", "#fbbf24", "#f472b6", "#a78bfa", "#22d3ee", "#f87171", "#a3e635"];
 
+  // Ícones do conjunto (src/lib/icons.js, carregado antes pelo manifest).
+  const { icon, tagIcon } = globalThis.EsIcons;
   const ICON = {
-    star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
-    note: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m14 6 4 4"/>',
-    camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
-    spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
-    eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
-    eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.1 3.9M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 4.4-1"/>',
-    megaphone: '<path d="M3 10v4h4l7 4V6L7 10z"/><path d="M18 9a4 4 0 0 1 0 6"/>',
-    open: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v6H4V6h6"/>',
-    pause: '<path d="M8 5v14M16 5v14"/>',
-    stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
-    play: '<path d="m7 4 13 8-13 8z"/>',
-    min: '<path d="M5 12h14"/>',
-    close: '<path d="M6 6l12 12M18 6 6 18"/>',
-    send: '<path d="M4 12 20 4l-6 16-3-7z"/>',
+    star: "importante", note: "nota", camera: "captura", spark: "ia", eye: "ver", eyeOff: "ocultar", megaphone: "avisar",
+    open: "abrir", pause: "pausar", stop: "parar", play: "tocar", min: "minimizar", close: "fechar", send: "enviar",
   };
-  const svg = (name, size = 16) =>
-    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
+  const svg = (name, size = 16) => icon(ICON[name] || name, { size });
+  // Cor da tag clareada para o fundo escuro do widget.
+  const light = (c) => (/^#[0-9a-f]{3,8}$/i.test(c || "") ? `color-mix(in srgb, ${c} 70%, #fff)` : "#e8eaed");
 
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const colorFor = (id) => {
@@ -107,7 +98,9 @@
     .blk .who time { color: #9aa0a6; font-size: 11px; }
     .blk p + p { margin-top: 6px; }
     .blk p .pt { color: #9aa0a6; font-size: 10.5px; margin-right: 5px; font-variant-numeric: tabular-nums; }
-    .blk .tags { margin-left: auto; font-size: 12px; }
+    .blk .tags { margin-left: auto; display: inline-flex; gap: 3px; }
+    .ic { vertical-align: -.18em; flex: none; }
+    .acts button.on { --ic-fill: .5; }
     .blk p { margin: 1px 0 0; color: #e8eaed; word-wrap: break-word; }
     .blk .acts { position: absolute; right: 6px; top: 2px; display: none; gap: 2px; background: #2d2e33; border-radius: 999px; padding: 2px 4px;
       box-shadow: 0 2px 8px rgba(0,0,0,.4); }
@@ -145,7 +138,7 @@
     .upd { padding: 5px 14px; font-size: 11px; color: #9aa0a6; border-top: 1px solid rgba(255,255,255,.06); }
     .upd[hidden] { display: none; }
     .badge { font-size: 11px; opacity: .8; }
-    .hqchip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: rgba(129,201,149,.16); color: #81c995; }
+    .hqchip { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: rgba(129,201,149,.16); color: #81c995; }
     .banner { margin: 4px 10px 6px 0; padding: 7px 10px; border-radius: 10px; background: rgba(138,180,248,.1); color: #d2e3fc; font-size: 12px; }
     .banner.warn { background: rgba(253,214,99,.12); color: #fde293; }
   </style>
@@ -156,7 +149,7 @@
       <span class="dot" id="dot"></span>
       <span class="brand">Escribanote</span>
       <span class="rec" id="rec"></span>
-      <span class="hqchip" id="hqchip" hidden title="Alta precisão ativa: Whisper rodando neste computador">🎧 HQ</span>
+      <span class="hqchip" id="hqchip" hidden title="Alta precisão ativa: Whisper rodando neste computador"></span>
       <span class="spacer"></span>
       <button class="ib" id="pause" title="Pausar transcrição"></button>
       <button class="stopb" id="end" title="Parar a transcrição agora. A reunião fica salva e você pode continuar na chamada; dá para retomar quando quiser.">${svg("stop", 13)}<span>Parar</span></button>
@@ -275,8 +268,8 @@
     if (m.type === "session-updated" || m.type === "hq-updated") refresh();
     if (m.type === "toast") {
       if (m.error) toast(m.error);
-      else if (m.command === "highlight-last") toast("Destaque alternado ⭐");
-      else if (m.command === "screenshot") toast("Captura salva 📷");
+      else if (m.command === "highlight-last") toast("Destaque alternado");
+      else if (m.command === "screenshot") toast("Captura salva");
       else if (m.command === "toggle-pause") toast("Pausa alternada");
     }
   });
@@ -308,8 +301,8 @@
         No Meet: <i>Mais opções › Configurações › Legendas › Idioma da reunião</i> → ${esc(LANG[li.expected] || li.expected)}.</div>`;
     }
     const hq = session.hq || {};
-    if (hq.state === "loading") return `<div class="banner">🎧 Baixando o modelo de alta precisão… ${hq.progress || 0}%</div>`;
-    if (hq.state === "error") return `<div class="banner warn">🎧 ${esc(hq.message || "Erro no modo de alta precisão")}</div>`;
+    if (hq.state === "loading") return `<div class="banner">${svg("hq", 13)} Baixando o modelo de alta precisão… ${hq.progress || 0}%</div>`;
+    if (hq.state === "error") return `<div class="banner warn">${svg("hq", 13)} ${esc(hq.message || "Erro no modo de alta precisão")}</div>`;
     if (hq.warning) return `<div class="banner">${esc(hq.warning)}</div>`;
     return "";
   }
@@ -363,7 +356,7 @@
     $("pstop").title = state.ended ? "Voltar a transcrever" : "Parar a transcrição";
     $("pstop").hidden = !state.ended && !canStop;
     $("hqchip").hidden = !(session && session.hq && session.hq.state === "running");
-    $("hqchip").textContent = session && session.hq && session.hq.audio ? "🎧 HQ · 🎙 áudio guardado" : "🎧 HQ";
+    $("hqchip").innerHTML = svg("hq", 12) + (session && session.hq && session.hq.audio ? `HQ · ${svg("mic", 12)}áudio guardado` : "HQ");
     $("hqchip").title = session && session.hq && session.hq.audio ? "Alta precisão ativa e áudio sendo guardado neste computador (Ajustes › Áudio guardado)" : "Alta precisão ativa: Whisper rodando neste computador";
     const hidden = state.settings.hideCaptions;
     $("caps").innerHTML = svg(hidden ? "eyeOff" : "eye");
@@ -426,10 +419,10 @@
         .map((b) => `<div class="blk" data-ids="${esc(JSON.stringify(b.ids))}" data-tags="${esc(JSON.stringify(b.tags))}">
           <div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${esc(b.speaker)}</b>
             <time>${clock(b.startAt - session.startedAt)}</time>${b.kind === "chat" ? '<span class="muted">chat</span>' : ""}
-            ${b.hq ? '<span class="badge" title="Transcrito pelo modo de alta precisão">🎧</span>' : ""}${b.fixed ? `<span class="badge" title="Revisado pela IA. Original: ${esc(b.original)}">✓</span>` : ""}
-            <span class="tags">${b.tags.map((id) => (t.find((x) => x.id === id) || {}).emoji || "🏷").join(" ")}</span></div>
+            ${b.hq ? '<span class="badge" title="Transcrito pelo modo de alta precisão">${svg("hq", 12)}</span>' : ""}${b.fixed ? `<span class="badge" title="Revisado pela IA. Original: ${esc(b.original)}">${svg("ok", 12)}</span>` : ""}
+            <span class="tags">${b.tags.map((id) => { const x = t.find((y) => y.id === id) || {}; return `<span style="color:${light(x.color)}" title="${esc(x.label || id)}">${svg(tagIcon(x), 14)}</span>`; }).join("")}</span></div>
           ${(b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text }]).map((p, i) => `<p>${i ? `<time class="pt">${clock(p.at - session.startedAt)}</time>` : ""}${esc(p.text)}</p>`).join("")}
-          <div class="acts">${t.map((x) => `<button data-tag="${x.id}" class="${b.tags.includes(x.id) ? "on" : ""}" title="${esc(x.label)}">${x.emoji}</button>`).join("")}</div>
+          <div class="acts">${t.map((x) => `<button data-tag="${x.id}" class="${b.tags.includes(x.id) ? "on" : ""}" title="${esc(x.label)}" aria-label="${esc(x.label)}" style="color:${light(x.color)}">${svg(tagIcon(x), 15)}</button>`).join("")}</div>
         </div>`)
         .join("");
       if (follow || atBottom) body.scrollTop = body.scrollHeight;
@@ -578,7 +571,7 @@
 
   $("hl").addEventListener("click", async () => {
     const r = await send({ type: "highlight-last", tagId: "importante" });
-    toast(r && r.tags && r.tags.includes("importante") ? "Último bloco destacado ⭐" : r ? "Destaque removido" : "Nada para destacar ainda");
+    toast(r && r.tags && r.tags.includes("importante") ? "Último bloco destacado" : r ? "Destaque removido" : "Nada para destacar ainda");
   });
 
   function togglePanel(id, focus) {
@@ -594,7 +587,7 @@
     if (!text || !session) return;
     await send({ type: "add-note", id: session.id, text });
     $("note-input").value = "";
-    toast("Nota salva 📝");
+    toast("Nota salva");
   };
   $("note-send").addEventListener("click", saveNote);
   $("note-input").addEventListener("keydown", (e) => e.key === "Enter" && saveNote());
@@ -605,7 +598,7 @@
     await new Promise((r) => setTimeout(r, 120));
     const r = await send({ type: "screenshot" }).catch((err) => ({ error: err.message }));
     hostEl.style.visibility = "";
-    toast(r && r.error ? (/permission|activeTab|all_urls/i.test(r.error) ? "Use Alt+Shift+S ou autorize capturas em Ajustes" : r.error) : "Captura salva 📷");
+    toast(r && r.error ? (/permission|activeTab|all_urls/i.test(r.error) ? "Use Alt+Shift+S ou autorize capturas em Ajustes" : r.error) : "Captura salva");
   });
 
   $("ai-chips").innerHTML = QUICK.map(([label, q]) => `<button class="chip" data-q="${esc(q)}">${esc(label)}</button>`).join("");
@@ -698,7 +691,7 @@
     const text = state.settings.notifyMessage || "Olá! Estou transcrevendo esta reunião com o Escribanote.";
     const copied = await navigator.clipboard.writeText(text).then(() => true, () => false);
     const sent = await sendToChat(text).catch(() => false);
-    if (sent) toast("Aviso enviado no chat da reunião 💬");
+    if (sent) toast("Aviso enviado no chat da reunião");
     else if (copied) toast("Aviso copiado. Cole no chat da reunião");
     else toast("Não foi possível enviar nem copiar o aviso");
   });
