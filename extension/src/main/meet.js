@@ -22,6 +22,48 @@
     };
   }
 
+  // Plano B do captions_v2: o Meet muda o esquema de tempos em tempos (campos novos, um nível a mais).
+  // Procura em qualquer nível uma mensagem com o deviceId ("…devices/…") e um texto ao lado; o id
+  // e a versão vêm do ancestral mais próximo com varint no campo 1 (e 2).
+  const LANG_RX = /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/;
+  function decodeCaptionLoose(bytes) {
+    const root = P.tryDecode(bytes);
+    if (!root) return null;
+    let hit = null;
+    const visit = (fields, ancestors, depth) => {
+      if (hit || depth > 8) return;
+      const strs = [];
+      for (const f of fields) {
+        if (f.wire !== 2) continue;
+        const s = P.str([f], f.no);
+        if (s !== undefined) strs.push({ no: f.no, s });
+      }
+      const dev = strs.find((x) => /(^|\/)devices\/[^/\s]+$/.test(x.s));
+      if (dev) {
+        const text = strs.filter((x) => x !== dev && !LANG_RX.test(x.s) && !/devices\//.test(x.s) && /\p{L}/u.test(x.s)).sort((a, b) => b.s.length - a.s.length)[0];
+        const owner = [fields, ...ancestors].find((m) => P.num(m, 1));
+        if (text && owner) {
+          hit = {
+            id: `${P.num(owner, 1)}/${dev.s}`,
+            speakerId: dev.s,
+            version: P.num(owner, 2) || 0,
+            text: text.s,
+            lang: strs.find((x) => x !== dev && LANG_RX.test(x.s))?.s,
+          };
+          if (!hit.lang) delete hit.lang;
+          return;
+        }
+      }
+      for (const f of fields) {
+        if (f.wire !== 2 || f.value.length < 4) continue;
+        const sub = P.tryDecode(f.value);
+        if (sub && sub.length) visit(sub, [fields, ...ancestors], depth + 1);
+      }
+    };
+    visit(root, [], 0);
+    return hit;
+  }
+
   // captions (legado): Wrapper{1: Message{1 deviceId, 2 messageId, 3 version, 6 text, 8 langId}}
   function decodeLegacyCaption(bytes) {
     const outer = P.tryDecode(bytes);
@@ -77,7 +119,7 @@
     return hit;
   }
 
-  root.EscribanoteMeet = { decodeCaptionsV2, decodeLegacyCaption, decodeDevices, decodeChat };
+  root.EscribanoteMeet = { decodeCaptionsV2, decodeCaptionLoose, decodeLegacyCaption, decodeDevices, decodeChat };
 
   if (typeof location === "undefined" || location.host !== "meet.google.com") return;
   if (!root.RTCPeerConnection || root.__escribanoteMeetHooked) return;
@@ -114,23 +156,34 @@
   }
 
   const handlers = {
-    captions_v2: (b) => decodeCaptionsV2(b),
-    captions: (b) => decodeLegacyCaption(b),
+    captions_v2: (b) => decodeCaptionsV2(b) || decodeCaptionLoose(b),
+    captions: (b) => decodeLegacyCaption(b) || decodeCaptionLoose(b),
   };
+  // Mensagens de legenda com cara de texto que nenhum decodificador entendeu: o bridge usa para ligar
+  // a leitura pela tela enquanto o protocolo falha, e o diagnóstico guarda as últimas em hex.
+  let lastUndecoded = 0;
 
   // Diagnóstico: todos os canais de dados vistos (rótulo → mensagens, bytes), mesmo os que não usamos.
   // Se o Meet trocar o nome do canal de legendas, é aqui que isso aparece.
   const channelStats = {};
+  const hex = (b) => [...b.subarray(0, 400)].map((x) => x.toString(16).padStart(2, "0")).join("");
   function noteChannel(channel) {
-    const st = (channelStats[channel.label] ||= { msgs: 0, bytes: 0, decoded: 0, lastAt: 0, samples: [] });
+    const st = (channelStats[channel.label] ||= { msgs: 0, bytes: 0, decoded: 0, undecoded: 0, lastAt: 0, samples: [], failed: [] });
     channel.addEventListener("message", safe(async (ev) => {
       st.msgs++;
       st.bytes += ev.data?.byteLength ?? ev.data?.size ?? (typeof ev.data === "string" ? ev.data.length : 0);
       st.lastAt = Date.now();
-      // Amostras brutas (hex) dos canais de legenda que não decodificaram: para ajustar o esquema.
-      if (handlers[channel.label] && st.samples.length < 8) {
-        const b = await toBytes(ev.data);
-        if (b) st.samples.push([...b.subarray(0, 240)].map((x) => x.toString(16).padStart(2, "0")).join(""));
+      if (!handlers[channel.label]) return;
+      const b = await toBytes(ev.data);
+      if (!b) return;
+      // Amostras brutas (hex): as primeiras e, sobretudo, as últimas que não decodificaram.
+      if (st.samples.length < 4) st.samples.push(hex(b));
+      // Mensagens curtas (< 40 bytes) são controle do canal, sem texto.
+      if (b.length >= 40 && !handlers[channel.label](b)) {
+        st.undecoded++;
+        lastUndecoded = Date.now();
+        st.failed.push(hex(b));
+        if (st.failed.length > 12) st.failed.shift();
       }
     }));
   }
@@ -199,6 +252,6 @@
 
   // Permite ao fallback por DOM saber se o protocolo está funcionando.
   document.addEventListener("escribanote:ping", () =>
-    emit("protocol-health", { platform: "meet", lastProtocolCaption, channels: channelStats, ...connectionsHealth() }),
+    emit("protocol-health", { platform: "meet", lastProtocolCaption, lastUndecoded, channels: channelStats, ...connectionsHealth() }),
   );
 })(globalThis);

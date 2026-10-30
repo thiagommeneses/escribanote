@@ -52,6 +52,9 @@
         if (pos + 4 > buf.length) throw new Error("i32 truncado");
         fields.push({ no, wire, value: buf.subarray(pos, pos + 4) });
         pos += 4;
+      } else if (wire === 3 || wire === 4) {
+        // grupos (obsoletos): só marcam início/fim; os campos internos seguem como irmãos
+        fields.push({ no, wire, value: null });
       } else {
         throw new Error(`wire type ${wire} não suportado`);
       }

@@ -167,6 +167,7 @@
 
   let lastCaptionAt = 0;
   let lastProtocolCaption = 0;
+  let lastUndecoded = 0; // última mensagem de legenda (com texto) que o coletor não conseguiu decodificar
   document.addEventListener("escribanote:evt", (e) => {
     let ev;
     try {
@@ -176,6 +177,7 @@
     }
     if (ev.kind === "protocol-health") {
       lastProtocolCaption = Math.max(lastProtocolCaption, ev.lastProtocolCaption || 0);
+      lastUndecoded = Math.max(lastUndecoded, ev.lastUndecoded || 0);
       if ("connections" in ev) state.protocol = { connections: ev.connections || 0, connectionsSeen: !!ev.connectionsSeen, lastConnectionAt: ev.lastConnectionAt || 0 };
       if (ev.channels) diag.channels = ev.channels;
       return;
@@ -484,7 +486,7 @@
     const snap = {
       at: Date.now(), reason, version: chrome.runtime.getManifest().version, path: location.pathname,
       stage: state.stage, uiLang: state.uiLang, captionsOn: state.captionsOn, captionsSeen: state.captionsSeen, consent: state.consent, ended: state.ended,
-      lastCaptionAt, lastProtocolCaption, protocol: state.protocol, channels: diag.channels, domEmitted: diag.domEmitted,
+      lastCaptionAt, lastProtocolCaption, lastUndecoded, domMode: lastProtocolCaption === 0 || protocolFailing(), protocol: state.protocol, channels: diag.channels, domEmitted: diag.domEmitted,
       regionFound: !!region, regionText: region ? (region.innerText || "").replace(/\s+/g, " ").trim().slice(0, 200) : "",
       regions: [...document.querySelectorAll("[role=region]")].slice(0, 20).map((el) => el.getAttribute("aria-label") || "(sem rótulo)"),
       ariaLive: ariaLive(),
@@ -509,11 +511,13 @@
       if ([...block.children].some((c) => linesOf(c).length >= 2)) continue;
       const name = lines[0];
       const text = lines.slice(1).join(" ");
+      if (!blockIds.has(block)) blockIds.set(block, `dom/${Date.now()}/${++blockSeq}`);
       if (namesOnly) {
         rememberDomCaption(name, text);
+        // texto já entregue pelo protocolo: se a leitura pela tela entrar depois, não o repete
+        blockVersions.set(block, text);
         continue;
       }
-      if (!blockIds.has(block)) blockIds.set(block, `dom/${Date.now()}/${++blockSeq}`);
       if (blockVersions.get(block) === text) continue;
       blockVersions.set(block, text);
       diag.domEmitted++;
@@ -551,6 +555,10 @@
     }
   }
 
+  function protocolFailing() {
+    return Date.now() - lastUndecoded < 6000 && Date.now() - lastProtocolCaption > 4000;
+  }
+
   setInterval(() => {
     document.dispatchEvent(new CustomEvent("escribanote:ping"));
     if (state.consent) scanTiles();
@@ -559,8 +567,10 @@
     tryEnableCaptions(ui);
     trackCaptionsStuck();
     if (state.stage === "meeting") writeDiag("tick");
-    // Só usa o DOM se o protocolo nunca entregou legendas nesta página (evita duplicatas).
-    if (state.consent !== false && state.settings.domFallback && lastProtocolCaption === 0) scrapeDom();
+    // Usa o DOM se o protocolo nunca entregou legendas nesta página, ou se o canal segue mandando
+    // legendas que o coletor não entende (o Meet mudou o esquema) e nada decodificou há alguns segundos.
+    // Fora disso a tela só serve para nomes (evita duplicatas).
+    if (state.consent !== false && state.settings.domFallback && (lastProtocolCaption === 0 || protocolFailing())) scrapeDom();
     // Com o protocolo ativo, a tela serve para descobrir nomes que o protocolo não trouxe e para
     // guardar a última legenda inteira (complemento ao sair da chamada).
     else if (state.consent) scrapeDom(true);
