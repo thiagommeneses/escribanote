@@ -1,7 +1,7 @@
-// Contas: login por link mágico, sessões do app (cookie), tokens da extensão, conta e exclusão (LGPD).
-import { hashToken, newToken } from "./crypto.js";
+// Contas: login por e-mail + senha ou link mágico, redefinição de senha, sessões do app (cookie), tokens da extensão, conta e exclusão (LGPD).
+import { hashPassword, hashToken, newToken, verifyPassword } from "./crypto.js";
 import { clientIp, fail, iso } from "./http.js";
-import { loginEmail } from "./mail.js";
+import { loginEmail, passwordEmail } from "./mail.js";
 
 const COOKIE = "rs";
 const EMAIL_RE = /^[^\s@<>()",;]{1,64}@[^\s@<>()",;]+\.[a-z]{2,}$/i;
@@ -14,7 +14,7 @@ export async function audit(db, userId, action, detail = {}, ip = "") {
 }
 
 export async function account(db, userId, config) {
-  const u = await db.one("SELECT id, email, name, created_at FROM users WHERE id = $1", [userId]);
+  const u = await db.one("SELECT id, email, name, created_at, password_hash IS NOT NULL AS has_password FROM users WHERE id = $1", [userId]);
   if (!u) return null;
   const sub = await db.one("SELECT * FROM subscriptions WHERE user_id = $1", [userId]);
   const cr = await db.one("SELECT balance, renews_at FROM credit_balances WHERE user_id = $1", [userId]);
@@ -23,6 +23,7 @@ export async function account(db, userId, config) {
     email: u.email,
     name: u.name,
     createdAt: iso(u.created_at),
+    hasPassword: u.has_password,
     plan: isPro(sub) ? "pro" : "free",
     subscription: sub && sub.status !== "none"
       ? {
@@ -47,6 +48,18 @@ async function createSession(db, userId, kind, name, days) {
   );
   return { token, id: row.id };
 }
+
+const PASSWORD_MIN = 8;
+function checkPassword(password, email) {
+  const pw = String(password ?? "");
+  if (pw.length < PASSWORD_MIN) fail(400, "weak_password", `A senha precisa ter pelo menos ${PASSWORD_MIN} caracteres.`);
+  if (pw.length > 200) fail(400, "weak_password", "A senha pode ter no máximo 200 caracteres.");
+  if (email && pw.trim().toLowerCase() === email) fail(400, "weak_password", "A senha não pode ser o seu e-mail.");
+  return pw;
+}
+// Comparação com um hash qualquer quando a conta não existe ou não tem senha: o tempo de resposta
+// não revela se o e-mail tem conta.
+const DUMMY_HASH = hashPassword("escribanote-sem-senha");
 
 export function registerAuth(app, { db, config, mailer, limiter, stripe }) {
   const secure = config.publicUrl.startsWith("https://");
@@ -83,7 +96,9 @@ export function registerAuth(app, { db, config, mailer, limiter, stripe }) {
     if (req.session.kind !== "web") fail(403, "web_only", "Faça isso pelo app do Escribanote no navegador.");
   };
 
-  app.post("/api/v1/auth/email", async (req, reply) => {
+  // Link por e-mail: para entrar sem senha (purpose "login") ou para definir/redefinir a senha
+  // ("password"; também é o cadastro com senha, já que confirma o e-mail). Limites compartilhados.
+  async function emailToken(req, purpose) {
     const email = String(req.body?.email || "").trim().toLowerCase();
     if (!EMAIL_RE.test(email) || email.length > 200) fail(400, "invalid_email", "Confira o e-mail digitado.");
     const ip = clientIp(req);
@@ -92,9 +107,32 @@ export function registerAuth(app, { db, config, mailer, limiter, stripe }) {
     }
     const token = newToken();
     await db.query(
-      `INSERT INTO login_tokens (token_hash, email, expires_at, ip) VALUES ($1, $2, now() + interval '${config.loginTokenMinutes} minutes', $3)`,
-      [hashToken(token), email, ip],
+      `INSERT INTO login_tokens (token_hash, email, expires_at, ip, purpose) VALUES ($1, $2, now() + interval '${config.loginTokenMinutes} minutes', $3, $4)`,
+      [hashToken(token), email, ip, purpose],
     );
+    return { email, token };
+  }
+  async function useToken(req, purpose) {
+    const token = String(req.body?.token || "");
+    if (!limiter.take(`verify-ip:${clientIp(req)}`, 20, 15 * 60_000)) fail(429, "rate_limited", "Muitas tentativas. Espere alguns minutos.");
+    const row = await db.one(
+      "UPDATE login_tokens SET used_at = now() WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > now() RETURNING email",
+      [hashToken(token), purpose],
+    );
+    if (!row) fail(400, "invalid_token", "Este link expirou ou já foi usado. Peça um novo.");
+    return db.one(
+      "INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO UPDATE SET updated_at = now() RETURNING id, email, (xmax = 0) AS created",
+      [row.email],
+    );
+  }
+  async function startWebSession(req, reply, userId) {
+    const s = await createSession(db, userId, "web", req.headers["user-agent"]?.slice(0, 200) || "Navegador", config.sessionDays);
+    setCookie(reply, s.token);
+    return s;
+  }
+
+  app.post("/api/v1/auth/email", async (req, reply) => {
+    const { email, token } = await emailToken(req, "login");
     // O token vai no fragmento (#): não aparece em logs nem no Referer.
     const link = `${config.publicUrl}/app/#/entrar/${token}`;
     await mailer.send({ to: email, ...loginEmail(link, config.loginTokenMinutes) });
@@ -103,21 +141,63 @@ export function registerAuth(app, { db, config, mailer, limiter, stripe }) {
   });
 
   app.post("/api/v1/auth/verify", async (req, reply) => {
-    const token = String(req.body?.token || "");
-    if (!limiter.take(`verify-ip:${clientIp(req)}`, 20, 15 * 60_000)) fail(429, "rate_limited", "Muitas tentativas. Espere alguns minutos.");
-    const row = await db.one(
-      "UPDATE login_tokens SET used_at = now() WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now() RETURNING email",
-      [hashToken(token)],
-    );
-    if (!row) fail(400, "invalid_token", "Este link expirou ou já foi usado. Peça um novo.");
-    const user = await db.one(
-      "INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO UPDATE SET updated_at = now() RETURNING id, (xmax = 0) AS created",
-      [row.email],
-    );
-    const s = await createSession(db, user.id, "web", req.headers["user-agent"]?.slice(0, 200) || "Navegador", config.sessionDays);
-    setCookie(reply, s.token);
+    const user = await useToken(req, "login");
+    await startWebSession(req, reply, user.id);
     await audit(db, user.id, user.created ? "signup" : "login", {}, clientIp(req));
     return account(db, user.id, config);
+  });
+
+  // E-mail + senha. A mesma resposta para conta inexistente, sem senha ou senha errada.
+  app.post("/api/v1/auth/login", async (req, reply) => {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password ?? "");
+    const ip = clientIp(req);
+    if (!limiter.take(`pw-ip:${ip}`, 20, 15 * 60_000) || !limiter.take(`pw-email:${email}`, 8, 15 * 60_000)) {
+      fail(429, "rate_limited", "Muitas tentativas. Espere alguns minutos ou entre pelo link no e-mail.");
+    }
+    const u = EMAIL_RE.test(email) && password ? await db.one("SELECT id, password_hash FROM users WHERE email = $1", [email]) : null;
+    const ok = await verifyPassword(password, u?.password_hash || (await DUMMY_HASH));
+    if (!u?.password_hash || !ok) fail(401, "invalid_credentials", "E-mail ou senha incorretos.");
+    await startWebSession(req, reply, u.id);
+    await audit(db, u.id, "login_password", {}, ip);
+    return account(db, u.id, config);
+  });
+
+  // Esqueci a senha / criar senha: sempre 202, exista ou não a conta (não revela quem tem conta).
+  app.post("/api/v1/auth/password/forgot", async (req, reply) => {
+    const { email, token } = await emailToken(req, "password");
+    const u = await db.one("SELECT password_hash IS NOT NULL AS has FROM users WHERE email = $1", [email]);
+    const link = `${config.publicUrl}/app/#/senha/${token}`;
+    await mailer.send({ to: email, ...passwordEmail(link, config.loginTokenMinutes, !!u?.has) });
+    reply.code(202);
+    return { ok: true };
+  });
+
+  // Link do e-mail + senha nova: grava, encerra as outras sessões do app e entra.
+  app.post("/api/v1/auth/password/reset", async (req, reply) => {
+    const password = checkPassword(req.body?.password);
+    const user = await useToken(req, "password");
+    checkPassword(password, user.email);
+    await db.query("UPDATE users SET password_hash = $2, password_set_at = now(), updated_at = now() WHERE id = $1", [user.id, await hashPassword(password)]);
+    await db.query("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND kind = 'web' AND revoked_at IS NULL", [user.id]);
+    await startWebSession(req, reply, user.id);
+    await audit(db, user.id, user.created ? "signup" : "password_reset", {}, clientIp(req));
+    return account(db, user.id, config);
+  });
+
+  // Definir ou trocar a senha estando logado. Trocar exige a senha atual.
+  app.put("/api/v1/auth/password", auth, async (req) => {
+    webOnly(req);
+    const u = await db.one("SELECT email, password_hash FROM users WHERE id = $1", [req.user.id]);
+    if (u.password_hash) {
+      if (!limiter.take(`pw-change:${req.user.id}`, 8, 15 * 60_000)) fail(429, "rate_limited", "Muitas tentativas. Espere alguns minutos.");
+      if (!(await verifyPassword(String(req.body?.current ?? ""), u.password_hash))) fail(400, "wrong_password", "A senha atual não confere.");
+    }
+    const password = checkPassword(req.body?.password, u.email);
+    await db.query("UPDATE users SET password_hash = $2, password_set_at = now(), updated_at = now() WHERE id = $1", [req.user.id, await hashPassword(password)]);
+    await db.query("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND kind = 'web' AND revoked_at IS NULL AND id <> $2", [req.user.id, req.session.id]);
+    await audit(db, req.user.id, u.password_hash ? "password_change" : "password_set", {}, clientIp(req));
+    return { ok: true };
   });
 
   app.post("/api/v1/auth/logout", auth, async (req, reply) => {

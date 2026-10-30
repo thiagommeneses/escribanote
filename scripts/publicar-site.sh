@@ -10,7 +10,7 @@ VERSION=$(python3 -c "import json;print(json.load(open('extension/manifest.json'
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 rsync -a --exclude 'download/*.zip' --exclude 'app/lib/' site/ "$STAGE/"
-sed -i -E "s#(from \"\./(lib/)?[a-z-]+\.js)\"#\1?v=$VERSION\"#g" "$STAGE/app/app.js" "$STAGE/app/api.js"
+sed -i -E "s#((from|import) \"\./(lib/)?[a-z-]+\.js)\"#\1?v=$VERSION\"#g" "$STAGE/app/app.js" "$STAGE/app/api.js"
 sed -i -E "s#src=\"app\.js\"#src=\"app.js?v=$VERSION\"#; s#href=\"app\.css\"#href=\"app.css?v=$VERSION\"#" "$STAGE/app/index.html"
 grep -q "app.js?v=$VERSION" "$STAGE/app/index.html"
 rsync -az --delete --exclude 'download/*.zip' --exclude 'app/lib/' "$STAGE/" vps:/opt/escribanote/public/

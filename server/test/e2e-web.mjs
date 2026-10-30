@@ -84,7 +84,8 @@ try {
   await go("#/conta?plano=mensal&moeda=usd");
   await waitFor(p, `!!document.getElementById("login-form")`, "tela de login");
   await shot(p, "web-1-login.png");
-  await evalIn(p, `document.getElementById("login-email").value = "ana@exemplo.com"; document.querySelector("#login-form button").click(); true`);
+  check(await evalIn(p, `[...document.querySelectorAll(".social-btn")].length === 2 && [...document.querySelectorAll(".social-btn")].every((b) => b.disabled)`), "login: Google e Apple aparecem desativados (em breve)");
+  await evalIn(p, `document.getElementById("login-email").value = "ana@exemplo.com"; document.querySelector('[data-act="magic"]').click(); true`);
   await waitFor(p, `!document.getElementById("login-sent").hidden`, "aviso de link enviado");
   const mail = await (await fetch(`${srv.url}/__test/mail`)).json();
   const link = mail.text.match(/https?:\/\/\S+#\/entrar\/[\w-]+/)[0];
@@ -150,7 +151,7 @@ try {
   // 7) Renomear participante
   await evalIn(p, `document.querySelector('.spk[data-spk="b"]').click(); true`);
   await sleep(200);
-  await evalIn(p, `(() => { const i = document.querySelector("#tx input.input:not(#tx-search)"); i.value = "Bruno Lima"; i.blur(); return true; })()`);
+  await evalIn(p, `(() => { const i = document.querySelector(".ask input"); i.value = "Bruno Lima"; document.querySelector(".ask [data-ok]").click(); return true; })()`);
   await waitFor(p, `[...document.querySelectorAll("#tx .who")].some((w) => w.textContent.includes("Bruno Lima"))`, "participante renomeado");
 
   // 8) Busca global sem acento
@@ -180,6 +181,10 @@ try {
   await waitFor(p, `!!document.querySelector(".panel.pro")`, "painel do Pro");
   check(await evalIn(p, `document.querySelector(".panel.pro").textContent.includes("11 de 30")`), "créditos na conta");
   await shot(p, "web-6-conta-pro.png");
+  // Senha: a conta entrou pelo link e ainda não tem senha; define pelo painel
+  check(await evalIn(p, `document.getElementById("pw-panel").textContent.includes("Definir senha")`), "conta sem senha oferece Definir senha");
+  await evalIn(p, `document.querySelector('#pw-panel [data-act="pw-open"]').click(); document.getElementById("pw-change-new").value = "ana senha forte"; document.querySelector('#pw-change [type="submit"]').click(); true`);
+  await waitFor(p, `document.getElementById("pw-panel")?.textContent.includes("Alterar senha")`, "senha definida na conta");
 
   // 12) Paleta de comandos
   await go("#/");
@@ -223,6 +228,29 @@ try {
   await evalIn(p, `document.getElementById("p-cta").click(); true`);
   await waitFor(p, `location.pathname === "/app/" && !!document.getElementById("login-form")`, "do botão Assinar para o login do app");
   check((await evalIn(p, `localStorage.getItem("escribanote:plano")`)) === JSON.stringify({ interval: "year", currency: "usd" }), "app guarda o plano escolhido no site para depois do login");
+
+  // Entrar com e-mail + senha (senha errada primeiro)
+  await evalIn(p, `document.getElementById("login-email").value = "ana@exemplo.com"; document.getElementById("login-password").value = "errada123"; document.querySelector('#login-form [type="submit"]').click(); true`);
+  await waitFor(p, `document.getElementById("login-err").textContent.includes("incorretos")`, "senha errada avisa");
+  await evalIn(p, `document.getElementById("login-password").value = "ana senha forte"; document.querySelector('#login-form [type="submit"]').click(); true`);
+  await waitFor(p, `location.hash.startsWith("#/conta") && !!document.getElementById("pw-panel")`, "entrou com a senha e voltou para onde ia (conta)");
+  // Esqueci minha senha: link por e-mail, senha nova, entra de novo
+  await evalIn(p, `fetch("/api/v1/auth/logout", { method: "POST", headers: { "x-escribanote": "1" } }).then(() => { location.hash = "#/esqueci"; }); true`);
+  await waitFor(p, `!!document.getElementById("link-form")`, "tela Esqueci minha senha");
+  await evalIn(p, `document.getElementById("link-email").value = "ana@exemplo.com"; document.querySelector('#link-form [type="submit"]').click(); true`);
+  await waitFor(p, `!document.getElementById("link-sent").hidden`, "aviso de link de senha enviado");
+  const pwMail = await (await fetch(`${srv.url}/__test/mail`)).json();
+  check(pwMail.subject === "Redefinir a senha do Escribanote", "e-mail de redefinição");
+  const pwLink = pwMail.text.match(/https?:\/\/\S+#\/senha\/[\w-]+/)[0];
+  await evalIn(p, `location.href = ${JSON.stringify(pwLink)}; true`);
+  await waitFor(p, `!!document.getElementById("pw-form")`, "tela Escolha sua senha");
+  await shot(p, "web-9-senha-nova.png");
+  await evalIn(p, `document.getElementById("pw-new").value = "senha nova da ana"; document.getElementById("pw-again").value = "outra coisa"; document.querySelector('#pw-form [type="submit"]').click(); true`);
+  await waitFor(p, `document.getElementById("pw-err").textContent.includes("não são iguais")`, "senhas diferentes avisam");
+  await evalIn(p, `document.getElementById("pw-again").value = "senha nova da ana"; document.querySelector('#pw-form [type="submit"]').click(); true`);
+  await waitFor(p, `!document.getElementById("pw-form") && !!document.querySelector(".top .nav")`, "senha nova salva e já entrou");
+  const relogin = await fetch(`${srv.url}/api/v1/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "ana@exemplo.com", password: "senha nova da ana" }) });
+  check(relogin.status === 200, "a senha nova funciona no login");
 
   check(consoleErrors.length === 0, `sem erros no console${consoleErrors.length ? ": " + consoleErrors.join(" | ") : ""}`);
 } catch (err) {

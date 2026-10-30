@@ -7,6 +7,9 @@ import { DEFAULT_TAGS } from "./lib/settings.js";
 import { computeStats, fmtDuration } from "./lib/stats.js";
 import { normalize, toBlocks, mergeSpeakers, speakerName } from "./lib/transcript.js";
 import { commitSummary, diffDocument, diffStats, diffHtml } from "./lib/diff.js";
+import "./lib/icons.js"; // ícones da extensão (duotone): globalThis.EsIcons
+
+const { icon, tagIcon } = globalThis.EsIcons;
 
 const EXTENSION_ID = "ohbnmfogdcbgegnpcaphidkjinplednd";
 const PALETTE = ["#c2410c", "#0f766e", "#7c3aed", "#b45309", "#be185d", "#1d4ed8", "#4d7c0f", "#9f1239"];
@@ -144,6 +147,8 @@ async function route() {
   const [head, arg] = parts;
   if (head === "conta") rememberPlan(params);
   if (head === "entrar") return renderLogin(arg);
+  if (head === "criar" || head === "esqueci") return renderEmailLink(head);
+  if (head === "senha" && arg) return renderSetPassword(arg);
   if (!state.me) {
     try {
       state.me = await api.get("/me");
@@ -156,6 +161,7 @@ async function route() {
       return renderFatal(err);
     }
   }
+  showChrome(true);
   if (head === "conta") return renderAccount(params);
   if (head === "conectar") return renderConnect();
   if (head === "perguntar") return renderAskAll();
@@ -170,51 +176,229 @@ function renderFatal(err) {
 }
 
 // ---------------- entrar ----------------
-async function renderLogin(token) {
+// E-mail + senha, ou um link por e-mail (sem senha). "Criar conta" e "Esqueci a senha" mandam um link
+// que confirma o e-mail e leva a #/senha/<token>, onde a pessoa escolhe a senha. Google e Apple: em breve.
+let typedEmail = "";
+const SOCIAL = [
+  { id: "google", label: "Google", icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.09A6.6 6.6 0 0 1 5.49 12c0-.73.13-1.43.35-2.09V7.07H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A10.96 10.96 0 0 0 12 1 11 11 0 0 0 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>` },
+  { id: "apple", label: "Apple", icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.37 12.73c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.18-1.53 2.66-.39 6.6 1.1 8.75.73 1.05 1.6 2.24 2.73 2.2 1.1-.05 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.4 1.2-2.46-.03-.01-2.3-.88-2.32-3.5zM14.2 6.27c.6-.73 1.01-1.75.9-2.77-.87.04-1.92.58-2.54 1.31-.56.64-1.05 1.68-.92 2.68.97.07 1.96-.49 2.56-1.22z"/></svg>` },
+];
+function socialHtml() {
+  return `<div class="social" role="group" aria-label="Entrar com outra conta">
+    ${SOCIAL.map((p) => `<button type="button" class="btn social-btn" disabled aria-describedby="social-soon">${p.icon}Continuar com ${p.label}</button>`).join("")}
+    <p class="small muted" id="social-soon">Entrar com Google e Apple chega em breve.</p>
+  </div>
+  <div class="or" aria-hidden="true"><span>ou com e-mail</span></div>`;
+}
+const pwField = (id, label, autocomplete, extra = "") =>
+  `<label class="field">${label}<span class="pw"><input type="password" id="${id}" autocomplete="${autocomplete}" required ${extra}><button type="button" class="pw-eye" data-act="pw-eye" data-for="${id}" aria-label="Mostrar senha" aria-pressed="false">Mostrar</button></span></label>`;
+
+// Depois de entrar (senha, link ou senha nova): volta para onde a pessoa queria ir.
+function afterLogin(me) {
+  state.me = me;
+  renderCredits();
+  const after = sessionStorage.getItem("after");
+  sessionStorage.removeItem("after");
+  const fallback = pendingPlan() && me.plan !== "pro" ? "#/conta" : "#/";
+  const skip = /^#\/(entrar|criar|esqueci|senha)/;
+  history.replaceState(null, "", after && !skip.test(after) && after !== "#/" ? after : fallback);
+  return route();
+}
+
+// Sem conta: o menu e a paleta da área logada somem.
+function showChrome(on) {
+  document.querySelector(".top .nav").hidden = !on;
+  $("palette-open").hidden = !on;
+}
+
+function authPage(inner) {
   setNav("");
+  showChrome(false);
   $("credits").hidden = true;
+  view.innerHTML = `<section class="page auth">${inner}
+    <p class="small muted">A extensão do Escribanote continua grátis e funcionando sem conta. A conta é para o Escribanote Pro.</p></section>`;
+}
+
+async function renderLogin(token) {
   if (token) {
+    setNav("");
+    showChrome(false);
     view.innerHTML = `<section class="page"><h1>Entrando…</h1></section>`;
     try {
-      state.me = await api.post("/auth/verify", { token });
-      renderCredits();
-      const after = sessionStorage.getItem("after");
-      sessionStorage.removeItem("after");
-      const fallback = pendingPlan() && state.me.plan !== "pro" ? "#/conta" : "#/";
-      history.replaceState(null, "", after && !after.startsWith("#/entrar") && after !== "#/" ? after : fallback);
-      return route();
+      return afterLogin(await api.post("/auth/verify", { token }));
     } catch (err) {
       view.innerHTML = `<section class="page"><h1>Este link não vale mais</h1>
-        <p class="lead">${esc(err.message)}</p><p><a class="btn dark" href="#/entrar">Pedir um novo link</a></p></section>`;
+        <p class="lead">${esc(err.message)}</p><p><a class="btn dark" href="#/entrar">Voltar para o login</a></p></section>`;
       return;
     }
   }
-  view.innerHTML = `<section class="page">
-    <h1>Entre no <em>Escribanote</em></h1>
-    <p class="lead">Suas reuniões, atas e a IA inclusa do Escribanote Pro, em qualquer computador. Digite seu e-mail: enviamos um link de acesso, sem senha.</p>
-    <form class="login-box" id="login-form" novalidate>
-      <label class="field">E-mail<input type="email" id="login-email" autocomplete="email" required placeholder="voce@empresa.com"></label>
-      <div class="row"><button class="btn primary" type="submit">Enviar link de acesso</button></div>
-      <p class="err" id="login-err" role="alert"></p>
-    </form>
-    <div class="sent" id="login-sent" hidden></div>
-    <p class="small muted">A extensão do Escribanote continua grátis e funcionando sem conta. A conta é para o Escribanote Pro.</p>
-  </section>`;
-  $("login-email").focus();
+  authPage(`<h1>Entre no <em>Escribanote</em></h1>
+    <p class="lead">Suas reuniões, atas e a IA inclusa do Escribanote Pro, em qualquer computador.</p>
+    <div class="auth-box">
+      ${socialHtml()}
+      <form id="login-form" class="auth-form" novalidate>
+        <label class="field">E-mail<input type="email" id="login-email" autocomplete="username email" required placeholder="voce@empresa.com" value="${esc(typedEmail)}"></label>
+        ${pwField("login-password", `<span class="row" style="justify-content:space-between">Senha <a href="#/esqueci" class="small" data-keep-email>Esqueci minha senha</a></span>`, "current-password")}
+        <button class="btn primary big" type="submit">Entrar</button>
+        <p class="err" id="login-err" role="alert"></p>
+      </form>
+      <button type="button" class="btn ghost magic" data-act="magic">Entrar sem senha: receber um link por e-mail</button>
+      <div class="sent" id="login-sent" hidden></div>
+    </div>
+    <p class="small">Ainda não tem conta? <a href="#/criar" data-keep-email>Criar conta</a></p>`);
+  const email = $("login-email");
+  (email.value ? $("login-password") : email).focus();
   $("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const email = $("login-email").value.trim();
-    $("login-err").textContent = "";
-    const btn = e.submitter;
+    const err = $("login-err");
+    err.textContent = "";
+    typedEmail = email.value.trim();
+    const password = $("login-password").value;
+    if (!typedEmail) return ((err.textContent = "Digite o seu e-mail."), email.focus());
+    if (!password) return ((err.textContent = "Digite a senha, ou use \"Entrar sem senha\" logo abaixo."), $("login-password").focus());
+    const btn = e.submitter || e.target.querySelector("[type=submit]");
     btn.disabled = true;
     try {
-      await api.post("/auth/email", { email });
-      $("login-form").hidden = true;
-      $("login-sent").hidden = false;
-      $("login-sent").innerHTML = `<div class="notice ok">Enviamos um link para <b>${esc(email)}</b>. Abra o e-mail neste navegador; o link vale por 15 minutos.</div>
-        <p class="small muted">Não chegou? Confira a caixa de spam ou <a href="#/entrar" data-act="relogin">tente de novo</a>.</p>`;
-    } catch (err) {
-      $("login-err").textContent = err.message;
+      afterLogin(await api.post("/auth/login", { email: typedEmail, password }));
+    } catch (ex) {
+      err.textContent = ex.code === "invalid_credentials" ? "E-mail ou senha incorretos. Se a sua conta ainda não tem senha, entre pelo link ou use \"Esqueci minha senha\" para criar uma." : ex.message;
+      btn.disabled = false;
+    }
+  });
+}
+
+async function sendMagicLink(btn) {
+  const email = $("login-email");
+  const err = $("login-err");
+  typedEmail = email.value.trim();
+  err.textContent = "";
+  if (!typedEmail) return ((err.textContent = "Digite o seu e-mail para receber o link."), email.focus());
+  btn.disabled = true;
+  try {
+    await api.post("/auth/email", { email: typedEmail });
+    $("login-form").hidden = true;
+    btn.hidden = true;
+    for (const el of document.querySelectorAll(".auth .social, .auth .or")) el.hidden = true;
+    $("login-sent").hidden = false;
+    $("login-sent").innerHTML = `<div class="notice ok">Enviamos um link para <b>${esc(typedEmail)}</b>. Abra o e-mail neste navegador; o link vale por 15 minutos.</div>
+      <p class="small muted">Não chegou? Confira a caixa de spam ou <a href="#/entrar" data-act="relogin">tente de novo</a>.</p>`;
+  } catch (ex) {
+    err.textContent = ex.message;
+    btn.disabled = false;
+  }
+}
+
+// "Criar conta" e "Esqueci minha senha": o mesmo link por e-mail, que confirma o endereço e leva à senha nova.
+function renderEmailLink(kind) {
+  const create = kind === "criar";
+  authPage(`<h1>${create ? "Crie sua <em>conta</em>" : "Esqueceu a <em>senha</em>?"}</h1>
+    <p class="lead">${create
+      ? "Digite o seu e-mail. Enviamos um link para confirmar o endereço e escolher a sua senha."
+      : "Digite o e-mail da conta. Enviamos um link para você escolher uma senha nova. Se a conta ainda não tem senha, o mesmo link serve para criar uma."}</p>
+    <div class="auth-box">
+      ${create ? socialHtml() : ""}
+      <form id="link-form" class="auth-form" novalidate>
+        <label class="field">E-mail<input type="email" id="link-email" autocomplete="email" required placeholder="voce@empresa.com" value="${esc(typedEmail)}"></label>
+        <button class="btn primary big" type="submit">${create ? "Criar conta" : "Enviar link"}</button>
+        <p class="err" id="link-err" role="alert"></p>
+      </form>
+      <div class="sent" id="link-sent" hidden></div>
+    </div>
+    <p class="small">${create ? "Já tem conta?" : "Lembrou a senha?"} <a href="#/entrar" data-keep-email>Entrar</a></p>`);
+  $("link-email").focus();
+  $("link-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    typedEmail = $("link-email").value.trim();
+    $("link-err").textContent = "";
+    if (!typedEmail) return (($("link-err").textContent = "Digite o seu e-mail."), $("link-email").focus());
+    const btn = e.submitter || e.target.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+      await api.post("/auth/password/forgot", { email: typedEmail });
+      $("link-form").hidden = true;
+      for (const el of document.querySelectorAll(".auth .social, .auth .or")) el.hidden = true;
+      $("link-sent").hidden = false;
+      $("link-sent").innerHTML = `<div class="notice ok">Se o endereço estiver certo, chega em instantes um e-mail para <b>${esc(typedEmail)}</b> com o link para escolher a senha. Ele vale por 15 minutos.</div>
+        <p class="small muted">Não chegou? Confira a caixa de spam ou <a href="#/${kind}" data-act="relink">tente de novo</a>.</p>`;
+    } catch (ex) {
+      $("link-err").textContent = ex.message;
+      btn.disabled = false;
+    }
+  });
+}
+
+// Link do e-mail: escolher a senha (nova conta ou redefinição). Entra na conta ao salvar.
+function renderSetPassword(token) {
+  authPage(`<h1>Escolha sua <em>senha</em></h1>
+    <p class="lead">Use pelo menos 8 caracteres. Uma frase curta que só você conhece costuma ser mais forte e mais fácil de lembrar.</p>
+    <div class="auth-box">
+      <form id="pw-form" class="auth-form" novalidate>
+        ${pwField("pw-new", "Senha nova", "new-password", 'minlength="8"')}
+        ${pwField("pw-again", "Repita a senha", "new-password", 'minlength="8"')}
+        <button class="btn primary big" type="submit">Salvar e entrar</button>
+        <p class="err" id="pw-err" role="alert"></p>
+      </form>
+    </div>`);
+  $("pw-new").focus();
+  $("pw-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const err = $("pw-err");
+    const password = $("pw-new").value;
+    err.textContent = "";
+    if (password.length < 8) return ((err.textContent = "A senha precisa ter pelo menos 8 caracteres."), $("pw-new").focus());
+    if (password !== $("pw-again").value) return ((err.textContent = "As duas senhas não são iguais."), $("pw-again").focus());
+    const btn = e.submitter || e.target.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+      const me = await api.post("/auth/password/reset", { token, password });
+      toast("Senha salva");
+      afterLogin(me);
+    } catch (ex) {
+      if (ex.code === "invalid_token") {
+        view.querySelector(".auth-box").innerHTML = `<div class="notice">${esc(ex.message)}</div><p><a class="btn dark" href="#/esqueci">Pedir um novo link</a></p>`;
+        return;
+      }
+      err.textContent = ex.message;
+      btn.disabled = false;
+    }
+  });
+}
+
+// Conta: definir (sem a atual) ou trocar (com a atual) a senha.
+function passwordPanel(me) {
+  return `<section class="panel" id="pw-panel"><h2>Senha e acesso</h2>
+    <p class="small muted">${me.hasPassword
+      ? "Você entra com e-mail e senha, ou pelo link por e-mail quando preferir."
+      : "Sua conta entra só pelo link enviado por e-mail. Defina uma senha para entrar mais rápido."}
+      Entrar com Google e Apple chega em breve.</p>
+    <div class="row"><button class="btn" data-act="pw-open">${me.hasPassword ? "Alterar senha" : "Definir senha"}</button></div>
+    <form id="pw-change" class="drawer auth-form" hidden novalidate>
+      ${me.hasPassword ? pwField("pw-current", "Senha atual", "current-password") : ""}
+      ${pwField("pw-change-new", "Senha nova", "new-password", 'minlength="8"')}
+      <div class="row"><button class="btn primary" type="submit">Salvar senha</button><button class="btn ghost" type="button" data-act="pw-open">Cancelar</button></div>
+      <p class="err" id="pw-change-err" role="alert"></p>
+      ${me.hasPassword ? `<p class="small muted">Trocar a senha encerra as sessões do app nos outros navegadores. A extensão continua conectada.</p>` : ""}
+    </form></section>`;
+}
+function bindPasswordPanel() {
+  const form = $("pw-change");
+  if (!form) return;
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const err = $("pw-change-err");
+    const password = $("pw-change-new").value;
+    err.textContent = "";
+    if (password.length < 8) return ((err.textContent = "A senha precisa ter pelo menos 8 caracteres."), $("pw-change-new").focus());
+    const btn = e.submitter || form.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+      await api.put("/auth/password", { current: $("pw-current")?.value || "", password });
+      state.me = { ...state.me, hasPassword: true };
+      toast("Senha salva");
+      $("pw-panel").outerHTML = passwordPanel(state.me);
+      bindPasswordPanel();
+    } catch (ex) {
+      err.textContent = ex.message;
       btn.disabled = false;
     }
   });
@@ -244,7 +428,7 @@ function cardHtml(m, current, snippet) {
   const who = (m.participants || []).slice(0, 4).join(", ");
   return `<a class="card" href="#/r/${encodeURIComponent(m.id)}" aria-current="${m.id === current}" data-id="${esc(m.id)}">
     <b>${esc(m.title)}</b>
-    <span class="meta">${meta.map(esc).join(" · ")}${m.hasSummary ? ' <span class="badge has-ata">ata</span>' : ""}${m.highlights ? ` <span class="badge">★ ${m.highlights}</span>` : ""}</span>
+    <span class="meta">${meta.map(esc).join(" · ")}${m.hasSummary ? ' <span class="badge has-ata">ata</span>' : ""}${m.highlights ? ` <span class="badge">${icon("importante")}${m.highlights}</span>` : ""}</span>
     ${snippet ? `<span class="snip">${snippet}</span>` : m.preview ? `<span class="prev">${esc(m.preview)}</span>` : who ? `<span class="prev">${esc(who)}</span>` : ""}
   </a>`;
 }
@@ -417,18 +601,18 @@ function renderTranscript() {
   const { doc } = state.meeting;
   const blocks = toBlocks(doc);
   const q = fold(state.inMeetingQuery.trim());
-  const tagLabel = (id) => {
+  const tagChip = (id) => {
     const t = DEFAULT_TAGS.find((x) => x.id === id);
-    return t ? `${t.emoji} ${t.label}` : id;
+    return t ? `<span class="tag" style="--tc:${t.color}">${icon(tagIcon(t))}${esc(t.label)}</span>` : `<span class="tag">${icon("tag")}${esc(id)}</span>`;
   };
   const speakers = speakersOf(doc);
   const html = blocks
     .filter((b) => !q || fold(`${b.speaker} ${b.text}`).includes(q))
     .map((b) => {
-      if (b.kind === "chat") return `<p class="chatline" data-ids="${esc(b.ids.join(" "))}">💬 ${esc(b.speaker)}: ${esc(b.text)}</p>`;
+      if (b.kind === "chat") return `<p class="chatline" data-ids="${esc(b.ids.join(" "))}">${icon("chat")} ${esc(b.speaker)}: ${esc(b.text)}</p>`;
       return `<div class="blk ${b.tags.length ? "hl" : ""}" data-ids="${esc(b.ids.join(" "))}">
         <span class="av" style="background:${colorFor(b.speakerId)}">${esc(initials(b.speaker))}</span>
-        <div><div class="who"><b data-act="rename" data-spk="${esc(b.speakerId)}" title="${isPro() ? "Clique para renomear" : "Renomear participantes é do Pro"}">${esc(b.speaker)}</b> <time>${clock(b.startAt - doc.startedAt)}</time>${b.tags.map((t) => `<span class="tag">${esc(tagLabel(t))}</span>`).join("")}${b.fixed ? '<span class="fixed" title="Corrigido pela revisão da IA">revisado</span>' : ""}</div>
+        <div><div class="who"><b data-act="rename" data-spk="${esc(b.speakerId)}" title="${isPro() ? "Clique para renomear" : "Renomear participantes é do Pro"}">${esc(b.speaker)}</b> <time>${clock(b.startAt - doc.startedAt)}</time>${b.tags.map(tagChip).join("")}${b.fixed ? '<span class="fixed" title="Corrigido pela revisão da IA">revisado</span>' : ""}</div>
         <p class="txt">${esc(b.text)}</p></div></div>`;
     })
     .join("");
@@ -520,7 +704,7 @@ function ataPane() {
   return `${body}
     <div class="row" style="margin-top:10px">
       <button class="btn sm" data-act="copy-ata">Copiar</button>
-      <button class="btn sm" data-act="copy-ata" data-k="editor" title="HTML no formato do Editor (TinyMCE): cole direto no editor">Copiar p/ Atena</button>
+      <button class="btn sm" data-act="copy-ata" data-k="editor" title="HTML no formato do Editor (TinyMCE): cole direto no editor">Copiar p/ Editor</button>
       <button class="btn sm" data-act="copy-ata" data-k="html" title="Código HTML para o 'Código-fonte' do editor">Copiar HTML</button>
       <button class="btn sm" data-act="dl-ata" data-f="txt">Baixar .txt</button>
       <button class="btn sm" data-act="dl-ata" data-f="md">Baixar .md</button>
@@ -613,13 +797,13 @@ function iaPane() {
 
 function hlPane() {
   const blocks = toBlocks(state.meeting.doc).filter((b) => b.tags.length);
-  if (!blocks.length) return `<div class="empty-pane small"><p>Nenhum destaque nesta reunião.</p><p class="muted">Marque falas com ⭐ na extensão durante a reunião.</p></div>`;
+  if (!blocks.length) return `<div class="empty-pane small"><p>Nenhum destaque nesta reunião.</p><p class="muted">Marque falas com Destacar (Alt+Shift+H) na extensão durante a reunião.</p></div>`;
   const groups = new Map();
   for (const b of blocks) for (const t of b.tags) (groups.get(t) || groups.set(t, []).get(t)).push(b);
   return [...groups]
     .map(([t, list]) => {
       const tag = DEFAULT_TAGS.find((x) => x.id === t);
-      return `<div><p class="small" style="font-weight:700;margin-bottom:6px">${esc(tag ? `${tag.emoji} ${tag.label}` : t)}</p>
+      return `<div><p class="small" style="font-weight:700;margin-bottom:6px">${tag ? `<span class="tag-h" style="--tc:${tag.color}">${icon(tagIcon(tag))}</span>${esc(tag.label)}` : esc(t)}</p>
         ${list.map((b) => `<button class="card" style="width:100%;text-align:left;background:var(--card);border-color:var(--rule)" data-act="jump" data-e="${esc(b.ids[0])}"><span class="meta">${esc(b.speaker)} · ${clock(b.startAt - state.meeting.doc.startedAt)}</span><span>${esc(b.text)}</span></button>`).join("")}</div>`;
     })
     .join("");
@@ -1027,6 +1211,7 @@ async function renderAccount(params) {
     ${justPaid && isPro() ? `<div class="notice ok">Assinatura confirmada. Bem-vindo ao Escribanote Pro! Agora <a href="#/conectar">conecte a extensão</a>.</div>` : ""}
     <section class="panel"><dl class="kv"><dt>E-mail</dt><dd>${esc(me.email)}</dd><dt>Conta criada em</dt><dd>${dateShort(me.createdAt)}</dd></dl></section>
     ${plan}
+    ${passwordPanel(me)}
     <section class="panel"><h2>Extensão</h2>
       <p class="small muted">Conecte a extensão do Escribanote para as reuniões irem para a conta sozinhas e a IA funcionar sem chave.</p>
       ${devices.length ? `<ul class="devices">${devices.map((d) => `<li><span><b>${esc(d.name)}</b><br><span class="small muted">Conectada em ${dateShort(d.createdAt)} · último uso ${dateShort(d.lastUsedAt)}</span></span><button class="btn sm ghost danger" data-act="device-off" data-id="${esc(d.id)}">Desconectar</button></li>`).join("")}</ul>` : ""}
@@ -1041,6 +1226,7 @@ async function renderAccount(params) {
       <label class="field">Digite <b>${esc(me.email)}</b> para confirmar<input id="del-confirm" autocomplete="off"></label>
       <div class="row"><button class="btn primary" data-act="delete-account">Apagar para sempre</button></div></div></section>
   </section>`;
+  bindPasswordPanel();
   if (justPaid && !isPro()) pollPro();
   renderSlackPanel(params);
 }
@@ -1346,6 +1532,8 @@ document.addEventListener("keydown", (e) => {
 
 // ---------------- cliques ----------------
 view.addEventListener("click", async (e) => {
+  // Entre as telas de login, o e-mail digitado vai junto.
+  if (e.target.closest("[data-keep-email]")) typedEmail = ($("login-email") || $("link-email"))?.value.trim() || typedEmail;
   const el = e.target.closest("[data-act]");
   if (!el) {
     const chip = e.target.closest("[data-filter]");
@@ -1374,6 +1562,26 @@ view.addEventListener("click", async (e) => {
       case "relogin":
         e.preventDefault();
         return renderLogin();
+      case "relink":
+        e.preventDefault();
+        return renderEmailLink(parseRoute().parts[0]);
+      case "magic":
+        return sendMagicLink(el);
+      case "pw-eye": {
+        const input = $(el.dataset.for);
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        el.textContent = show ? "Ocultar" : "Mostrar";
+        el.setAttribute("aria-pressed", show);
+        el.setAttribute("aria-label", show ? "Ocultar senha" : "Mostrar senha");
+        return;
+      }
+      case "pw-open": {
+        const f = $("pw-change");
+        f.hidden = !f.hidden;
+        if (!f.hidden) f.querySelector("input")?.focus();
+        return;
+      }
       case "tab":
         state.tab = el.dataset.tab;
         return renderPane();

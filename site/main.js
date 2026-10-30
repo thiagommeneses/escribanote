@@ -173,8 +173,8 @@
   const script = [
     ["ana", 4, "Bom dia! Vamos direto ao orçamento do <span class='fix'><span class='bad'>quiu quatro</span></span>?", { fix: "Q4" }],
     ["bruno", 11, "A proposta de mídia ficou em 180 mil, dá pra fechar até <span class='fix'><span class='bad'>sesta</span></span>.", { fix: "sexta" }],
-    ["voce", 19, "Fechado então: aprovamos os 180 mil para o Q4.", { tag: "✅ Decisão", hl: true }],
-    ["carla", 26, "Eu atualizo o <span class='fix'><span class='bad'>ó que erre</span></span> do time de vendas hoje.", { fix: "OKR", tag: "📌 Ação" }],
+    ["voce", 19, "Fechado então: aprovamos os 180 mil para o Q4.", { tag: `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0z" fill="currentColor" style="fill-opacity:var(--ic-fill,.16)"/><path d="M8.2 12.4l2.6 2.6 5-5.2"/></g></svg>Decisão`, hl: true }],
+    ["carla", 26, "Eu atualizo o <span class='fix'><span class='bad'>ó que erre</span></span> do time de vendas hoje.", { fix: "OKR", tag: `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4h11.8l-2.4 4 2.4 4H5.5z" fill="currentColor" style="fill-opacity:var(--ic-fill,.16)"/><path d="M5.5 4v16.5"/></g></svg>Ação` }],
     ["ana", 33, "Perfeito. Próximo ponto: contratação.", {}],
   ];
 

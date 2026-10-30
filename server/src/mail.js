@@ -47,3 +47,19 @@ export function loginEmail(link, minutes) {
 <p style="font-size:13px;line-height:1.5;color:#7a7268;word-break:break-all;margin:0">${esc(link)}</p>`),
   };
 }
+
+export function passwordEmail(link, minutes, hasPassword) {
+  const subject = hasPassword ? "Redefinir a senha do Escribanote" : "Defina a senha do Escribanote";
+  const ask = hasPassword ? "Recebemos um pedido para redefinir a senha da sua conta do Escribanote." : "Recebemos um pedido para definir uma senha na sua conta do Escribanote.";
+  return {
+    subject,
+    text: `Olá!\n\n${ask} Para escolher a senha nova, abra este link (vale por ${minutes} minutos e só funciona uma vez):\n\n${link}\n\nSe você não pediu, ignore este e-mail: sua senha continua a mesma.\n\nEscribanote · escribanote.com`,
+    html: wrap(subject, `Escolha uma senha para o Escribanote. O link vale por ${minutes} minutos.`, `
+<p style="font-size:15px;line-height:1.55;margin:0 0 12px">Olá!</p>
+<p style="font-size:15px;line-height:1.55;margin:0 0 12px">${ask} Clique no botão abaixo para escolher a senha nova. O link vale por ${minutes} minutos e só funciona uma vez.</p>
+<p style="margin:24px 0"><a href="${esc(link)}" style="background:#c8442a;color:#fffdf9;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:600;display:inline-block">Escolher a senha</a></p>
+<p style="font-size:13px;line-height:1.5;color:#7a7268;margin:0 0 6px">Se o botão não funcionar, copie este endereço no navegador:</p>
+<p style="font-size:13px;line-height:1.5;color:#7a7268;word-break:break-all;margin:0">${esc(link)}</p>
+<p style="font-size:13px;line-height:1.5;color:#7a7268;margin:16px 0 0">Se você não pediu, ignore este e-mail: sua senha continua a mesma.</p>`),
+  };
+}
