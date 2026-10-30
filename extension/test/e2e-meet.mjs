@@ -711,6 +711,20 @@ try {
   await waitFor(async () => (await sw({ type: "get", id })).speakers[CARLA] === "Carla Dias", "nome da Carla pela tela", 8000);
   step("falante sem nome no protocolo recebe o nome da legenda na tela");
 
+  // O Meet muda o esquema e o canal passa a mandar legendas que o coletor não entende: a leitura
+  // pela tela entra sozinha enquanto isso (antes, uma legenda decodificada de vez em quando a mantinha desligada).
+  await sleep(4500);
+  await evaluate(meet, `(() => {
+    window.__junk = setInterval(() => __caps.send(new Uint8Array(60).fill(0xff)), 400);
+    const region = document.querySelector('[role="region"][aria-label="Legendas"]');
+    const block = document.createElement("div");
+    block.innerHTML = "<div>Diego Lima</div><div>essa fala veio num formato que o coletor não entende</div>";
+    region.append(block);
+  })()`);
+  await waitFor(async () => (await sw({ type: "get", id })).entries.some((e) => e.source === "dom" && /formato que o coletor/.test(e.text)), "fala lida pela tela com o protocolo falhando", 10_000);
+  await evaluate(meet, "clearInterval(window.__junk)");
+  step("canal com legendas ilegíveis: a leitura pela tela assume");
+
   // Legenda em idioma errado
   const meet3 = await openMeet("lng-test-abc", "Reunião em inglês");
   await evaluate(meet3, `(async () => { for (let i = 0; i < 4; i++) { __caps.send(window.EscribanoteProto.encode([[1, "message", [[1, "varint", 900 + i], [2, "varint", 1], [3, "message", [[3, "string", "we should close this today " + i], [4, "string", "en-US"], [6, "string", ${JSON.stringify(ANA)}]]]]]])); await new Promise((r) => setTimeout(r, 150)); } })()`);

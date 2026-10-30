@@ -33,6 +33,43 @@ test("Meet captions_v2: decodifica utterance (esquema observado no Meet)", () =>
   });
 });
 
+test("Meet captions_v2: esquema mudado cai no decodificador flexível", () => {
+  // um nível a mais e campos em outras posições: o caminho fixo falha, a busca acha o texto
+  const bytes = encode([
+    [2, "message", [
+      [1, "varint", 641],
+      [2, "varint", 18],
+      [5, "message", [
+        [7, "message", [
+          [1, "string", "spaces/abc/devices/535"],
+          [2, "string", "pt-BR"],
+          [9, "string", "mas não é de costume, mas de costume"],
+        ]],
+      ]],
+    ]],
+  ]);
+  assert.equal(Meet.decodeCaptionsV2(bytes), null);
+  assert.deepEqual(Meet.decodeCaptionLoose(bytes), {
+    id: "641/spaces/abc/devices/535",
+    speakerId: "spaces/abc/devices/535",
+    version: 18,
+    text: "mas não é de costume, mas de costume",
+    lang: "pt-BR",
+  });
+  // o formato conhecido continua dando o mesmo resultado pelos dois caminhos
+  const known = encode([[1, "message", [[1, "varint", 7], [2, "varint", 2], [3, "message", [[3, "string", "bom dia a todos"], [4, "string", "pt-BR"], [6, "string", "spaces/abc/devices/1"]]]]]]);
+  assert.deepEqual(Meet.decodeCaptionLoose(known), Meet.decodeCaptionsV2(known));
+  // sem deviceId, ou sem texto, não inventa legenda
+  assert.equal(Meet.decodeCaptionLoose(encode([[1, "message", [[1, "varint", 7], [3, "message", [[3, "string", "texto solto"]]]]]])), null);
+  assert.equal(Meet.decodeCaptionLoose(encode([[1, "message", [[1, "varint", 7], [3, "message", [[6, "string", "spaces/abc/devices/1"]]]]]])), null);
+});
+
+test("proto: grupos (wire 3/4) não derrubam a mensagem inteira", () => {
+  const inner = encode([[1, "varint", 5], [2, "varint", 1], [3, "message", [[3, "string", "olá de novo"], [6, "string", "spaces/x/devices/2"]]]]);
+  const bytes = new Uint8Array([0x0a, inner.length, ...inner, 0x4b, 0x08, 0x01, 0x4c]); // campo 9 como grupo
+  assert.equal(Meet.decodeCaptionsV2(bytes).text, "olá de novo");
+});
+
 test("Meet captions legado: wrapper{1: message}", () => {
   const bytes = encode([
     [1, "message", [
