@@ -723,7 +723,9 @@ try {
   })()`);
   await waitFor(async () => (await sw({ type: "get", id })).entries.some((e) => e.source === "dom" && /formato que o coletor/.test(e.text)), "fala lida pela tela com o protocolo falhando", 10_000);
   await evaluate(meet, "clearInterval(window.__junk)");
-  step("canal com legendas ilegíveis: a leitura pela tela assume");
+  // A fala que o protocolo já tinha entregue (Carla) continua na tela e não pode sair repetida pela leitura da tela
+  assert.ok(!(await sw({ type: "get", id })).entries.some((e) => e.source === "dom" && /relatório final/.test(e.text)), "fala já entregue pelo protocolo não se repete");
+  step("canal com legendas ilegíveis: a leitura pela tela assume, sem repetir o que o protocolo entregou");
 
   // Legenda em idioma errado
   const meet3 = await openMeet("lng-test-abc", "Reunião em inglês");
