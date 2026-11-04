@@ -46,7 +46,11 @@
     const ss = String(s % 60).padStart(2, "0");
     return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
   };
-  const send = (msg) => chrome.runtime.sendMessage(msg);
+  // Com a extensão atualizada e a aba ainda aberta (script órfão), chrome.runtime estoura na hora:
+  // vira uma promessa rejeitada, que as chamadas já tratam.
+  const alive = () => !!chrome.runtime?.id;
+  const send = (msg) => (alive() ? chrome.runtime.sendMessage(msg) : Promise.reject(new Error("Extensão atualizada: recarregue a página")));
+  const store = (obj) => alive() && chrome.storage.local.set(obj).catch(() => {});
 
   // ---------- Montagem ----------
   const hostEl = document.createElement("escribanote-widget");
@@ -232,7 +236,7 @@
       const up = () => {
         removeEventListener("pointermove", move);
         removeEventListener("pointerup", up);
-        chrome.storage.local.set({ widgetPos: { right: parseInt(hostEl.style.right, 10), bottom: parseInt(hostEl.style.bottom, 10) } });
+        store({ widgetPos: { right: parseInt(hostEl.style.right, 10), bottom: parseInt(hostEl.style.bottom, 10) } });
         if (!moved && handle === $("pill")) setMin(false);
       };
       addEventListener("pointermove", move);
@@ -242,7 +246,7 @@
 
   function setMin(v) {
     minimized = v;
-    chrome.storage.local.set({ widgetMin: v });
+    store({ widgetMin: v });
     render();
   }
   $("min").addEventListener("click", () => setMin(true));

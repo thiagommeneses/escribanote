@@ -988,6 +988,26 @@ try {
   assert.ok(JSON.stringify(savedList).includes("Reunião durante a atualização"), "reunião salva antes de recarregar");
   step("sem reunião, a versão nova entra sozinha e a reunião ficou salva");
 
+  // Extensão recarregada à força (⟳ em chrome://extensions) no meio da reunião: o script da aba fica
+  // órfão. Ele para os ciclos e avisa no widget, sem erros "Extension context invalidated" na aba.
+  {
+    const meetO = await openMeet("orf-test-abc", "Reunião com a extensão recarregada");
+    await evaluate(meetO, `__say(990, 1, "Fala antes de recarregar a extensão.", ${JSON.stringify(ANA)})`);
+    await waitFor(async () => /Fala antes de recarregar/.test((await widgetCall(meetO, "#body")) || ""), "reunião ao vivo antes do reload forçado");
+    const errs = [];
+    listeners.push((msg) => {
+      if (msg.sessionId === meetO && msg.method === "Runtime.exceptionThrown") errs.push(msg.params.exceptionDetails.exception?.description || msg.params.exceptionDetails.text);
+    });
+    await send("Runtime.enable", {}, meetO);
+    await evaluate(app2, "setTimeout(() => chrome.runtime.reload(), 50), true");
+    await waitFor(async () => /Recarregue esta aba/.test((await widgetCall(meetO, "#upd")) || ""), "aviso de extensão recarregada no widget", 15000);
+    await evaluate(meetO, `__say(991, 1, "Fala depois de recarregar a extensão.", ${JSON.stringify(ANA)})`);
+    await sleep(7000); // vários ciclos de 1,5 s, o diagnóstico de 5 s e a fila
+    const invalid = errs.filter((e) => /context invalidated/i.test(e));
+    assert.equal(invalid.length, 0, "erros na aba órfã: " + JSON.stringify(invalid.slice(0, 3)));
+    step("extensão recarregada no meio da reunião: aviso no widget e nenhum erro na aba");
+  }
+
   console.log("\nE2E OK");
 } finally {
   ws.close();
