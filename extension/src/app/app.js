@@ -773,7 +773,16 @@ function blockHtml(s, b, q) {
       return `<span class="tag" style="color:${t.color};border-color:${t.color}">${icon(tagIcon(t))}${esc(t.label)}</span>`;
     })
     .join("");
-  const acts = tags().map((t) => `<button data-tag="${t.id}" class="${b.tags.includes(t.id) ? "on" : ""}" title="${esc(t.label)}" aria-label="${esc(t.label)}" style="--tc:${t.color}">${icon(tagIcon(t))}</button>`).join("");
+  // As marcações ficam num só botão com menu: a barra cabe numa linha no painel lateral, e as
+  // marcações da fala continuam à vista nas etiquetas ao lado do nome.
+  const marked = b.tags.length ? ` (${b.tags.map((id) => tagById(id).label).join(", ")})` : "";
+  const acts = `<span class="menu-wrap tag-pick"><button data-act="tags" class="${b.tags.length ? "on" : ""}" title="Marcar${esc(marked)}" aria-label="Marcar" aria-haspopup="menu" aria-expanded="false">${icon("tag")}</button>
+    <span class="menu tag-menu" role="menu" hidden>${tags()
+      .map((t) => {
+        const on = b.tags.includes(t.id);
+        return `<button data-tag="${t.id}" role="menuitemcheckbox" aria-checked="${on}" style="--tc:${t.color}">${icon(tagIcon(t))}<span>${esc(t.label)}</span>${on ? `<i class="tm-ok">${icon("ok")}</i>` : ""}</button>`;
+      })
+      .join("")}</span></span>`;
   // Texto diferente do transcrito (revisão da IA ou correção à mão): as palavras mudadas ficam marcadas.
   const changed = (b.fixed || b.edited) && b.original !== b.text;
   const badges =
@@ -866,6 +875,29 @@ $("t-search").addEventListener("input", (e) => {
   renderTranscript();
 });
 
+// Menu de marcações de uma fala: abre para baixo, ou para cima quando falta espaço no fim da lista.
+function closeTagMenus(except) {
+  for (const m of $("timeline").querySelectorAll(".tag-menu:not([hidden])")) {
+    if (m === except) continue;
+    m.hidden = true;
+    m.closest(".blk").classList.remove("menu-open");
+    m.previousElementSibling.setAttribute("aria-expanded", "false");
+  }
+}
+function toggleTagMenu(btn) {
+  const menu = btn.nextElementSibling;
+  closeTagMenus(menu);
+  menu.hidden = !menu.hidden;
+  btn.setAttribute("aria-expanded", String(!menu.hidden));
+  btn.closest(".blk").classList.toggle("menu-open", !menu.hidden);
+  if (menu.hidden) return;
+  menu.classList.remove("up");
+  const r = menu.getBoundingClientRect();
+  if (r.bottom > window.innerHeight - 8 && btn.getBoundingClientRect().top > r.height + 8) menu.classList.add("up");
+}
+document.addEventListener("click", (e) => { if (!e.target.closest(".tag-pick")) closeTagMenus(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTagMenus(); });
+
 $("timeline").addEventListener("click", async (e) => {
   const s = state.session;
   if (!s) return;
@@ -885,6 +917,8 @@ $("timeline").addEventListener("click", async (e) => {
   const blk = e.target.closest(".blk");
   if (!blk) return;
   if (e.target.closest("[data-speaker]")) return; // tratado no pointerdown
+  const pick = e.target.closest('[data-act="tags"]');
+  if (pick) return toggleTagMenu(pick);
   const ids = JSON.parse(blk.dataset.ids);
   const tagBtn = e.target.closest("[data-tag]");
   if (tagBtn) {
