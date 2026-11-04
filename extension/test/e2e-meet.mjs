@@ -752,6 +752,22 @@ try {
   await sleep(1200);
   assert.ok(await evaluate(app, "!document.body.classList.contains('wide')"));
   await screenshot(app, "8-painel-estreito.png");
+  // Marcações num só botão: a barra da fala cabe numa linha no painel; o menu marca e a etiqueta aparece no nome
+  {
+    const bar = JSON.parse(await evaluate(app, `(() => { const b = document.querySelector('#timeline .blk'); b.classList.add('menu-open'); const a = b.querySelector('.acts'); const r = a.getBoundingClientRect(); const n = b.querySelector('[data-speaker]').getBoundingClientRect(); b.classList.remove('menu-open'); return JSON.stringify({ h: r.height, top: r.top, nameBottom: n.bottom, btns: a.querySelectorAll(':scope > button, :scope > .tag-pick > button').length }); })()`));
+    assert.ok(bar.h < 34, "barra numa linha: " + JSON.stringify(bar));
+    assert.ok(bar.top >= bar.nameBottom, "barra não cobre o nome: " + JSON.stringify(bar));
+    assert.equal(bar.btns, 7, "Marcar + 6 ações");
+    await evaluate(app, `document.querySelector('#timeline .blk [data-act="tags"]').click()`);
+    await sleep(200);
+    assert.ok(await evaluate(app, `!document.querySelector('#timeline .blk .tag-menu').hidden`), "menu de marcações aberto");
+    await screenshot(app, "8b-marcar.png");
+    await evaluate(app, `document.querySelector('#timeline .blk .tag-menu [data-tag="decisao"]').click()`);
+    await sleep(600);
+    assert.match(await evaluate(app, `document.querySelector('#timeline .blk .who').innerText`), /Decisão/, "etiqueta da marcação ao lado do nome");
+    assert.ok(await evaluate(app, `!!document.querySelector('#timeline .blk .tag-menu [data-tag="decisao"][aria-checked="true"]')`), "menu mostra a marcação");
+    step("marcações num só botão, barra numa linha no painel estreito");
+  }
   await evaluate(app, `document.querySelector('[data-nav="settings"]').click()`);
   await sleep(600);
   assert.match(await evaluate(app, "document.getElementById('view-settings').innerText"), /Tags de destaque[\s\S]*Inteligência artificial/);

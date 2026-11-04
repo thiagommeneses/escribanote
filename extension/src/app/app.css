@@ -255,11 +255,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .blk.chat p { color: var(--text-2); font-style: italic; }
 .blk .acts { position: absolute; right: 8px; top: 6px; display: none; gap: 2px; background: var(--surface); border: 1px solid var(--border);
   border-radius: 999px; padding: 2px 4px; box-shadow: var(--shadow); }
-.blk:hover .acts, .blk:focus-within .acts { display: flex; }
+.blk:hover .acts, .blk:focus-within .acts, .blk.menu-open .acts { display: flex; }
+.blk.menu-open { z-index: 3; }
+.tag-menu { left: auto; right: 0; min-width: 180px; }
+.tag-menu.up { top: auto; bottom: calc(100% + 4px); }
+.acts .tag-menu button { display: flex; width: 100%; gap: 8px; justify-content: flex-start; opacity: 1; padding: 6px 10px; font-size: 13px; color: var(--text); }
+.acts .tag-menu button > .ic { color: var(--tc); }
+.acts .tag-menu button > span { color: var(--text); }
+.tag-menu button[aria-checked="true"] { --ic-fill: .5; }
+.tag-menu .tm-ok { margin-left: auto; display: inline-grid; color: var(--accent); }
 /* Coluna estreita (painel lateral): a barra não cabe ao lado do nome; ela entra embaixo do texto
    em vez de cobrir o nome, que precisa continuar clicável para renomear. */
 @container (max-width: 640px) {
   .blk .acts { position: static; grid-column: 2; justify-self: start; flex-wrap: wrap; margin-top: 4px; border-radius: 12px; box-shadow: none; }
+  .tag-menu { left: 0; right: auto; }
 }
 .acts button { border: 0; background: none; cursor: pointer; padding: 2px 5px; border-radius: 6px; opacity: .5; font-size: 13px; }
 .acts button:hover, .acts button.on { opacity: 1; background: var(--bg-soft); }
