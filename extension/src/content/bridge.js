@@ -514,8 +514,10 @@
       if (!blockIds.has(block)) blockIds.set(block, `dom/${Date.now()}/${++blockSeq}`);
       if (namesOnly) {
         rememberDomCaption(name, text);
-        // texto já entregue pelo protocolo: se a leitura pela tela entrar depois, não o repete
-        blockVersions.set(block, text);
+        // Texto que o protocolo já entregou: se a leitura pela tela entrar depois, não o repete.
+        // Só conta como entregue se uma legenda do protocolo casar com ele; a fala que aparece na tela
+        // no instante em que o canal começa a falhar ainda não chegou por ele e não pode se perder.
+        if (lastProto.some((p) => sameUtterance(p.text, text))) blockVersions.set(block, text);
         continue;
       }
       if (blockVersions.get(block) === text) continue;
