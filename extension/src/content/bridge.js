@@ -28,6 +28,17 @@
     settings: { mode: "always", widget: true, hideCaptions: true, autoCaptions: true, domFallback: true, notifyMessage: "" },
   };
   bus.state = state;
+  // Extensão atualizada ou recarregada com a aba aberta: este script fica órfão e qualquer chamada a
+  // chrome.runtime/chrome.storage estoura "Extension context invalidated" na hora (o .catch não pega).
+  const alive = () => !!chrome.runtime?.id;
+  function toWorker(msg) {
+    if (!alive()) return Promise.resolve(null);
+    try {
+      return chrome.runtime.sendMessage(msg);
+    } catch {
+      return Promise.resolve(null);
+    }
+  }
   const emitState = () => bus.dispatchEvent(new CustomEvent("state"));
 
   function meetingKey() {
@@ -59,7 +70,7 @@
     else if (state.settings.mode === "off") state.consent = false;
     else if (state.consent === null) {
       const key = meetingKey();
-      state.consent = key ? await chrome.runtime.sendMessage({ type: "consent-get", key }).catch(() => null) : null;
+      state.consent = key ? await toWorker({ type: "consent-get", key }).catch(() => null) : null;
     }
     applyCaptionVisibility();
     emitState();
@@ -76,7 +87,7 @@
   bus.decide = async (value, remember) => {
     state.consent = value;
     const key = meetingKey();
-    if (key) await chrome.runtime.sendMessage({ type: "consent-set", key, value }).catch(() => {});
+    if (key) await toWorker({ type: "consent-set", key, value }).catch(() => {});
     if (remember) {
       const { settings = {} } = await chrome.storage.local.get("settings");
       await chrome.storage.local.set({ settings: { ...settings, mode: value ? "always" : "off" } });
@@ -94,7 +105,7 @@
     state.ended = true;
     pending = [];
     emitState();
-    await chrome.runtime.sendMessage({ type: "meeting-left", reason: "stop-widget" }).catch(() => {});
+    await toWorker({ type: "meeting-left", reason: "stop-widget" }).catch(() => {});
   };
   bus.resumeSession = () => {
     state.ended = false;
@@ -150,19 +161,18 @@
     flushTimer = null;
     const key = meetingKey();
     if (!state.consent || !pending.length || !key) return;
+    if (!alive()) return goOrphan();
     const events = pending;
     pending = [];
-    chrome.runtime
-      .sendMessage({
-        type: "events",
-        meeting: { key, platform, url: location.origin + location.pathname, title: meetingTitle() },
-        events,
-      })
-      .catch(() => {
-        // Service worker reiniciando: devolve para a fila e tenta de novo.
-        pending = events.concat(pending);
-        if (!flushTimer) flushTimer = setTimeout(flush, 1500);
-      });
+    toWorker({
+      type: "events",
+      meeting: { key, platform, url: location.origin + location.pathname, title: meetingTitle() },
+      events,
+    }).catch(() => {
+      // Service worker reiniciando: devolve para a fila e tenta de novo.
+      pending = events.concat(pending);
+      if (!flushTimer) flushTimer = setTimeout(flush, 1500);
+    });
   }
 
   let lastCaptionAt = 0;
@@ -280,7 +290,7 @@
   // Encerramento: o service worker fecha a sessão (e pode gerar a ata automática).
   window.addEventListener("pagehide", () => {
     flush();
-    if (isTop) chrome.runtime.sendMessage({ type: "meeting-left", reason: "tab-closed" }).catch(() => {});
+    if (isTop) toWorker({ type: "meeting-left", reason: "tab-closed" }).catch(() => {});
   });
 
   // ---------- Legendas nativas ----------
@@ -305,15 +315,21 @@
   }
   // Extensão recarregada à força (⟳ em chrome://extensions) com a aba aberta: este script fica órfão.
   // Devolve as legendas nativas e avisa no widget; a aba precisa ser recarregada para voltar a transcrever.
-  const orphanCheck = setInterval(() => {
-    if (chrome.runtime?.id) return;
-    clearInterval(orphanCheck);
+  // Os ciclos da página param junto (sem isso, o diagnóstico e a fila seguiam chamando a extensão).
+  const timers = [];
+  function goOrphan() {
+    if (state.orphaned) return;
+    for (const t of timers) clearInterval(t);
+    clearTimeout(flushTimer);
+    pending = [];
     if (hideStyle) hideStyle.remove();
     hideStyle = null;
     state.orphaned = true;
     emitState();
-  }, 3000);
+  }
+  timers.push(setInterval(() => alive() || goOrphan(), 3000));
   bus.setCaptionsHidden = async (hidden) => {
+    if (!alive()) return goOrphan();
     const { settings = {} } = await chrome.storage.local.get("settings");
     await chrome.storage.local.set({ settings: { ...settings, hideCaptions: hidden } });
   };
@@ -360,7 +376,7 @@
         state.ended = true;
         pending = [];
         const reason = rejoin ? "rejoin-screen" : leave ? "leave-button" : pcs.connectionsSeen ? "connections-closed" : "call-ui-gone";
-        if (isTop) chrome.runtime.sendMessage({ type: "meeting-left", reason }).catch(() => {});
+        if (isTop) toWorker({ type: "meeting-left", reason }).catch(() => {});
         emitState();
       }
     } else if (state.stage === "unknown") {
@@ -372,7 +388,7 @@
   if (platform === "slack") {
     // Huddle do Slack: o detector (slack.js) diz se há áudio ao vivo; não há legendas, só o áudio da aba.
     bus.inCall = () => !!window.__escribanoteSlack?.active;
-    setInterval(() => trackStage(bus.inCall()), 1500);
+    timers.push(setInterval(() => (alive() ? trackStage(bus.inCall()) : goOrphan()), 1500));
     return;
   }
 
@@ -462,7 +478,7 @@
     const stuck = state.stage === "meeting" && !!state.consent && !state.captionsSeen && (state.captionsOn === "unavailable" || (state.captionsOn === false && Date.now() - meetingSince > 12_000));
     if (stuck !== state.captionsStuck) {
       state.captionsStuck = stuck;
-      if (stuck && isTop) chrome.runtime.sendMessage({ type: "session-report", kind: "captions-stuck", detail: { captionsOn: state.captionsOn } }).catch(() => {});
+      if (stuck && isTop) toWorker({ type: "session-report", kind: "captions-stuck", detail: { captionsOn: state.captionsOn } }).catch(() => {});
       emitState();
     }
   }
@@ -480,7 +496,7 @@
     }));
   }
   function writeDiag(reason) {
-    if (Date.now() - diagTimer < 5000 && reason !== "left") return;
+    if (!alive() || (Date.now() - diagTimer < 5000 && reason !== "left")) return;
     diagTimer = Date.now();
     const region = document.querySelector(CAPTION_REGION);
     const snap = {
@@ -561,7 +577,8 @@
     return Date.now() - lastUndecoded < 6000 && Date.now() - lastProtocolCaption > 4000;
   }
 
-  setInterval(() => {
+  timers.push(setInterval(() => {
+    if (!alive()) return goOrphan();
     document.dispatchEvent(new CustomEvent("escribanote:ping"));
     if (state.consent) scanTiles();
     const ui = readMeetUi();
@@ -576,5 +593,5 @@
     // Com o protocolo ativo, a tela serve para descobrir nomes que o protocolo não trouxe e para
     // guardar a última legenda inteira (complemento ao sair da chamada).
     else if (state.consent) scrapeDom(true);
-  }, 1500);
+  }, 1500));
 })();
