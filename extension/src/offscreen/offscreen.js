@@ -61,7 +61,7 @@ async function decodeTrack(file) {
 
 // Transcreve de novo (ou pela primeira vez, num arquivo importado) as faixas guardadas de uma reunião.
 // Usa o mesmo pipeline da alta precisão, com fontes offline no relógio original (startedAt).
-async function retranscribe({ sessionId, modelKey, lang, diarize, startedAt, tracks }) {
+async function retranscribe({ sessionId, modelKey, lang, diarize, startedAt, tracks, profiles }) {
   if (state.tabId) throw new Error("A alta precisão está em uso numa reunião. Termine-a antes de transcrever de novo.");
   if (state.retrans) throw new Error("Já há uma transcrição em andamento.");
   state.retrans = { sessionId, startedAt, durationMs: 0, segments: 0, status: { state: "starting", progress: 0 } };
@@ -77,7 +77,7 @@ async function retranscribe({ sessionId, modelKey, lang, diarize, startedAt, tra
       state.retrans.durationMs = Math.max(state.retrans.durationMs, d.durationMs);
     }
     if (!decoded.length) throw new Error("O áudio desta reunião não está mais neste computador.");
-    await pipe.run(modelKey, lang, { diarize: !!diarize });
+    await pipe.run(modelKey, lang, { diarize: !!diarize, profiles });
     retransProgress({ state: "running", progress: 0 });
     // a faixa dos outros entra antes do microfone: o filtro de eco compara com o que já chegou
     decoded.sort((a, b) => (a.source === "mic") - (b.source === "mic"));
@@ -105,7 +105,7 @@ async function stopCapture() {
   state.play = null;
 }
 
-async function start({ tabId, streamId, modelKey, lang, mic, echo = true, diarize, keep = null }) {
+async function start({ tabId, streamId, modelKey, lang, mic, echo = true, diarize, keep = null, profiles = null }) {
   await stopCapture();
   pipe.reset();
   pipe.setEcho(echo);
@@ -145,7 +145,7 @@ async function start({ tabId, streamId, modelKey, lang, mic, echo = true, diariz
     }
   }
 
-  await pipe.run(modelKey, lang, { diarize: !!diarize });
+  await pipe.run(modelKey, lang, { diarize: !!diarize, profiles });
 }
 
 // Teste/diagnóstico da identificação de falantes: devolve turnos e voz de cada amostra enviada.

@@ -98,12 +98,14 @@ export class VoiceBook {
           const a = this.voices[i];
           const b = this.voices[j];
           if (a.w < MERGE_MIN_S || b.w < MERGE_MIN_S) continue;
+          if (a.name && b.name) continue; // dois perfis salvos são duas pessoas
           const sim = cosine(a.centroid, b.centroid);
           if (sim >= this.mergeAt && (!best || sim > best.sim)) best = { a, b, sim };
         }
       }
       if (!best) return merged;
-      const [keep, drop] = best.b.w > best.a.w ? [best.b, best.a] : [best.a, best.b];
+      // fica o perfil salvo (tem nome); senão, a voz com mais fala
+      const [keep, drop] = best.b.name && !best.a.name ? [best.b, best.a] : best.a.name && !best.b.name ? [best.a, best.b] : best.b.w > best.a.w ? [best.b, best.a] : [best.a, best.b];
       this.#merge(drop, keep);
       merged++;
     }
@@ -131,6 +133,26 @@ export class VoiceBook {
   takeMerges() {
     const out = this.merges.map((m) => ({ from: m.from, to: this.resolve(m.to) }));
     this.merges = [];
+    return out;
+  }
+
+  // Perfis de voz salvos (opcional, só neste computador): entram como vozes conhecidas, com nome.
+  // profiles: [{name, c: number[], w}]. O peso é limitado para a voz de hoje ainda poder ajustar o centroide.
+  seed(profiles) {
+    for (const p of profiles || []) {
+      if (!p || !p.name || !Array.isArray(p.c) || !p.c.length || this.voices.some((v) => v.name === p.name)) continue;
+      const w = Math.min(20, Math.max(MERGE_MIN_S, Number(p.w) || MERGE_MIN_S));
+      const centroid = Float32Array.from(p.c);
+      this.voices.push({ id: `perfil:${this.next++}`, name: p.name, sum: Float32Array.from(centroid, (x) => x * w), centroid, w, n: 1, seeded: true });
+    }
+  }
+  nameOf(id) {
+    return this.voices.find((v) => v.id === this.resolve(id))?.name || null;
+  }
+  // Impressões de voz com fala suficiente para virar perfil: {id: {c, w, name?}}.
+  snapshot(minS = 8) {
+    const out = {};
+    for (const v of this.voices) if (v.w >= minS) out[v.id] = { c: Array.from(v.centroid, (x) => Math.round(x * 1e5) / 1e5), w: Math.round(v.w), ...(v.name ? { name: v.name } : {}) };
     return out;
   }
 

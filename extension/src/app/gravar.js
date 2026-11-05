@@ -292,7 +292,8 @@ async function start() {
   // Identificação de falantes pela voz (Pro): no gravador não há legendas, então é ela que separa
   // "Falante 1", "Falante 2"… em vez de juntar tudo em "Participantes".
   const diarize = !!settings.diarize && (await chrome.runtime.sendMessage({ type: "is-pro" }).catch(() => false));
-  rec.running = rec.pipe.run(modelKey, settings.captionLang, { diarize }).catch((err) => {
+  const { voiceProfiles: profiles } = diarize && settings.voiceProfiles ? await chrome.storage.local.get("voiceProfiles") : {};
+  rec.running = rec.pipe.run(modelKey, settings.captionLang, { diarize, profiles: Array.isArray(profiles) ? profiles : null }).catch((err) => {
     rec.status = { state: "error", message: err.message };
     renderStatus();
   });

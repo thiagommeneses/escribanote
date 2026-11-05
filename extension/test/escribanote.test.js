@@ -1087,3 +1087,33 @@ test("localizar e substituir: palavra inteira, um passo de desfazer", () => {
   undoEdit(s);
   assert.equal(toBlocks(s)[0].text, "o quiu quatro e o banana");
 });
+
+// ---------------- 0.9.50: perfis de voz ----------------
+import { learnProfiles } from "../src/lib/voiceprofiles.js";
+test("perfis de voz: aprende pelo nome, reconhece na reunião seguinte e não junta dois perfis", () => {
+  const rnd = rng(3);
+  const book = new VoiceBook();
+  for (let i = 0; i < 6; i++) book.assign(voiceVec(1.3, 0.8, rnd), 4000);
+  for (let i = 0; i < 6; i++) book.assign(voiceVec(2.9, 0.8, rnd), 4000);
+  const prints = book.snapshot();
+  assert.equal(Object.keys(prints).length, 2);
+  // reunião 1: legendas dizem que voz:1 é a Ana; voz:2 ficou "Falante 2" (genérico, não vira perfil)
+  const s = session();
+  s.speakers = { "dev/ana": "Ana Souza", "voz:2": "Falante 2" };
+  s.asr = [{ id: "x1", voice: "voz:1", speakerId: "dev/ana", start: 1, end: 2, text: "a" }, { id: "x2", voice: "voz:2", speakerId: "voz:2", start: 3, end: 4, text: "b" }];
+  const profiles = learnProfiles(s, prints, []);
+  assert.deepEqual(profiles.map((p) => p.name), ["Ana Souza"]);
+  // reunião 2: livro novo, semeado; a voz da Ana é reconhecida com nome
+  const book2 = new VoiceBook();
+  book2.seed(profiles);
+  const id = book2.assign(voiceVec(1.3, 0.8, rnd), 3000);
+  assert.equal(book2.nameOf(id), "Ana Souza");
+  assert.notEqual(book2.nameOf(book2.assign(voiceVec(2.9, 0.8, rnd), 3000)), "Ana Souza");
+  // sem legenda, a fala com o nome do perfil vira a Ana e junta com o participante de mesmo nome
+  const s2 = session();
+  applyEvent(s2, { kind: "speaker", speakerId: "dev/ana2", name: "Ana Souza" });
+  addAsrSegment(s2, { start: 9_000_000, end: 9_003_000, text: "bom dia a todos", source: "tab", voice: id, voiceName: "Ana Souza" });
+  assert.equal(transcriptMod.canonicalSpeaker(s2, s2.asr[0].speakerId), "dev/ana2");
+  // atualizar o perfil soma as reuniões
+  assert.equal(learnProfiles(s, prints, profiles)[0].meetings, 2);
+});

@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.50 beta — 2026-11-05
+- Perfis de voz (Pro, opcional, desligado por padrão): a impressão de voz de quem tem nome na reunião fica guardada só neste computador e a pessoa é reconhecida pela voz desde a primeira fala nas reuniões seguintes, mesmo sem legenda. Lista em Ajustes › Avançadas › Reconhecimento, com apagar por pessoa ou todas. Nunca vai para backup, conta ou sincronização (dado biométrico, LGPD).
+- Dois perfis salvos nunca são juntados entre si; numa junção, o perfil com nome é o que fica.
+- O selo "Pro" dentro das opções não aparece mais como um segundo interruptor.
+
 ## 0.9.49 beta — 2026-11-05
 - Localizar e substituir: botão "Substituir" ao lado da busca troca uma palavra ou nome em toda a transcrição (palavra inteira e maiúsculas opcionais), com a contagem de ocorrências e um único Ctrl+Z para desfazer.
 - O horário citado pela IA limpa a busca antes de levar ao trecho (um filtro ativo escondia a fala).

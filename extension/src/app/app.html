@@ -320,6 +320,9 @@
             <label class="switch"><input type="checkbox" name="echoFilter"><span></span>Filtrar o eco da caixa de som no microfone (desligue se a sua própria fala estiver sendo cortada)</label>
             <label class="switch" id="diarize-row"><input type="checkbox" name="diarize"><span></span>Identificar falantes pela voz <span class="badge" title="Recurso do Escribanote Pro">Pro</span></label>
             <p class="muted tiny" id="diarize-info">Na alta precisão e no gravador do computador, separa quem fala comparando as vozes (modelos pyannote e WeSpeaker, ~32 MB, baixados uma vez; nada sai do computador). Quando as legendas trazem os nomes, o Escribanote aprende de quem é cada voz; sem legendas, mostra "Falante 1", "Falante 2"… que você pode renomear.</p>
+            <label class="switch" id="vp-row"><input type="checkbox" name="voiceProfiles"><span></span>Lembrar as vozes de quem participa sempre, para reconhecer a pessoa desde a primeira fala <span class="badge" title="Recurso do Escribanote Pro">Pro</span></label>
+            <p class="muted tiny">A impressão de voz é um dado biométrico (dado sensível na LGPD): fica só neste computador, não vai para o backup, para a conta nem para a sincronização, e só é guardada para quem tem nome na reunião. Use com o conhecimento das pessoas.</p>
+            <div id="vp-list" class="vp-list"></div>
             <div class="row"><button type="button" class="btn sm ghost" id="mic-perm">Permitir microfone</button><button type="button" class="btn sm ghost" id="hq-test">Testar o modelo</button><span class="muted tiny" id="hq-test-out"></span></div>
 
             <label class="field"><span>Vocabulário da equipe: nomes, siglas, termos jurídicos, de tecnologia e em inglês (um por linha)</span>

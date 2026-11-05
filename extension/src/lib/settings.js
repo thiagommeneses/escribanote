@@ -75,6 +75,7 @@ export const DEFAULTS = {
   audioQuotaMb: 2048, // espaço máximo do cofre; as reuniões mais antigas saem primeiro
   audioRetentionDays: 30, // 0 = sem prazo // descarta do microfone o que é a voz dos outros saindo da caixa de som (energia e texto)
   diarize: false, // identificar falantes pela voz (Pro): pyannote + WeSpeaker locais
+  voiceProfiles: false, // lembrar as vozes de quem participa sempre (dado biométrico: só neste computador, opt-in)
   afterCall: "off", // ao sair da chamada: "off" | "app" (abre a reunião no Escribanote) | "web" (app web da conta Pro)
   myName: "",
   // Gravador do computador (Slack e outros apps): últimas escolhas
