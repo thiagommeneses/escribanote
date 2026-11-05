@@ -115,12 +115,21 @@ export function nameKey(name) {
     .trim();
 }
 
+// "Manter separados": duas pessoas com o mesmo nome que a junção automática não pode juntar.
+export function keepApart(session, a, b) {
+  if (!a || !b || a === b) return;
+  session.apart ||= {};
+  (session.apart[a] ||= []).includes(b) || session.apart[a].push(b);
+  (session.apart[b] ||= []).includes(a) || session.apart[b].push(a);
+}
+const isApart = (session, a, b) => !!session.apart?.[a]?.includes(b);
+
 // Outro falante (não mesclado) com o mesmo nome que `speakerId`.
 function sameNameSpeaker(session, speakerId) {
   const key = nameKey(session.speakers[speakerId]);
   if (!key) return null;
   for (const [id, n] of Object.entries(session.speakers)) {
-    if (id !== speakerId && !session.merged?.[id] && nameKey(n) === key) return id;
+    if (id !== speakerId && !session.merged?.[id] && !isApart(session, id, speakerId) && nameKey(n) === key) return id;
   }
   return null;
 }
@@ -142,8 +151,10 @@ export function dedupeSpeakers(session, now = Date.now()) {
   for (const id of ids) {
     const key = nameKey(session.speakers[id]);
     if (!key) continue;
-    if (!first.has(key)) { first.set(key, id); continue; }
-    mergeSpeakers(session, id, first.get(key), now);
+    const to = first.get(key);
+    if (!to) { first.set(key, id); continue; }
+    if (isApart(session, id, to)) continue; // a pessoa disse "manter separados"
+    mergeSpeakers(session, id, to, now);
     n++;
   }
   return n;
@@ -347,6 +358,26 @@ function echoOf(session, seg, text) {
   }
   // chegou a fala dos outros: um trecho do microfone já guardado pode ser o eco dela
   return session.asr.find((a) => a.source === "mic" && near(a) && isTextEcho(a.text, [text])) || null;
+}
+
+// O agrupamento de vozes descobriu que duas vozes são a mesma pessoa: as falas, os votos aprendidos
+// pelas legendas e o nome dado à mão ("Falante 2" renomeado) passam para a voz que ficou.
+export function mergeVoices(session, merges, now = Date.now()) {
+  let n = 0;
+  for (const { from, to } of merges || []) {
+    if (!from || !to || from === to) continue;
+    for (const a of session.asr) if (a.voice === from) { a.voice = to; n++; }
+    const fv = session.voices[from];
+    if (fv) {
+      const tv = (session.voices[to] ||= {});
+      for (const [k, c] of Object.entries(fv)) tv[k] = (tv[k] || 0) + c;
+      delete session.voices[from];
+    }
+    if (session.speakers[from] && !session.speakers[to]) session.speakers[to] = session.speakers[from];
+    n += mergeSpeakers(session, from, to, now);
+  }
+  if (n) session.updatedAt = Math.max(session.updatedAt, now);
+  return n;
 }
 
 // Adiciona um segmento do Whisper. source "mic" é sempre a própria pessoa; "system" é o áudio

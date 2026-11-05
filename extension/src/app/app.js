@@ -714,7 +714,7 @@ async function renameSpeaker(id, anchor) {
       return;
     }
   }
-  state.session = normalize(await send({ type: "update", id: s.id, speakers: { [id]: name.slice(0, 120) } }));
+  state.session = normalize(await send({ type: "update", id: s.id, speakers: { [id]: name.slice(0, 120) }, ...(other ? { apart: [id, other] } : {}) }));
   renderMeeting();
   toast(`${current} agora é ${name}`);
 }

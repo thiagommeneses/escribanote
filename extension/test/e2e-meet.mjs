@@ -205,14 +205,17 @@ try {
   // Primeira execução: a janela de boas-vindas abre sozinha; escolhe a área interna para o backup automático
   assert.equal(await evaluate(app, "document.getElementById('welcome').open"), true, "janela de primeira execução aberta");
   await screenshot(app, "0-boas-vindas.png");
+  await evaluate(app, `document.querySelector('#welcome [name="w-usage"][value="institutional"]').click(); document.getElementById('w-next').click(); true`);
+  await sleep(100);
   await evaluate(app, `document.querySelector('#welcome [name="w-backup"][value="opfs"]').click(); document.getElementById('w-next').click(); true`);
   await sleep(100);
   await evaluate(app, `document.querySelector('#welcome [name="w-mode"][value="always"]').click(); document.getElementById('w-next').click(); true`);
   await sleep(100);
   await evaluate(app, `document.getElementById('w-next').click(); true`);
   await waitFor(async () => (await evaluate(app, `(async () => (await chrome.storage.local.get(["welcomeDone", "settings"])))()`)).settings.backupAuto === "opfs", "escolhas da primeira execução salvas");
+  assert.equal((await evaluate(app, `chrome.storage.local.get("settings")`)).settings.usage, "institutional", "uso escolhido no primeiro passo");
   assert.equal(await evaluate(app, "document.getElementById('welcome').open"), false);
-  step("primeira execução: janela de boas-vindas salva backup automático (área interna) e modo de gravação");
+  step("primeira execução: janela de boas-vindas salva uso (institucional), backup automático (área interna) e modo de gravação");
 
   // 2) Reunião com legendas e nomes
   const meet = await openMeet("abc-defg-hij", "Planejamento Q4");
@@ -456,7 +459,7 @@ try {
   assert.match(await pane("highlights"), /Importante[\s\S]*Retomando|Importante[\s\S]*documento/);
   await screenshot(app, "3-app-destaques.png");
   const stats = await pane("stats");
-  assert.match(stats, /Parcela de fala/);
+  assert.match(stats, /Quem falou e quanto/);
   assert.match(stats, /Ana Teste/);
   await screenshot(app, "4-app-analise.png");
   assert.match(await pane("ai"), /Pergunte à IA[\s\S]*Itens de ação/);
@@ -772,7 +775,12 @@ try {
   }
   await evaluate(app, `document.querySelector('[data-nav="settings"]').click()`);
   await sleep(600);
-  assert.match(await evaluate(app, "document.getElementById('view-settings').innerText"), /Tags de destaque[\s\S]*Inteligência artificial/);
+  // Básicas à vista, avançadas recolhidas
+  assert.match(await evaluate(app, "document.getElementById('view-settings').innerText"), /Transcrição[\s\S]*Inteligência artificial[\s\S]*Configurações avançadas/);
+  assert.equal(await evaluate(app, "document.getElementById('adv-settings').open"), false, "avançadas começam recolhidas");
+  await evaluate(app, "document.querySelector('#adv-settings > summary').click(); true");
+  await sleep(200);
+  assert.match(await evaluate(app, "document.getElementById('view-settings').innerText"), /Configurações avançadas[\s\S]*Uso[\s\S]*Tags de destaque[\s\S]*Backup/);
   assert.match(await evaluate(app, "document.getElementById('bk-auto-status').innerText"), /Ligado em Downloads/);
   await screenshot(app, "9-ajustes.png");
   step("layout de painel lateral e Ajustes");

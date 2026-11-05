@@ -209,6 +209,8 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
             }
           }
         }
+        // Vozes que se revelaram a mesma pessoa: a sessão remapeia as falas já gravadas.
+        if (state.speakers) sendVoiceMerges(state.speakers.book.takeMerges(), seg.source);
         for (const part of parts) {
           // Nivela a fala antes do modelo: trechos baixos e altos chegam com a mesma intensidade.
           const text = await state.engine.transcribe(levelSamples(part.samples, seg.speechRms));
@@ -314,10 +316,21 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
     state.segmenters = [];
   }
 
+  function sendVoiceMerges(merges, source) {
+    if (!merges || !merges.length) return;
+    emit("voices-merged", { merges });
+    onResult({ mergeVoices: merges, source, start: 0, end: 0, text: "" });
+  }
+  // Fim da captura: junta as vozes com pouquíssima fala à mais parecida.
+  function finalizeVoices() {
+    if (state.speakers) sendVoiceMerges(state.speakers.book.finalize(), "tab");
+  }
+
   // Para a captura e termina o que já estava na fila.
   async function stop() {
     await stopCapture();
     await pump();
+    finalizeVoices();
   }
 
   // Espera a fila esvaziar (usado ao parar o gravador, para não perder o fim da conversa).
@@ -326,6 +339,7 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
       if (!state.busy) pump();
       await new Promise((r) => setTimeout(r, 200));
     }
+    finalizeVoices();
   }
 
   function reset() {

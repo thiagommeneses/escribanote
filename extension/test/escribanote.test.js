@@ -462,6 +462,7 @@ test("Gravador do computador: áudio do sistema vira 'outros', microfone vira 'v
 });
 
 import { VoiceBook } from "../src/asr/speakers.js";
+import * as transcriptMod from "../src/lib/transcript.js";
 
 test("vozes: embeddings parecidos viram o mesmo falante; diferentes viram outro", () => {
   const book = new VoiceBook();
@@ -1014,4 +1015,61 @@ test("falantes: 'keep_…' não vira nome; o mesmo nome em ids diferentes vira u
   assert.equal(dedupeSpeakers(old), 2);
   assert.deepEqual([...new Set(old.entries.map((e) => e.speakerId))], ["a"]);
   assert.match(spkName2(old, "c"), /^Participante/);
+});
+
+// ---------------- 0.9.46: mesma pessoa não vira duas vozes ----------------
+import { mergeVoices } from "../src/lib/transcript.js";
+function voiceVec(seed, noise, rnd) {
+  // 64 dimensões: direção da pessoa (seed) + ruído do turno
+  const v = new Float32Array(64);
+  for (let i = 0; i < 64; i++) v[i] = Math.sin((i + 1) * seed) + (rnd() - 0.5) * noise;
+  return v;
+}
+function rng(s) { return () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648); }
+test("vozes: turno curto e ruidoso no começo não deixa a mesma pessoa com duas vozes", () => {
+  const rnd = rng(7);
+  const book = new VoiceBook();
+  // começo ruim: um turno curto muito ruidoso da pessoa A cria uma voz própria
+  const first = book.assign(voiceVec(1.3, 3.5, rnd), 800);
+  const ids = [];
+  for (let i = 0; i < 12; i++) ids.push(book.assign(voiceVec(1.3, 1.2, rnd), 4000));
+  for (let i = 0; i < 12; i++) ids.push(book.assign(voiceVec(2.9, 1.2, rnd), 4000));
+  assert.equal(book.size, 3, "antes do fim, A ficou com duas vozes (o turno ruidoso e as falas boas)");
+  const merges = book.finalize();
+  const a = book.resolve(first);
+  assert.equal(book.resolve(ids[0]), a, "o turno ruidoso foi absorvido pela voz de A");
+  assert.ok(ids.slice(0, 12).every((id) => book.resolve(id) === a));
+  assert.ok(ids.slice(12).every((id) => book.resolve(id) !== a), "B continua outra pessoa");
+  assert.equal(book.size, 2);
+  assert.deepEqual(merges, [{ from: first, to: a }]);
+});
+test("vozes: duas vozes que convergem viram uma só, e B continua separada", () => {
+  const rnd = rng(11);
+  const book = new VoiceBook({ same: 0.9 }); // limiar alto: força a criação de vozes duplicadas de A
+  for (let i = 0; i < 20; i++) book.assign(voiceVec(1.3, 1.2, rnd), 5000);
+  for (let i = 0; i < 10; i++) book.assign(voiceVec(2.9, 1.2, rnd), 5000);
+  const before = book.voices.length;
+  book.finalize();
+  assert.ok(book.size <= 2 && book.size < before + 1, `ficaram ${book.size} vozes (antes ${before})`);
+  assert.notEqual(book.resolve(book.assign(voiceVec(1.3, 0.3, rnd), 3000)), book.resolve(book.assign(voiceVec(2.9, 0.3, rnd), 3000)));
+});
+test("vozes: a junção remapeia falas, votos e o nome dado à mão", () => {
+  const s = session();
+  s.asr.push({ id: "asr/1/tab", start: 1, end: 2, text: "oi", source: "tab", speakerId: "voz:2", voice: "voz:2" });
+  s.asr.push({ id: "asr/3/tab", start: 3, end: 4, text: "tudo", source: "tab", speakerId: "voz:1", voice: "voz:1" });
+  s.voices = { "voz:2": { ana: 2 }, "voz:1": { ana: 1 } };
+  s.speakers["voz:2"] = "Ana Paula";
+  mergeVoices(s, [{ from: "voz:2", to: "voz:1" }]);
+  assert.deepEqual(s.asr.map((a) => [a.voice, a.speakerId]), [["voz:1", "voz:1"], ["voz:1", "voz:1"]]);
+  assert.deepEqual(s.voices, { "voz:1": { ana: 3 } });
+  assert.equal(s.speakers["voz:1"], "Ana Paula");
+});
+test("falantes: 'manter separados' impede a junção automática por nome", () => {
+  const { keepApart } = transcriptMod;
+  const s = session();
+  s.speakers = { a: "João Silva", b: "João Silva" };
+  keepApart(s, "a", "b");
+  assert.equal(dedupeSpeakers(s), 0);
+  applyEvent(s, { kind: "speaker", speakerId: "c", name: "João Silva" });
+  assert.equal(s.merged.c, "a", "um terceiro id com o mesmo nome ainda é juntado");
 });

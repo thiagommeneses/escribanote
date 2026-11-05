@@ -481,7 +481,7 @@
             });
             form.querySelector("[data-rn-keep]").addEventListener("click", async () => {
               renaming = null;
-              await send({ type: "update", id: session.id, speakers: { [speakerId]: name.slice(0, 120) } }).catch(() => {});
+              await send({ type: "update", id: session.id, speakers: { [speakerId]: name.slice(0, 120) }, apart: [speakerId, other.speakerId] }).catch(() => {});
               refresh();
               render();
             });
