@@ -68,7 +68,7 @@ export const DEFAULTS = {
   ataTemplate: "", // id do modelo de ata padrão ("" = formato do Escribanote)
   ataInstructions: "", // instruções extras padrão para todas as atas (a reunião pode ter as suas)
   autoReview: false,
-  hq: "off", // "off" | "base" | "small" | "turbo" — motor Whisper local
+  hq: "off", // "off" | "auto" | "base" | "small" | "turbo" — motor Whisper local ("auto" escolhe pelo computador e pela bateria)
   hqMic: false,
   echoFilter: true,
   audioKeep: false, // guardar o áudio (faixas separadas) no cofre da extensão quando houver captura de áudio

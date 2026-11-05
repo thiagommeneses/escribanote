@@ -2282,6 +2282,7 @@ $("model-select").innerHTML = MODELS.map((m) => `<option value="${m.id}">${esc(m
 const HAS_GPU = !!navigator.gpu;
 $("hq-select").innerHTML =
   `<option value="off">Desligado (usa só as legendas)</option>` +
+  `<option value="auto">Automático: escolhe pelo computador e economiza na bateria fraca</option>` +
   Object.entries(HQ_MODELS)
     .map(([k, m]) => {
       const cfg = (HAS_GPU && m.webgpu) || m.wasm;
