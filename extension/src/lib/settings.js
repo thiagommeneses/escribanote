@@ -87,12 +87,14 @@ export const DEFAULTS = {
   tags: DEFAULT_TAGS,
   cleanSpeech: false, // leitura limpa: tela e exportações sem "ahn", "hum" e repetições coladas (o texto guardado não muda)
   exportAta: false, // ligado: exportações da reunião levam a ata (modelo institucional, assinatura) e o rodapé; padrão = só a reunião
+  notifyAuto: false, // envia o aviso de transcrição no chat da reunião assim que a transcrição começa
   notifyMessage:
-    "Olá! Estou transcrevendo esta reunião com o Escribanote. A transcrição fica salva no meu computador.",
+    "Olá! Estou transcrevendo esta reunião com o Escribanote, direto no meu navegador (sem bot e sem gravar o vídeo). A transcrição fica salva no meu computador. Se preferir que não, me avise.",
 };
 
 // Textos padrão antigos: quem nunca editou a mensagem passa a ver o padrão atual.
 const OLD_NOTIFY = [
+  "Olá! Estou transcrevendo esta reunião com o Escribanote. A transcrição fica salva no meu computador.",
   "Olá! Estou transcrevendo esta reunião com o Escribanote para gerar a ata. A transcrição fica salva só no meu computador.",
 ];
 

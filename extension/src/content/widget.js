@@ -78,6 +78,10 @@
     button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
     .ib { width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; color: #bdc1c6; }
     .ib:hover { background: rgba(255,255,255,.08); color: #fff; }
+    .ib.due { color: #fbbc04; position: relative; }
+    .ib.due::after { content: ""; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #fbbc04; animation: due 1.6s ease-in-out infinite; }
+    @keyframes due { 50% { opacity: .25; } }
+    @media (prefers-reduced-motion: reduce) { .ib.due::after { animation: none; } }
     .ib.active { color: #8ab4f8; }
     .ib:disabled { opacity: .35; cursor: default; background: none; }
     .stopb { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px 0 9px; border-radius: 999px; border: 1px solid transparent;
@@ -264,6 +268,7 @@
       session = s && !s.error ? s : null;
       if (session && seq === pauseSeq) state.paused = session.paused;
       render();
+      consentCheck();
     }, 300);
   }
   bus.addEventListener("state", render);
@@ -691,10 +696,32 @@
     return !!sent;
   }
 
+  // Consentimento: o aviso aos participantes é lembrado (megafone pulsando) até ser enviado uma vez
+  // nesta reunião; com "avisar sozinho" ligado, vai para o chat assim que a transcrição começa.
+  const noticeKey = () => session && `escribanote:avisado:${session.id}`;
+  const noticed = () => { try { return !!sessionStorage.getItem(noticeKey()); } catch { return false; } };
+  const markNoticed = () => { try { sessionStorage.setItem(noticeKey(), "1"); } catch {} $("notify")?.classList.remove("due"); };
+  let autoNoticeTimer = null;
+  function consentCheck() {
+    const b = $("notify");
+    if (!b || !session) return;
+    const due = !noticed() && !state.paused && !state.ended;
+    b.classList.toggle("due", due);
+    b.title = due ? "Avise os participantes de que a reunião está sendo transcrita" : "Avisar os participantes";
+    if (!due || !state.settings.notifyAuto || autoNoticeTimer) return;
+    autoNoticeTimer = setTimeout(async () => {
+      autoNoticeTimer = null;
+      if (noticed() || state.paused || state.ended) return;
+      const text = state.settings.notifyMessage || "Olá! Estou transcrevendo esta reunião com o Escribanote.";
+      if (await sendToChat(text).catch(() => false)) { markNoticed(); toast("Aviso de transcrição enviado no chat"); }
+    }, 6000);
+  }
+
   $("notify").addEventListener("click", async () => {
     const text = state.settings.notifyMessage || "Olá! Estou transcrevendo esta reunião com o Escribanote.";
     const copied = await navigator.clipboard.writeText(text).then(() => true, () => false);
     const sent = await sendToChat(text).catch(() => false);
+    if (sent || copied) markNoticed();
     if (sent) toast("Aviso enviado no chat da reunião");
     else if (copied) toast("Aviso copiado. Cole no chat da reunião");
     else toast("Não foi possível enviar nem copiar o aviso");

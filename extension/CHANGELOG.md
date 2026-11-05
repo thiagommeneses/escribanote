@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.48 beta — 2026-11-05
+- Consentimento: o megafone do widget pisca até o aviso de transcrição ser enviado na reunião; nova opção (Ajustes › Transcrição) para enviar o aviso sozinho no chat assim que a transcrição começa.
+- Aviso padrão mais claro: transcrição no navegador, sem bot e sem gravar o vídeo, com convite para quem preferir que não.
+- Site: página de privacidade explica sem bot, aviso em um clique, aviso automático, pausa e base legal sugerida (LGPD).
+
 ## 0.9.47 beta — 2026-11-05
 - Ata e respostas da IA citam o horário de cada ponto (`[00:12:31]`); no app, o horário é um link que leva ao trecho da transcrição. Quando algo não foi dito, a IA responde "não consta na transcrição" em vez de supor. (Atas em modelo institucional não levam horários.)
 - A junção final das vozes (vozes com pouquíssima fala vão para a mais parecida) passa a valer também quando chega depois de a reunião encerrar.
