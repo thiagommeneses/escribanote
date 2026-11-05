@@ -1073,3 +1073,17 @@ test("falantes: 'manter separados' impede a junção automática por nome", () =
   applyEvent(s, { kind: "speaker", speakerId: "c", name: "João Silva" });
   assert.equal(s.merged.c, "a", "um terceiro id com o mesmo nome ainda é juntado");
 });
+test("localizar e substituir: palavra inteira, um passo de desfazer", () => {
+  const { replaceAll, countMatches, undoEdit } = transcriptMod;
+  const s = session();
+  applyEvent(s, { kind: "speaker", speakerId: "a", name: "Ana" });
+  applyEvent(s, { kind: "caption", id: "1/a", speakerId: "a", text: "o quiu quatro e o banana" }, 1_001_000);
+  applyEvent(s, { kind: "caption", id: "2/b", speakerId: "b", text: "fechamos o Quiu Quatro" }, 1_060_000);
+  assert.equal(countMatches(s, "quiu quatro"), 2);
+  assert.equal(countMatches(s, "nana", { wholeWord: true }), 0);
+  assert.equal(replaceAll(s, "quiu quatro", "Q4"), 2);
+  assert.deepEqual(toBlocks(s).map((b) => b.text), ["o Q4 e o banana", "fechamos o Q4"]);
+  assert.equal(s.undo.length, 1);
+  undoEdit(s);
+  assert.equal(toBlocks(s)[0].text, "o quiu quatro e o banana");
+});

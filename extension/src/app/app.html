@@ -106,7 +106,15 @@
             <div class="t-tools">
               <div class="search"><i data-ic="buscar"></i>
                 <input id="t-search" type="search" placeholder="Buscar nesta reunião…" aria-label="Buscar na transcrição"></div>
+              <button class="btn sm" id="t-replace-btn" aria-expanded="false" title="Trocar uma palavra ou nome errado em toda a transcrição">Substituir</button>
               <button class="btn sm t-clean" id="t-clean" aria-pressed="false" title="Esconde “ahn”, “hum”, “éé” e palavras repetidas em sequência. O texto guardado não muda, e as exportações seguem esta escolha.">Leitura limpa</button>
+            </div>
+            <div class="t-replace" id="t-replace" hidden>
+              <input id="t-repl" placeholder="Substituir por…" aria-label="Substituir por" maxlength="200">
+              <label class="tiny"><input type="checkbox" id="t-whole" checked> palavra inteira</label>
+              <label class="tiny"><input type="checkbox" id="t-case"> maiúsculas</label>
+              <button class="btn sm primary" id="t-repl-go" disabled>Substituir tudo</button>
+              <span class="muted tiny" id="t-repl-info">Digite na busca o que trocar.</span>
             </div>
             <div class="speakers" id="speakers"></div>
             <ol class="timeline" id="timeline"></ol>

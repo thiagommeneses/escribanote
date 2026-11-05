@@ -629,3 +629,8 @@ body.usage-personal .inst { display: none !important; }
 .cites { display: inline-flex; gap: 3px; flex-wrap: wrap; vertical-align: 1px; margin-left: 2px; }
 .cite { font: 600 10.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 0 5px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg-soft); color: var(--accent); cursor: pointer; }
 .cite:hover, .cite:focus-visible { border-color: var(--accent); outline: none; }
+
+/* Localizar e substituir */
+.t-replace { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-soft); }
+.t-replace #t-repl { flex: 1 1 180px; min-width: 0; font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); }
+.t-replace label { display: inline-flex; gap: 4px; align-items: center; color: var(--text-2); }

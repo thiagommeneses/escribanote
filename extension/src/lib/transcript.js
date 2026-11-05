@@ -602,6 +602,45 @@ export function editBlock(session, ids, patch, label) {
   session.updatedAt = Math.max(session.updatedAt, at);
   return true;
 }
+// Localizar e substituir em toda a transcrição (falas da plataforma e do Whisper; o chat fica como está).
+// Um passo só na pilha de desfazer. wholeWord: não troca dentro de outras palavras ("Ana" não mexe em "banana").
+export function findRegex(find, { wholeWord = true, caseSensitive = false } = {}) {
+  const f = String(find || "").trim();
+  if (!f) return null;
+  const esc = f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(wholeWord ? `(?<![\\p{L}\\p{N}])${esc}(?![\\p{L}\\p{N}])` : esc, caseSensitive ? "gu" : "giu");
+}
+export function countMatches(session, find, opts) {
+  const rx = findRegex(find, opts);
+  if (!rx) return 0;
+  return toBlocks(session).filter((b) => b.kind !== "chat").reduce((n, b) => n + (b.text.match(rx) || []).length, 0);
+}
+export function replaceAll(session, find, repl, opts = {}) {
+  const rx = findRegex(find, opts);
+  if (!rx) return 0;
+  session.edits ||= {};
+  session.undo ||= [];
+  const prev = {};
+  const at = Date.now();
+  let n = 0;
+  for (const b of toBlocks(session)) {
+    if (b.kind === "chat") continue;
+    const hits = (b.text.match(rx) || []).length;
+    if (!hits) continue;
+    const text = b.text.replace(rx, String(repl ?? "")).replace(/[ \t]{2,}/g, " ").trim();
+    if (!text || text === b.text) continue;
+    for (const id of b.ids) if (!(id in prev)) prev[id] = session.edits[id] ? structuredClone(session.edits[id]) : null;
+    session.edits[b.ids[0]] = { ...(session.edits[b.ids[0]] || {}), text, at };
+    for (const id of b.ids.slice(1)) session.edits[id] = { ...(session.edits[id] || {}), deleted: true, at };
+    n += hits;
+  }
+  if (!n) return 0;
+  session.undo.push({ at, label: `substituir “${String(find).trim()}”`, prev });
+  if (session.undo.length > 50) session.undo.shift();
+  session.updatedAt = Math.max(session.updatedAt, at);
+  return n;
+}
+
 // Divide um bloco em dois: o texto antes do ponto fica na primeira fala do bloco (as outras somem) e o resto
 // vira uma fala derivada "<id>~n", do falante escolhido, com o horário estimado pela proporção do texto
 // (at). Um passo só na pilha de desfazer; destaques e notas continuam onde estavam.
