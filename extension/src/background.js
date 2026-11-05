@@ -1,7 +1,7 @@
 // Service worker: mantém as sessões de reunião e as salva localmente
 // (chrome.storage.local). Só fala com a rede quando o usuário usa a IA.
 import { commitSummary } from "./lib/diff.js";
-import { mergeSpeakers, dedupeSpeakers, mergeVoices, keepApart,
+import { mergeSpeakers, dedupeSpeakers, mergeVoices, keepApart, replaceAll,
   createSession, applyEvent, normalize, setBlockTags, toggleLastBlockTag, participantNames, editBlock, undoEdit, splitBlock,
   addAsrSegment, effectiveEntries, toBlocks, speakerName,
 } from "./lib/transcript.js";
@@ -1070,6 +1070,16 @@ async function handle(msg, sender) {
       noteEvent(s, "edit", { kind: Object.keys(patch)[0], n: ids.length });
       await changed(s, { now: true });
       return s;
+    }
+    case "replace-all": {
+      // localizar e substituir: {find, repl, wholeWord, caseSensitive}; um passo de desfazer
+      if (!s) return null;
+      const n = replaceAll(s, String(msg.find || "").slice(0, 200), String(msg.repl ?? "").slice(0, 200), { wholeWord: msg.wholeWord !== false, caseSensitive: !!msg.caseSensitive });
+      if (n) {
+        noteEvent(s, "replace-all", { n });
+        await changed(s, { now: true });
+      }
+      return { ...s, replaced: n };
     }
     case "split-block": {
       // dividir uma fala em duas: {ids, before, after, speakerId}; o horário da segunda parte sai da proporção do texto

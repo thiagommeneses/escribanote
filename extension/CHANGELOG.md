@@ -2,6 +2,10 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.49 beta — 2026-11-05
+- Localizar e substituir: botão "Substituir" ao lado da busca troca uma palavra ou nome em toda a transcrição (palavra inteira e maiúsculas opcionais), com a contagem de ocorrências e um único Ctrl+Z para desfazer.
+- O horário citado pela IA limpa a busca antes de levar ao trecho (um filtro ativo escondia a fala).
+
 ## 0.9.48 beta — 2026-11-05
 - Consentimento: o megafone do widget pisca até o aviso de transcrição ser enviado na reunião; nova opção (Ajustes › Transcrição) para enviar o aviso sozinho no chat assim que a transcrição começa.
 - Aviso padrão mais claro: transcrição no navegador, sem bot e sem gravar o vídeo, com convite para quem preferir que não.

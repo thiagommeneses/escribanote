@@ -1,4 +1,4 @@
-import { toBlocks, speakerName, timeline, participantNames, normalize, effectiveEntries } from "../lib/transcript.js";
+import { toBlocks, speakerName, timeline, participantNames, normalize, effectiveEntries, countMatches } from "../lib/transcript.js";
 import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName, ataEditorHtml } from "../lib/format.js";
 import { computeStats, findMe, fmtDuration } from "../lib/stats.js";
 import { API_ORIGIN } from "../lib/ai.js";
@@ -633,6 +633,7 @@ document.addEventListener("click", (e) => {
   if (!c || !state.session) return;
   e.preventDefault();
   const at = state.session.startedAt + citeMs(c.dataset.cite);
+  if (state.query) { $("t-search").value = ""; state.query = ""; } // um filtro de busca esconderia o trecho
   state.tab = "transcript";
   state.follow = false;
   renderMeeting();
@@ -643,6 +644,38 @@ document.addEventListener("click", (e) => {
   el.scrollIntoView({ block: "center", behavior: "smooth" });
   el.classList.add("flash");
   setTimeout(() => el.classList.remove("flash"), 1600);
+});
+
+// ----- Localizar e substituir (usa o texto da busca como "o que trocar") -----
+function replaceOpts() {
+  return { wholeWord: $("t-whole").checked, caseSensitive: $("t-case").checked };
+}
+function updateReplaceInfo() {
+  if ($("t-replace").hidden || !state.session) return;
+  const find = $("t-search").value.trim();
+  const n = find ? countMatches(state.session, find, replaceOpts()) : 0;
+  $("t-repl-go").disabled = !n || clean();
+  $("t-repl-go").textContent = n ? `Substituir ${n === 1 ? "1 ocorrência" : `${n} ocorrências`}` : "Substituir tudo";
+  $("t-repl-info").textContent = clean() ? "Desligue a leitura limpa para substituir." : !find ? "Digite na busca o que trocar." : n ? "Dá para desfazer com Ctrl+Z." : "Nada encontrado.";
+}
+$("t-replace-btn").addEventListener("click", () => {
+  const open = $("t-replace").hidden;
+  $("t-replace").hidden = !open;
+  $("t-replace-btn").setAttribute("aria-expanded", String(open));
+  if (open) { updateReplaceInfo(); ($("t-search").value ? $("t-repl") : $("t-search")).focus(); }
+});
+for (const id of ["t-search", "t-whole", "t-case"]) $(id).addEventListener("input", updateReplaceInfo);
+$("t-repl").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("t-repl-go").click(); } });
+$("t-repl-go").addEventListener("click", async () => {
+  const find = $("t-search").value.trim();
+  if (!find || !state.session || clean()) return;
+  const repl = $("t-repl").value;
+  const r = await send({ type: "replace-all", id: state.session.id, find, repl, ...replaceOpts() });
+  state.session = normalize(r);
+  toast(r.replaced ? `${r.replaced} ocorrência${r.replaced === 1 ? "" : "s"} de “${find}” trocada${r.replaced === 1 ? "" : "s"} por “${repl}” · Ctrl+Z desfaz` : "Nada encontrado");
+  if (r.replaced) { $("t-search").value = repl.trim(); $("t-search").dispatchEvent(new Event("input")); }
+  renderMeeting();
+  updateReplaceInfo();
 });
 
 // ----- Capítulos -----
