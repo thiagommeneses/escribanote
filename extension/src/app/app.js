@@ -616,6 +616,35 @@ document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.target.closest("input, textarea, [contenteditable]") && state.view === "meeting" && state.tab === "transcript") { e.preventDefault(); undoLast(); }
 });
 
+// ----- Citações da IA: [00:12:31] na ata e no chat vira link para o trecho da transcrição -----
+const CITE_RX = /\[(\d{1,2}:\d{2}:\d{2})((?:\s*[,;–-]\s*\d{1,2}:\d{2}:\d{2})*)\]/g;
+function withCites(html) {
+  return html.replace(CITE_RX, (_, first, rest) => {
+    const all = [first, ...(rest.match(/\d{1,2}:\d{2}:\d{2}/g) || [])];
+    return `<span class="cites">${all.map((t) => `<button type="button" class="cite" data-cite="${t}" title="Ir para este trecho da transcrição">${t}</button>`).join("")}</span>`;
+  });
+}
+function citeMs(t) {
+  const [h, m, sec] = t.split(":").map(Number);
+  return ((h * 60 + m) * 60 + sec) * 1000;
+}
+document.addEventListener("click", (e) => {
+  const c = e.target.closest("[data-cite]");
+  if (!c || !state.session) return;
+  e.preventDefault();
+  const at = state.session.startedAt + citeMs(c.dataset.cite);
+  state.tab = "transcript";
+  state.follow = false;
+  renderMeeting();
+  // o bloco que estava falando nesse instante (o último que começou até ali, com 2 s de folga)
+  const blks = [...document.querySelectorAll(".blk")];
+  const el = blks.filter((x) => Number(x.dataset.start) <= at + 2000).pop() || blks[0];
+  if (!el) return;
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.classList.add("flash");
+  setTimeout(() => el.classList.remove("flash"), 1600);
+});
+
 // ----- Capítulos -----
 function renderChapters(s) {
   const el = $("chapters");
@@ -1099,8 +1128,8 @@ async function renderAta() {
 
   const editing = !$("ata-editor").hidden;
   if (state.busy !== "ata" && !editing) {
-    if (viewing) $("ata-body").innerHTML = mdToHtml(viewing.text);
-    else if (s.summary) $("ata-body").innerHTML = mdToHtml(s.summary.text);
+    if (viewing) $("ata-body").innerHTML = withCites(mdToHtml(viewing.text));
+    else if (s.summary) $("ata-body").innerHTML = withCites(mdToHtml(s.summary.text));
     if (viewing || s.summary) decorateAta();
     else $("ata-body").innerHTML = s.entries.length
       ? `<div class="ata-empty"><div class="ico">${icon("nota")}</div><b>Nenhuma ata ainda</b><p>Gere uma ata com resumo, decisões, itens de ação e pendências. Escolha um modelo acima se a sua equipe tem um formato próprio.</p></div>`
@@ -1253,7 +1282,7 @@ function renderChatLog(streamText) {
     msgs.push({ role: "assistant", text: streamText || "Pensando…" });
   }
   $("chat-log").innerHTML = msgs.length
-    ? msgs.map((m) => `<div class="msg ${m.role}">${m.role === "assistant" ? `<div class="md">${mdToHtml(m.text)}</div>` : esc(m.text)}</div>`).join("")
+    ? msgs.map((m) => `<div class="msg ${m.role}">${m.role === "assistant" ? `<div class="md">${withCites(mdToHtml(m.text))}</div>` : esc(m.text)}</div>`).join("")
     : `<p class="muted tiny">Faça perguntas durante ou depois da reunião. As conversas ficam salvas junto com a transcrição.</p>`;
   $("chat-log").scrollTop = $("chat-log").scrollHeight;
 }
@@ -1296,7 +1325,7 @@ $("ata-gen").addEventListener("click", async () => {
   $("ata-body").innerHTML = '<p class="muted">Gerando a ata…</p>';
   runAI(
     { action: "ata", id: state.session.id },
-    (t) => ($("ata-body").innerHTML = mdToHtml(t)),
+    (t) => ($("ata-body").innerHTML = withCites(mdToHtml(t))),
     async (m) => {
       state.busy = null;
       if (m.type === "error") {
