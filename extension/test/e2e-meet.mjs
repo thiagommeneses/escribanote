@@ -309,14 +309,16 @@ try {
     return true;
   })()`);
   await send("Browser.grantPermissions", { permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"], origin: "https://meet.google.com" });
+  assert.equal(await widgetCall(meet, "#notify", "function(){ return this.classList.contains('due') }"), true, "megafone pisca enquanto o aviso não foi enviado");
   await click(meet, "#notify");
   await waitFor(async () => (await evaluate(meet, "__chat.length")) === 1, "aviso enviado no chat");
   const aviso = await evaluate(meet, "__chat[0]");
-  assert.match(aviso, /^Olá! Estou transcrevendo esta reunião com o Escribanote\. A transcrição fica salva no meu computador\.$/);
+  assert.match(aviso, /^Olá! Estou transcrevendo esta reunião com o Escribanote, direto no meu navegador \(sem bot e sem gravar o vídeo\)\. A transcrição fica salva no meu computador\. Se preferir que não, me avise\.$/);
   assert.doesNotMatch(aviso, /\bata\b/i);
   await waitFor(() => evaluate(meet, "document.querySelector('aside').hidden"), "painel do chat fechado de novo");
   assert.match(await widgetCall(meet, "#toast"), /enviado no chat/);
-  step("botão de aviso envia a mensagem no chat do Meet (e copia)");
+  await waitFor(async () => !(await widgetCall(meet, "#notify", "function(){ return this.classList.contains('due') }")), "megafone para de piscar depois do aviso");
+  step("botão de aviso envia a mensagem no chat do Meet (e copia); o lembrete de consentimento some");
   await widgetCall(meet, "#note-input", "function(v){ this.value = v; return true }", "Confirmar verba com o financeiro");
   await click(meet, "#note-send");
   await waitFor(async () => (await sw({ type: "get", id })).notes.items.length === 1, "nota salva");

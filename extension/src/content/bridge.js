@@ -25,7 +25,7 @@
     captionsOn: null, // true/false quando dá para saber pelo botão de legendas
     captionsStuck: false, // na chamada há um tempo e as legendas não ligaram (nem sozinhas, nem à mão)
     protocol: { connections: 0, connectionsSeen: false, lastConnectionAt: 0 }, // conexões WebRTC vistas pelo coletor (Meet)
-    settings: { mode: "always", widget: true, hideCaptions: true, autoCaptions: true, domFallback: true, notifyMessage: "" },
+    settings: { mode: "always", widget: true, hideCaptions: true, autoCaptions: true, domFallback: true, notifyMessage: "", notifyAuto: false },
   };
   bus.state = state;
   // Extensão atualizada ou recarregada com a aba aberta: este script fica órfão e qualquer chamada a
