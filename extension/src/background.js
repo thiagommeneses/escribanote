@@ -460,6 +460,7 @@ async function endSession(tabId, reason = "unknown") {
     if (settings.autoReview) await reviewPending(s).catch(() => {});
     await Promise.allSettled([maybeAutoAta(s), maybeAutoChapters(s)]);
     await maybeAutoQuestions(s).catch(() => {});
+    await sendWebhook(s).catch((err) => console.warn("webhook:", err));
   } finally {
     afterCallWork.delete(s.id);
     checkUpdate().catch(() => {});
@@ -545,6 +546,43 @@ async function maybeAutoChapters(s) {
   const settings = await getSettings();
   if (!settings.chaptersAuto || (s.chapters && s.chapters.length)) return;
   await generateChapters(s).catch(() => {});
+}
+
+// Webhook pós-reunião (opcional): quando a reunião termina (depois da ata e das perguntas automáticas),
+// envia um JSON para o endereço do usuário (Zapier, Make, n8n, um servidor próprio…). Só com a
+// permissão de acesso àquele site concedida em Ajustes. O áudio e as capturas não vão.
+function webhookPayload(s, settings) {
+  const blocks = toBlocks(s, { clean: settings.cleanSpeech === true });
+  return {
+    event: "meeting.ended",
+    app: "escribanote",
+    version: chrome.runtime.getManifest().version,
+    meeting: {
+      id: s.id, title: s.title, platform: s.platform, url: s.url || null,
+      startedAt: new Date(s.startedAt).toISOString(), endedAt: s.endedAt ? new Date(s.endedAt).toISOString() : null,
+      durationMs: (s.endedAt || s.updatedAt) - s.startedAt,
+      participants: participantNames(s),
+    },
+    ata: s.summary?.text || null,
+    chapters: (s.chapters || []).map((c) => ({ title: c.title, at: c.startAt - s.startedAt })),
+    questions: s.chats.filter((c) => c.auto).map((c) => ({ question: c.messages[0]?.text, answer: c.messages[1]?.text || null })),
+    transcript: blocks.map((b) => ({ at: b.startAt - s.startedAt, speaker: b.speaker, text: b.text })),
+    markdown: toMarkdown(s, { tags: settings.tags, clean: settings.cleanSpeech === true }),
+  };
+}
+async function sendWebhook(s, { test = false } = {}) {
+  const settings = await getSettings();
+  const url = (settings.webhookUrl || "").trim();
+  if (!url || (!test && !settings.webhookOn)) return { skipped: true };
+  if (!test && s.entries.length + s.asr.length < 3) return { skipped: true };
+  const origin = new URL(url).origin + "/*";
+  if (!(await chrome.permissions.contains({ origins: [origin] }))) throw new Error("Sem permissão para enviar a " + new URL(url).host + ". Salve o endereço de novo em Ajustes.");
+  const fresh = (await getSession(s.id)) || s;
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(webhookPayload(fresh, settings)) });
+  noteEvent(fresh, "webhook", { status: res.status, test });
+  await changed(fresh);
+  if (!res.ok) throw new Error(`O endereço respondeu ${res.status}.`);
+  return { ok: true, status: res.status };
 }
 
 // Modelos de perguntas marcados como automáticos: cada um vira uma conversa salva na reunião
@@ -1248,6 +1286,12 @@ async function handle(msg, sender) {
       // diagnóstico: turnos e vozes das amostras enviadas (identificação de falantes)
       await ensureOffscreen();
       return toOffscreen({ type: "analyze-speakers", clips: msg.clips });
+    }
+    case "webhook-test": {
+      // envia a reunião aberta (ou a mais recente) para o webhook configurado, mesmo com o envio automático desligado
+      const target = s || (await getSession((await loadIndex())[0]?.id));
+      if (!target) throw new Error("Nenhuma reunião para enviar.");
+      return sendWebhook(target, { test: true });
     }
     case "hq-test": {
       // diagnóstico: transcreve amostras enviadas pela página de ajustes/testes

@@ -2,6 +2,9 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.53 beta — 2026-11-05
+- Webhook pós-reunião (Ajustes › Avançadas › Integrações): ao terminar, a reunião vai em JSON (título, plataforma, horários, participantes, ata, perguntas automáticas, capítulos, transcrição e Markdown) para o endereço escolhido — Zapier, Make, n8n ou servidor próprio levam ao Notion, Google Docs, CRM… Botão "Enviar teste". A permissão é pedida só para aquele site; áudio e capturas não vão.
+
 ## 0.9.52 beta — 2026-11-05
 - Perguntas sobre várias reuniões: na aba IA, "Perguntar sobre" escolhe entre só esta reunião, esta + as anteriores com os mesmos participantes, ou esta + as 5 últimas. A IA diz de qual reunião (título e data) vem cada informação. Funciona com a chave própria e com o Pro.
 

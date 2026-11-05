@@ -2364,6 +2364,7 @@ async function renderSettings() {
   form.elements.voiceProfiles.disabled = !pro;
   $("vp-row").classList.toggle("muted", !pro);
   renderVoiceProfiles();
+  if (document.activeElement !== $("wh-url")) $("wh-url").value = s.webhookUrl || "";
   $("after-call-web").disabled = !pro;
   if (!pro) $("after-call-web").textContent += " (Pro)";
 
@@ -2383,6 +2384,31 @@ async function renderSettings() {
   $("usage").textContent = `${index.length} reuniões · ${(bytes / 1024 / 1024).toFixed(2)} MB usados neste computador.`;
   renderAudioUsage();
 }
+// Webhook: salvar pede a permissão de acesso só àquele site (gesto do usuário).
+$("wh-save").addEventListener("click", async () => {
+  const raw = $("wh-url").value.trim();
+  if (!raw) {
+    state.settings = await setSettings({ webhookUrl: "", webhookOn: false });
+    $("wh-status").textContent = "Webhook removido.";
+    return renderSettings();
+  }
+  let u;
+  try { u = new URL(raw); } catch { return ($("wh-status").textContent = "Endereço inválido."); }
+  if (u.protocol !== "https:" && u.hostname !== "localhost") return ($("wh-status").textContent = "Use um endereço https://.");
+  if (!(await chrome.permissions.request({ origins: [u.origin + "/*"] }))) return ($("wh-status").textContent = "Permissão negada.");
+  state.settings = await setSettings({ webhookUrl: u.href });
+  $("wh-status").textContent = `Salvo. As reuniões vão para ${u.host}${state.settings.webhookOn ? " ao terminar" : " quando você ligar o envio automático ou pedir um teste"}.`;
+});
+$("wh-test").addEventListener("click", async () => {
+  $("wh-status").textContent = "Enviando…";
+  try {
+    const r = await send({ type: "webhook-test", id: state.session?.id });
+    $("wh-status").textContent = r?.ok ? `Teste enviado (resposta ${r.status}).` : r?.error || "Configure e salve o endereço primeiro.";
+  } catch (err) {
+    $("wh-status").textContent = "Falhou: " + (err.message || err);
+  }
+});
+
 // Perfis de voz salvos neste computador: lista com apagar por pessoa e apagar todos.
 async function renderVoiceProfiles() {
   const { voiceProfiles: list = [] } = await chrome.storage.local.get("voiceProfiles");
