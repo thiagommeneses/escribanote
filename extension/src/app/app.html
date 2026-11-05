@@ -310,6 +310,15 @@
           </div>
 
           <div class="card">
+            <h3>Integrações (webhook)</h3>
+            <p class="muted tiny">Quando a reunião termina, o Escribanote envia um JSON com título, participantes, ata, perguntas automáticas, capítulos e transcrição para o endereço abaixo: use com Zapier, Make, n8n ou um servidor seu para levar a reunião ao Notion, ao Google Docs, ao CRM… O áudio e as capturas não vão.</p>
+            <label class="field"><span>Endereço (https://…)</span>
+              <div class="row"><input id="wh-url" type="url" placeholder="https://hooks.zapier.com/hooks/catch/…" class="grow" autocomplete="off"><button type="button" class="btn sm primary" id="wh-save">Salvar</button><button type="button" class="btn sm" id="wh-test">Enviar teste</button></div></label>
+            <label class="switch"><input type="checkbox" name="webhookOn"><span></span>Enviar sozinho quando cada reunião terminar</label>
+            <span class="muted tiny" id="wh-status"></span>
+          </div>
+
+          <div class="card">
             <h3>Legendas da plataforma</h3>
             <label class="switch"><input type="checkbox" name="autoCaptions"><span></span>Ligar as legendas do Meet automaticamente</label>
             <label class="switch"><input type="checkbox" name="domFallback"><span></span>Ler as legendas da tela como plano B (Meet)</label>
