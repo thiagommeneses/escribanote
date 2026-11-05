@@ -838,6 +838,13 @@ async function onAsrResult(msg) {
     // retranscrição ou arquivo importado: a reunião já terminou, não há aba
     s = await getSession(msg.sessionId);
     if (!s) return;
+  } else if (msg.seg && Array.isArray(msg.seg.mergeVoices)) {
+    // A junção final das vozes chega quando o Whisper termina a fila, às vezes depois de a sessão fechar:
+    // vale também para a reunião que acabou de encerrar nesta aba.
+    const active = await activeFor(msg.tabId);
+    const endedId = [...endedTab].filter(([, t]) => t === msg.tabId).map(([id]) => id).pop();
+    s = await getSession(active ? active.id : endedId);
+    if (!s) return;
   } else {
     const active = await activeFor(msg.tabId);
     if (!active) return;
