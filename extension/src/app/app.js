@@ -1,8 +1,8 @@
 import { toBlocks, speakerName, timeline, participantNames, normalize, effectiveEntries } from "../lib/transcript.js";
 import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName, ataEditorHtml } from "../lib/format.js";
 import { computeStats, findMe, fmtDuration } from "../lib/stats.js";
-import { QUICK_PROMPTS, API_ORIGIN } from "../lib/ai.js";
-import { getSettings, setSettings, DEFAULT_TAGS, MODELS, DEFAULTS, HQ_MODELS } from "../lib/settings.js";
+import { API_ORIGIN } from "../lib/ai.js";
+import { getSettings, setSettings, DEFAULT_TAGS, DEFAULT_QUESTIONS, MODELS, DEFAULTS, HQ_MODELS } from "../lib/settings.js";
 import { LANG_NAMES } from "../lib/lang.js";
 import { diffDocument, diffStats, diffHtml as versionDiffHtml } from "../lib/diff.js";
 import { getBackupDir, setBackupDir, backupPermission, resolveBackupFolder, readBackupFolder } from "../lib/backup.js";
@@ -416,7 +416,7 @@ function buildExportMenu() {
   ];
   $("export-menu").innerHTML =
     // Uso institucional (MPGO), desligado por padrão: ligado, a ata no modelo da equipe vai junto.
-    `<label class="menu-opt"><input type="checkbox" id="exp-ata"${state.settings.exportAta === true ? " checked" : ""}>Incluir a ata e os textos institucionais</label>` +
+    `<label class="menu-opt inst"><input type="checkbox" id="exp-ata"${state.settings.exportAta === true ? " checked" : ""}>Incluir a ata e os textos institucionais</label>` +
     `<label class="menu-opt"><input type="checkbox" id="exp-clean"${clean() ? " checked" : ""}>Leitura limpa (sem “ahn”, “hum” e repetições)</label><hr>` +
     items
       .map((it) => (it ? `<button data-exp="${it[0]}"><span>${icon(it[1])}</span>${esc(it[2])}${it[3] ? `<small>${esc(it[3])}</small>` : ""}</button>` : "<hr>"))
@@ -450,7 +450,7 @@ $("export-menu").addEventListener("click", async (e) => {
   if (!b || !state.session) return;
   const s = state.session;
   const kind = b.dataset.exp;
-  const ata = state.settings.exportAta === true;
+  const ata = state.settings.exportAta === true && institutional();
   const opts = { tags: tags(), ata, clean: clean() };
   try {
     if (kind === "rich") {
@@ -1147,7 +1147,7 @@ async function renderAI() {
   const sel = $("chat-select");
   sel.innerHTML =
     `<option value="">Nova conversa</option>` +
-    s.chats.map((c, i) => `<option value="${esc(c.id)}">${esc((c.messages[0]?.text || `Conversa ${i + 1}`).slice(0, 40))}</option>`).join("");
+    s.chats.map((c, i) => `<option value="${esc(c.id)}">${c.auto ? "[auto] " : ""}${esc((questions().find((q) => q.id === c.tplId)?.label || c.messages[0]?.text || `Conversa ${i + 1}`).slice(0, 40))}</option>`).join("");
   if (state.chatId && !s.chats.some((c) => c.id === state.chatId)) state.chatId = null;
   sel.value = state.chatId || "";
   if (state.busy !== "chat") renderChatLog();
@@ -1155,10 +1155,85 @@ async function renderAI() {
   // Sugestões
   if (!state.index.length) state.index = await send({ type: "list" });
   const prev = previousWithSame(s)[0];
-  const quick = QUICK_PROMPTS.map((p) => `<button class="chip" data-q="${esc(p.text)}">${esc(p.label)}</button>`);
+  const quick = questions().map((p) => `<button class="chip" data-q="${esc(p.text)}" title="${esc(p.text)}">${esc(p.label)}${p.auto ? '<span class="pill-auto" title="Feita sozinha quando a reunião termina">auto</span>' : ""}</button>`);
   if (prev) quick.push(`<button class="chip" data-prev="${esc(prev.id)}">${icon("anterior")}Reunião anterior com estes participantes</button>`);
   $("quick").innerHTML = quick.join("");
+  renderQuestionList();
 }
+
+// ----- Modelos de perguntas (Ajustes "questions", valem para todas as reuniões) -----
+function questions() {
+  return Array.isArray(state.settings.questions) ? state.settings.questions : DEFAULT_QUESTIONS;
+}
+async function saveQuestions(list) {
+  state.settings = await setSettings({ questions: list });
+  renderAI();
+}
+function renderQuestionList() {
+  const list = questions();
+  const autos = list.filter((q) => q.auto).length;
+  $("q-count").textContent = `${list.length} modelo${list.length === 1 ? "" : "s"}${autos ? ` · ${autos} automático${autos === 1 ? "" : "s"}` : ""}`;
+  if ($("q-list").contains(document.activeElement)) return; // não apaga o que está sendo digitado
+  $("q-list").innerHTML = list.length
+    ? list
+        .map(
+          (q, i) => `<div class="q-row" data-i="${i}">
+      <div class="q-fields"><input data-k="label" value="${esc(q.label)}" maxlength="60" aria-label="Nome do modelo" placeholder="Nome curto">
+        <textarea data-k="text" rows="2" maxlength="2000" aria-label="Pergunta" placeholder="A pergunta que a IA deve responder">${esc(q.text)}</textarea></div>
+      <div class="q-side"><label class="switch sm" title="Fazer esta pergunta sozinha quando a reunião terminar"><input type="checkbox" data-k="auto"${q.auto ? " checked" : ""}><span></span>Automática</label>
+        <span class="q-acts"><button type="button" class="q-ic" data-q-run="${i}" data-tip="Perguntar agora" aria-label="Perguntar agora nesta reunião">${icon("enviar")}</button>
+        <button type="button" class="q-ic danger" data-q-rm="${i}" data-tip="Apagar modelo" aria-label="Apagar o modelo">${icon("apagar")}</button></span></div>
+    </div>`,
+        )
+        .join("")
+    : '<p class="muted tiny">Nenhum modelo. Escreva uma pergunta e clique em “Salvar modelo”.</p>';
+}
+$("q-list").addEventListener("change", (e) => {
+  const row = e.target.closest(".q-row");
+  if (!row) return;
+  const list = questions().map((q) => ({ ...q }));
+  const q = list[+row.dataset.i];
+  const k = e.target.dataset.k;
+  if (!q || !k) return;
+  if (k === "auto") q.auto = e.target.checked;
+  else {
+    const v = e.target.value.trim();
+    if (!v) return renderQuestionList();
+    q[k] = v;
+  }
+  saveQuestions(list).then(() => toast(k === "auto" ? (q.auto ? "Pergunta automática ligada" : "Pergunta automática desligada") : "Modelo salvo"));
+});
+$("q-list").addEventListener("click", (e) => {
+  const rm = e.target.closest("[data-q-rm]");
+  if (rm) {
+    const list = questions().filter((_, i) => i !== +rm.dataset.qRm);
+    return saveQuestions(list).then(() => toast("Modelo apagado"));
+  }
+  const run = e.target.closest("[data-q-run]");
+  if (run) ask(questions()[+run.dataset.qRun]?.text);
+});
+$("q-add").addEventListener("click", () => {
+  saveQuestions([...questions(), { id: Date.now().toString(36), label: "Nova pergunta", text: "Escreva aqui a pergunta", auto: false }]).then(() => {
+    $("q-manage").open = true;
+    const inputs = $("q-list").querySelectorAll('.q-row:last-child [data-k="text"]');
+    inputs[0]?.focus();
+    inputs[0]?.select();
+  });
+});
+$("q-reset").addEventListener("click", () => {
+  if (!confirm("Voltar aos modelos de perguntas padrão? Os seus modelos serão substituídos.")) return;
+  saveQuestions(DEFAULT_QUESTIONS.map((q) => ({ ...q }))).then(() => toast("Modelos padrão restaurados"));
+});
+$("q-save").addEventListener("click", async () => {
+  const text = $("chat-input").value.trim();
+  if (!text) return toast("Escreva a pergunta primeiro");
+  if (questions().some((q) => q.text === text)) return toast("Essa pergunta já é um modelo");
+  const label = await askInline($("q-save"), { label: "Nome do modelo", value: text.slice(0, 40), placeholder: "Ex.: Riscos levantados" });
+  if (!label) return;
+  await saveQuestions([...questions(), { id: Date.now().toString(36), label: label.slice(0, 60), text: text.slice(0, 2000), auto: false }]);
+  $("q-manage").open = true;
+  toast("Modelo salvo: aparece em todas as reuniões");
+});
 
 function renderChatLog(streamText) {
   const chat = state.session.chats.find((c) => c.id === state.chatId);
@@ -1943,11 +2018,26 @@ function renderStats() {
   const prev = previousWithSame(s);
   $("pane-stats").innerHTML = `
     <div class="kpis">${kpis.map(([v, l]) => `<div class="kpi"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>
-    <div class="card"><h3>Parcela de fala</h3>${rows}</div>
-    <div class="card"><h3>Quem falou quando</h3><svg class="tl-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Linha do tempo de falas">${rects}${axis}</svg>
-      <div class="row tiny" style="margin-top:6px">${top.map((p) => `<span class="row" style="gap:4px"><i style="width:10px;height:10px;border-radius:3px;background:${colorFor(p.name)};display:inline-block"></i>${esc(p.name)}</span>`).join("")}</div></div>
-    ${prev.length ? `<div class="card"><h3>Reuniões anteriores com estes participantes</h3>${prev.map(cardHtml).join("")}</div>` : ""}`;
+    ${foldCard("share", "Quem falou e quanto", rows)}
+    ${foldCard("timeline", "Linha do tempo: quem falou quando", `<svg class="tl-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Linha do tempo de falas">${rects}${axis}</svg>
+      <div class="row tiny" style="margin-top:6px">${top.map((p) => `<span class="row" style="gap:4px"><i style="width:10px;height:10px;border-radius:3px;background:${colorFor(p.name)};display:inline-block"></i>${esc(p.name)}</span>`).join("")}</div>`)}
+    ${prev.length ? foldCard("previous", "Reuniões anteriores com estes participantes", prev.map(cardHtml).join("")) : ""}`;
 }
+// Painéis recolhíveis da Análise: o que fica aberto ou fechado é lembrado neste navegador.
+function foldState() {
+  try { return JSON.parse(localStorage.getItem("escribanote:folds") || "{}"); } catch { return {}; }
+}
+function foldCard(key, title, body) {
+  const closed = foldState()[key] === false;
+  return `<details class="card fold" data-fold="${key}"${closed ? "" : " open"}><summary><h3>${esc(title)}</h3></summary><div class="fold-body">${body}</div></details>`;
+}
+$("pane-stats").addEventListener("toggle", (e) => {
+  const d = e.target.closest?.("[data-fold]");
+  if (!d) return;
+  const st = foldState();
+  st[d.dataset.fold] = d.open;
+  try { localStorage.setItem("escribanote:folds", JSON.stringify(st)); } catch {}
+}, true);
 $("pane-stats").addEventListener("click", openFromCard);
 
 // ---------------- Lista de reuniões ----------------
@@ -2225,7 +2315,13 @@ $("settings").addEventListener("change", async (e) => {
   }
   const v = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
   state.settings = await setSettings({ [el.name]: v });
+  if (el.name === "usage") applyUsage();
   toast("Ajuste salvo");
+});
+// Avançadas recolhidas por padrão; o navegador lembra se ficaram abertas.
+try { $("adv-settings").open = localStorage.getItem("escribanote:adv") === "1"; } catch {}
+$("adv-settings").addEventListener("toggle", () => {
+  try { localStorage.setItem("escribanote:adv", $("adv-settings").open ? "1" : "0"); } catch {}
 });
 
 $("save-key").addEventListener("click", async () => {
@@ -2425,6 +2521,15 @@ $("bk-auto-restore").addEventListener("click", async () => {
   renderList();
 });
 
+// ----- Uso pessoal x institucional -----
+// Pessoal: some o que é de órgão público (ata institucional nas exportações, cópia/HTML para o Editor).
+function institutional() {
+  return state.settings.usage === "institutional";
+}
+function applyUsage() {
+  document.body.classList.toggle("usage-personal", !institutional());
+}
+
 // ----- Primeira execução -----
 let wStep = 1;
 function showWelcomeStep(n) {
@@ -2432,10 +2537,12 @@ function showWelcomeStep(n) {
   for (const s of document.querySelectorAll(".w-step")) s.hidden = Number(s.dataset.step) !== n;
   [...$("w-steps").children].forEach((li, i) => { li.classList.toggle("on", i + 1 === n); li.classList.toggle("done", i + 1 < n); });
   $("w-back").hidden = n === 1;
-  $("w-next").textContent = n === 3 ? "Concluir" : "Continuar";
+  $("w-next").textContent = n === W_STEPS ? "Concluir" : "Continuar";
 }
+const W_STEPS = 4;
 async function openWelcome() {
   const f = $("welcome-form");
+  f.elements["w-usage"].value = state.settings.usage === "institutional" ? "institutional" : "personal";
   f.elements["w-backup"].value = state.settings.backupAuto || "downloads";
   f.elements["w-mode"].value = state.settings.mode === "ask" ? "ask" : "always";
   f.elements["w-after"].value = state.settings.afterCall === "app" ? "app" : "off";
@@ -2447,8 +2554,9 @@ async function openWelcome() {
 async function finishWelcome(skipped) {
   const f = $("welcome-form");
   if (!skipped) {
-    const patch = { backupAuto: f.elements["w-backup"].value, mode: f.elements["w-mode"].value, afterCall: f.elements["w-after"].value };
+    const patch = { usage: f.elements["w-usage"].value, backupAuto: f.elements["w-backup"].value, mode: f.elements["w-mode"].value, afterCall: f.elements["w-after"].value };
     state.settings = await setSettings(patch);
+    applyUsage();
     const ai = f.elements["w-ai"].value;
     const key = $("w-key").value.trim();
     if (ai === "key" && key) {
@@ -2458,12 +2566,13 @@ async function finishWelcome(skipped) {
     if (ai === "pro") openAccountWeb("#/conectar");
     send({ type: "auto-backup-flush", all: true }).catch(() => {});
   }
+  if (!state.settings.usage) { state.settings = await setSettings({ usage: "personal" }); applyUsage(); }
   await chrome.storage.local.set({ welcomeDone: Date.now() });
   $("welcome").close();
   if (state.view === "settings") render();
   if (!skipped) toast("Pronto! Dá para rever tudo em Ajustes.");
 }
-$("w-next").addEventListener("click", () => (wStep < 3 ? showWelcomeStep(wStep + 1) : finishWelcome(false)));
+$("w-next").addEventListener("click", () => (wStep < W_STEPS ? showWelcomeStep(wStep + 1) : finishWelcome(false)));
 $("w-back").addEventListener("click", () => showWelcomeStep(Math.max(1, wStep - 1)));
 $("w-skip").addEventListener("click", () => finishWelcome(true));
 $("welcome").addEventListener("cancel", (e) => { e.preventDefault(); finishWelcome(true); });
@@ -2613,6 +2722,14 @@ if (params.get("perm") === "mic") {
 }
 (async () => {
   state.settings = await getSettings();
+  // Quem já usava antes da pergunta de uso: quem já tinha a ata nas exportações ou modelos de ata segue
+  // vendo as funções institucionais; os demais ficam com o painel pessoal (dá para trocar em Ajustes).
+  const { welcomeDone: had, ataTemplates } = await chrome.storage.local.get(["welcomeDone", "ataTemplates"]);
+  if (had && !state.settings.usage) {
+    const inst = state.settings.exportAta === true || (Array.isArray(ataTemplates) && ataTemplates.length > 0);
+    state.settings = await setSettings({ usage: inst ? "institutional" : "personal" });
+  }
+  applyUsage();
   applyLayout();
   const id = params.get("id");
   if (id) await openSession(id, true);

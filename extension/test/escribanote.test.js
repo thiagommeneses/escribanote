@@ -177,7 +177,7 @@ test("exportação: SRT, VTT, Markdown, TXT e nome de arquivo", () => {
   assert.match(toVtt(s), /^WEBVTT\n\n00:00:01\.500 --> 00:00:02\.500\n<v Ana>olá/);
   assert.match(toMarkdown(s), /# Planejamento Q4[\s\S]*\*\*Participantes:\*\* Ana/);
   assert.match(toText(s), /\[00:00:01\] Ana: olá\n\n\[00:01:05\] Ana: tudo certo/);
-  assert.match(fileName(s, "md"), /_planejamento-q4\.md$/);
+  assert.match(fileName(s, "md"), /^Planejamento Q4 - Google Meet - \d{4}-\d\d-\d\d \d\dh\d\d\.md$/);
 });
 
 // ---------------- v2 ----------------
@@ -987,4 +987,31 @@ test("ícones: conjunto duotone e paleta das tags com emoji para exportação", 
   assert.match(svg, /^<svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">/);
   assert.match(svg, /fill-opacity:var\(--ic-fill,\.16\)/);
   assert.equal(icon("nao-existe"), "");
+});
+
+// ---------------- 0.9.45: falantes duplicados e nomes técnicos ----------------
+import { isJunkName, nameKey, dedupeSpeakers, speakerName as spkName2 } from "../src/lib/transcript.js";
+test("falantes: 'keep_…' não vira nome; o mesmo nome em ids diferentes vira um participante só", () => {
+  assert.equal(isJunkName("keep_a1b2c3d4"), true);
+  assert.equal(isJunkName("spaces/x/devices/9"), true);
+  assert.equal(isJunkName("Pedro Henrique"), false);
+  assert.equal(isJunkName("Thiago"), false);
+  assert.equal(nameKey("Apresentação de Vitor Almeida"), nameKey("vitor almeida"));
+  const s = session();
+  applyEvent(s, { kind: "speaker", speakerId: "d1", name: "keep_abc123" });
+  assert.equal(s.speakers.d1, undefined);
+  applyEvent(s, { kind: "speaker", speakerId: "d1", name: "Igor Peres" });
+  applyEvent(s, { kind: "caption", id: "1/d1", speakerId: "d1", text: "primeira" }, 1_001_000);
+  // reconexão: id novo, mesmo nome
+  applyEvent(s, { kind: "speaker", speakerId: "d2", name: "Igor Peres" });
+  applyEvent(s, { kind: "caption", id: "2/d2", speakerId: "d2", text: "segunda" }, 1_010_000);
+  assert.deepEqual([...new Set(s.entries.map((e) => e.speakerId))], ["d1"]);
+  // sessão antiga com duplicatas e nome técnico
+  const old = session();
+  old.speakers = { a: "Diego Dantas", b: "Diego Dantas", c: "keep_zz99" };
+  applyEvent(old, { kind: "caption", id: "1/a", speakerId: "a", text: "x" }, 1_001_000);
+  applyEvent(old, { kind: "caption", id: "2/b", speakerId: "b", text: "y" }, 1_002_000);
+  assert.equal(dedupeSpeakers(old), 2);
+  assert.deepEqual([...new Set(old.entries.map((e) => e.speakerId))], ["a"]);
+  assert.match(spkName2(old, "c"), /^Participante/);
 });

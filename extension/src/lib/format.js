@@ -201,17 +201,19 @@ export const FORMATS = {
   json: { label: "JSON (.json)", mime: "application/json", render: toJson },
 };
 
-export function fileName(session, ext) {
+// Nome sugerido no download: "Nome da reunião - Google Meet - 2026-11-05 08h45.md".
+// Mantém acentos (o Windows aceita) e troca só os caracteres proibidos em nomes de arquivo.
+function cleanName(t) {
+  return String(t || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").replace(/[. ]+$/, "").trim().slice(0, 90);
+}
+function exportBase(session) {
   const d = new Date(session.startedAt);
-  const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
-  const slug = session.title
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 50)
-    .toLowerCase();
-  return `${stamp}_${slug || "reuniao"}.${ext}`;
+  const when = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}h${pad(d.getMinutes())}`;
+  const parts = [cleanName(session.title) || "Reunião", cleanName(PLATFORM[session.platform] || session.platform), when].filter(Boolean);
+  return parts.join(" - ");
+}
+export function fileName(session, ext) {
+  return `${exportBase(session)}.${ext}`;
 }
 
 // Ata em texto puro (para colar em sistemas que não aceitam Markdown): remove a marcação, mantém títulos e listas.
@@ -233,10 +235,7 @@ export function ataPlainText(md) {
 }
 
 export function ataFileName(session, ext) {
-  const d = new Date(session.startedAt);
-  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const slug = (session.title || "reuniao").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 60) || "reuniao";
-  return `ata-${stamp}-${slug}.${ext}`;
+  return `Ata - ${exportBase(session)}.${ext}`;
 }
 
 // HTML no formato que o editor do Atena (TinyMCE) produz: parágrafos justificados com rótulo em

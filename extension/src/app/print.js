@@ -1,5 +1,5 @@
 import { normalize } from "../lib/transcript.js";
-import { toHtml, mdToHtml } from "../lib/format.js";
+import { toHtml, mdToHtml, fileName, ataFileName } from "../lib/format.js";
 import { getSettings } from "../lib/settings.js";
 
 const params = new URLSearchParams(location.search);
@@ -15,10 +15,11 @@ const doc = document.getElementById("doc");
   }
   const session = normalize(raw);
   const [settings, shotUrls] = await Promise.all([getSettings(), chrome.runtime.sendMessage({ type: "get-shots", id })]);
-  document.title = ONLY_ATA ? `Ata — ${session.title}` : session.title;
+  // O "Salvar como PDF" do Chrome usa o título da página como nome do arquivo.
+  document.title = (ONLY_ATA ? ataFileName(session, "pdf") : fileName(session, "pdf")).replace(/\.pdf$/, "");
   // "Incluir a ata e os textos institucionais" (desligado por padrão): sem ela, só a reunião, sem a ata e sem o rodapé.
   // O PDF "só a ata" (aba Ata) é pedido explícito e não muda.
-  const institutional = ONLY_ATA || settings.exportAta === true;
+  const institutional = ONLY_ATA || (settings.exportAta === true && settings.usage === "institutional");
   doc.innerHTML = (ONLY_ATA
     ? (session.summary?.text ? mdToHtml(session.summary.text) : "<p>Esta reunião ainda não tem ata.</p>")
     : toHtml(session, { tags: settings.tags, shotUrls: shotUrls || {}, ata: institutional, clean: settings.cleanSpeech === true })) +

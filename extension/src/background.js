@@ -1,7 +1,7 @@
 // Service worker: mantém as sessões de reunião e as salva localmente
 // (chrome.storage.local). Só fala com a rede quando o usuário usa a IA.
 import { commitSummary } from "./lib/diff.js";
-import { mergeSpeakers,
+import { mergeSpeakers, dedupeSpeakers,
   createSession, applyEvent, normalize, setBlockTags, toggleLastBlockTag, participantNames, editBlock, undoEdit, splitBlock,
   addAsrSegment, effectiveEntries, toBlocks, speakerName,
 } from "./lib/transcript.js";
@@ -315,7 +315,7 @@ async function exportMeetingFolder(dir, id, s, settings) {
     if (f && f.size) audio.push({ name: `${{ tab: "outros", system: "computador", mic: "microfone", import: "gravacao" }[source] || source}.${(f.name.split(".").pop() || "webm")}`, file: f });
   }
   const manifest = meetingManifest(s, { participants: participantNames(s), audioFiles: audio.map((a) => a.name), version: chrome.runtime.getManifest().version });
-  const name = await writeMeetingFolder(dir, s, { markdown: toMarkdown(s, { tags: settings.tags, ata: settings.exportAta === true, clean: settings.cleanSpeech === true }), manifest, audio });
+  const name = await writeMeetingFolder(dir, s, { markdown: toMarkdown(s, { tags: settings.tags, ata: settings.exportAta === true && settings.usage === "institutional", clean: settings.cleanSpeech === true }), manifest, audio });
   if (names[id] && names[id] !== name) await removeMeetingFolder(dir, names[id]);
   names[id] = name;
   await chrome.storage.local.set({ folderExport: { names } });
@@ -445,6 +445,7 @@ async function endSession(tabId, reason = "unknown") {
   chrome.action.setBadgeText({ tabId, text: "" }).catch(() => {}); // o selo REC some junto com a sessão
   if (!s || s.endedAt) return;
   s.endedAt = s.updatedAt;
+  dedupeSpeakers(s);
   await changed(s, { now: true });
   queueBackup([s.id], { now: true }); // reunião terminou: backup já, sem esperar o lote
   queueAutoBackup([s.id], { now: true });
@@ -457,6 +458,7 @@ async function endSession(tabId, reason = "unknown") {
   try {
     if (settings.autoReview) await reviewPending(s).catch(() => {});
     await Promise.allSettled([maybeAutoAta(s), maybeAutoChapters(s)]);
+    await maybeAutoQuestions(s).catch(() => {});
   } finally {
     afterCallWork.delete(s.id);
     checkUpdate().catch(() => {});
@@ -542,6 +544,31 @@ async function maybeAutoChapters(s) {
   const settings = await getSettings();
   if (!settings.chaptersAuto || (s.chapters && s.chapters.length)) return;
   await generateChapters(s).catch(() => {});
+}
+
+// Modelos de perguntas marcados como automáticos: cada um vira uma conversa salva na reunião
+// quando ela termina (chave própria ou 1 crédito do Pro por pergunta). Não repete o que já foi respondido.
+async function maybeAutoQuestions(s) {
+  const settings = await getSettings();
+  const list = (Array.isArray(settings.questions) ? settings.questions : []).filter((q) => q && q.auto && q.text);
+  if (!list.length || s.entries.length + s.asr.length < 8) return;
+  const ai = await aiProvider();
+  if (!ai) return;
+  for (const q of list) {
+    const fresh = await getSession(s.id);
+    if (!fresh) return;
+    if (fresh.chats.some((c) => c.tplId === q.id || c.messages[0]?.text === q.text)) continue;
+    const chat = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), createdAt: Date.now(), tplId: q.id, auto: true, messages: [{ role: "user", text: q.text, at: Date.now() }] };
+    try {
+      const r = await runChat(ai, fresh, chat.messages, settings);
+      chat.messages.push({ role: "assistant", text: r.text, at: Date.now() });
+      fresh.chats.push(chat);
+      noteEvent(fresh, "auto-question", { id: q.id });
+      await changed(fresh, { now: true });
+    } catch {
+      return; // sem rede, sem créditos ou chave inválida: dá para perguntar à mão depois
+    }
+  }
 }
 
 async function maybeAutoAta(s) {
@@ -1191,6 +1218,8 @@ async function handle(msg, sender) {
     case "list":
       return loadIndex();
     case "get":
+      // Reuniões gravadas antes da junção automática: o mesmo nome em vários ids vira um só participante.
+      if (s && dedupeSpeakers(s)) await changed(s, { now: true });
       return s;
     case "active-for-tab": {
       const active = await activeFor(msg.tabId);
