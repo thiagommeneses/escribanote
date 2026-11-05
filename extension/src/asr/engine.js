@@ -25,6 +25,21 @@ const quiet = (fn) => (...args) => {
 console.warn = quiet(console.warn.bind(console));
 console.error = quiet(console.error.bind(console));
 
+// "Automático": escolhe o modelo pelo computador. Com placa de vídeo (WebGPU) ou processador forte, o
+// equilibrado; senão, o rápido. Na bateria fraca (abaixo de 30%, sem carregar), sempre o rápido, que gasta menos.
+export async function pickAutoModel() {
+  const gpu = await hasWebGPU();
+  const cores = navigator.hardwareConcurrency || 4;
+  const mem = navigator.deviceMemory || 4;
+  let lowBattery = false;
+  try {
+    const b = navigator.getBattery ? await navigator.getBattery() : null;
+    lowBattery = !!b && !b.charging && b.level < 0.3;
+  } catch {}
+  const key = lowBattery ? "base" : gpu || (cores >= 8 && mem >= 8) ? "small" : "base";
+  return { key, reason: { gpu, cores, mem, lowBattery } };
+}
+
 export async function hasWebGPU() {
   if (!navigator.gpu) return false;
   try {

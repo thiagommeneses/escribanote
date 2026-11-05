@@ -2,6 +2,9 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.51 beta — 2026-11-05
+- Alta precisão "Automático": escolhe o modelo pelo computador (placa de vídeo ou processador forte → equilibrado; senão, rápido) e, na bateria abaixo de 30% sem carregar, usa o rápido, que gasta menos. A escolha fica registrada no Diagnóstico.
+
 ## 0.9.50 beta — 2026-11-05
 - Perfis de voz (Pro, opcional, desligado por padrão): a impressão de voz de quem tem nome na reunião fica guardada só neste computador e a pessoa é reconhecida pela voz desde a primeira fala nas reuniões seguintes, mesmo sem legenda. Lista em Ajustes › Avançadas › Reconhecimento, com apagar por pessoa ou todas. Nunca vai para backup, conta ou sincronização (dado biométrico, LGPD).
 - Dois perfis salvos nunca são juntados entre si; numa junção, o perfil com nome é o que fica.

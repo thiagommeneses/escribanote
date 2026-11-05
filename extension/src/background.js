@@ -785,7 +785,7 @@ async function startHq(tabId) {
   const settings = await getSettings();
   // Sem modelo escolhido (ex.: huddle do Slack, que só tem o áudio), usa o do gravador ou o rápido.
   const modelKey = settings.hq !== "off" ? settings.hq : settings.recorderModel || "base";
-  if (!HQ_MODELS[modelKey]) throw new Error("Modelo de reconhecimento inválido.");
+  if (!HQ_MODELS[modelKey] && modelKey !== "auto") throw new Error("Modelo de reconhecimento inválido.");
   // O documento offscreen tem um só pipeline do Whisper: uma reunião pelo áudio por vez.
   // (Pelas legendas, várias abas transcrevem em paralelo, cada uma com a sua sessão.)
   const busy = (await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] })).length

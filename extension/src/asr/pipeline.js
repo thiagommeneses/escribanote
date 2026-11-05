@@ -2,7 +2,7 @@
 // transcreve com o Whisper. Usado pelo documento offscreen (áudio da aba da reunião) e pelo
 // gravador (áudio do computador, para apps como o Slack). O áudio nunca sai do computador.
 import { Segmenter, levelSamples, isStockPhrase, ownSpeechRatio, ECHO_KEEP_RATIO } from "./segmenter.js";
-import { createEngine, saveDiag } from "./engine.js";
+import { createEngine, saveDiag, pickAutoModel } from "./engine.js";
 import { createSpeakerEngine } from "./speakers.js";
 import { HQ_MODELS, WHISPER_LANG } from "../lib/settings.js";
 
@@ -236,6 +236,12 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
   }
 
   async function loadEngine(modelKey, lang) {
+    if (modelKey === "auto" || !HQ_MODELS[modelKey]) {
+      const auto = await pickAutoModel();
+      emit("auto-model", { model: auto.key, ...auto.reason });
+      if (auto.reason.lowBattery) report({ warning: "Bateria fraca: o Escribanote usa o modelo rápido, que gasta menos." });
+      modelKey = auto.key;
+    }
     if (state.engine && state.modelKey === modelKey) return state.engine;
     if (state.engine) await state.engine.dispose();
     state.engine = null;
