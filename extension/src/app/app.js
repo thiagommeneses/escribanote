@@ -1155,7 +1155,7 @@ async function renderAI() {
   // Sugestões
   if (!state.index.length) state.index = await send({ type: "list" });
   const prev = previousWithSame(s)[0];
-  const quick = questions().map((p) => `<button class="chip" data-q="${esc(p.text)}" title="${esc(p.text)}">${esc(p.label)}${p.auto ? '<span class="pill-auto" title="Feita sozinha quando a reunião termina">auto</span>' : ""}</button>`);
+  const quick = questions().filter((p) => p.pinned !== false).map((p) => `<button class="chip" data-q="${esc(p.text)}" title="${esc(p.text)}">${esc(p.label)}${p.auto ? '<span class="pill-auto" title="Feita sozinha quando a reunião termina">auto</span>' : ""}</button>`);
   if (prev) quick.push(`<button class="chip" data-prev="${esc(prev.id)}">${icon("anterior")}Reunião anterior com estes participantes</button>`);
   $("quick").innerHTML = quick.join("");
   renderQuestionList();
@@ -1172,7 +1172,8 @@ async function saveQuestions(list) {
 function renderQuestionList() {
   const list = questions();
   const autos = list.filter((q) => q.auto).length;
-  $("q-count").textContent = `${list.length} modelo${list.length === 1 ? "" : "s"}${autos ? ` · ${autos} automático${autos === 1 ? "" : "s"}` : ""}`;
+  const pinned = list.filter((q) => q.pinned !== false).length;
+  $("q-count").textContent = `${list.length} modelo${list.length === 1 ? "" : "s"} · ${pinned} fixado${pinned === 1 ? "" : "s"}${autos ? ` · ${autos} automático${autos === 1 ? "" : "s"}` : ""}`;
   if ($("q-list").contains(document.activeElement)) return; // não apaga o que está sendo digitado
   $("q-list").innerHTML = list.length
     ? list
@@ -1181,7 +1182,8 @@ function renderQuestionList() {
       <div class="q-fields"><input data-k="label" value="${esc(q.label)}" maxlength="60" aria-label="Nome do modelo" placeholder="Nome curto">
         <textarea data-k="text" rows="2" maxlength="2000" aria-label="Pergunta" placeholder="A pergunta que a IA deve responder">${esc(q.text)}</textarea></div>
       <div class="q-side"><label class="switch sm" title="Fazer esta pergunta sozinha quando a reunião terminar"><input type="checkbox" data-k="auto"${q.auto ? " checked" : ""}><span></span>Automática</label>
-        <span class="q-acts"><button type="button" class="q-ic" data-q-run="${i}" data-tip="Perguntar agora" aria-label="Perguntar agora nesta reunião">${icon("enviar")}</button>
+        <span class="q-acts"><button type="button" class="q-ic pin${q.pinned !== false ? " on" : ""}" data-q-pin="${i}" aria-pressed="${q.pinned !== false}" data-tip="${q.pinned !== false ? "Desafixar dos atalhos" : "Fixar nos atalhos"}" aria-label="${q.pinned !== false ? "Desafixar dos atalhos" : "Fixar nos atalhos"}">${icon("fixar")}</button>
+        <button type="button" class="q-ic" data-q-run="${i}" data-tip="Perguntar agora" aria-label="Perguntar agora nesta reunião">${icon("enviar")}</button>
         <button type="button" class="q-ic danger" data-q-rm="${i}" data-tip="Apagar modelo" aria-label="Apagar o modelo">${icon("apagar")}</button></span></div>
     </div>`,
         )
@@ -1208,6 +1210,14 @@ $("q-list").addEventListener("click", (e) => {
   if (rm) {
     const list = questions().filter((_, i) => i !== +rm.dataset.qRm);
     return saveQuestions(list).then(() => toast("Modelo apagado"));
+  }
+  const pin = e.target.closest("[data-q-pin]");
+  if (pin) {
+    const list = questions().map((q) => ({ ...q }));
+    const q = list[+pin.dataset.qPin];
+    if (!q) return;
+    q.pinned = q.pinned === false;
+    return saveQuestions(list).then(() => toast(q.pinned ? `“${q.label}” fixado nos atalhos` : `“${q.label}” desafixado: continua aqui na lista`));
   }
   const run = e.target.closest("[data-q-run]");
   if (run) ask(questions()[+run.dataset.qRun]?.text);

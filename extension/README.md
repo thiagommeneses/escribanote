@@ -20,7 +20,8 @@ nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, aju
   pediu para manter separados (`session.apart`).
 - **Correção:** abrir uma reunião ao vivo não grava mais a sessão (a junção por nome na leitura vale só para
   reuniões encerradas), o que podia competir com as falas chegando.
-- Modelos de perguntas: ações em ícones (perguntar, apagar) com dica ao passar o mouse.
+- Modelos de perguntas: ações em ícones (fixar, perguntar, apagar) com dica ao passar o mouse. Só os
+  **fixados** viram atalhos acima da caixa de pergunta; os desafixados ficam na lista (`pinned: false`).
 
 ## Modelos de perguntas, painel mais limpo e falantes sem duplicatas (0.9.45)
 
