@@ -94,6 +94,61 @@ export function mergeSpeakers(session, fromId, toId, now = Date.now()) {
   return moved;
 }
 
+// Nome que é identificador interno da plataforma, não nome de gente ("keep_a1b2c3", "spaces/…/devices/…").
+export function isJunkName(name) {
+  const n = String(name || "").trim();
+  if (!n) return true;
+  if (/devices\/|spaces\/|^https?:/i.test(n)) return true;
+  if (/^keep_/i.test(n)) return true;
+  return !/\s/.test(n) && /^[a-z0-9]+_[A-Za-z0-9_-]{3,}$/.test(n);
+}
+
+// Chave para comparar nomes: sem acentos, maiúsculas, "(Você)" e o prefixo de apresentação do Meet
+// ("Apresentação de Fulano", "Fulano (apresentação)"): a tela compartilhada é da mesma pessoa.
+export function nameKey(name) {
+  return String(name || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\((voce|you|apresentacao|presentation|apresentando|presenting)\)/g, " ")
+    .replace(/^(apresentacao de|presentation by|presentation from|tela de)\s+/, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+// Outro falante (não mesclado) com o mesmo nome que `speakerId`.
+function sameNameSpeaker(session, speakerId) {
+  const key = nameKey(session.speakers[speakerId]);
+  if (!key) return null;
+  for (const [id, n] of Object.entries(session.speakers)) {
+    if (id !== speakerId && !session.merged?.[id] && nameKey(n) === key) return id;
+  }
+  return null;
+}
+
+// O Meet dá um id novo a cada reconexão (e outro para a tela compartilhada): a mesma pessoa vira
+// vários participantes com o mesmo nome. Junta todos no primeiro que apareceu. Retorna quantos juntou.
+export function dedupeSpeakers(session, now = Date.now()) {
+  session.merged ||= {};
+  let n = 0;
+  for (const [id, name] of Object.entries(session.speakers)) {
+    if (isJunkName(name)) { delete session.speakers[id]; n++; continue; }
+  }
+  const first = new Map();
+  const order = (id) => {
+    const e = session.entries.find((x) => x.speakerId === id);
+    return e ? e.at ?? 0 : Infinity;
+  };
+  const ids = Object.keys(session.speakers).filter((id) => !session.merged[id]).sort((a, b) => order(a) - order(b));
+  for (const id of ids) {
+    const key = nameKey(session.speakers[id]);
+    if (!key) continue;
+    if (!first.has(key)) { first.set(key, id); continue; }
+    mergeSpeakers(session, id, first.get(key), now);
+    n++;
+  }
+  return n;
+}
+
 function norm(text) {
   return (text || "").replace(/\s+/g, " ").trim();
 }
@@ -129,7 +184,10 @@ export function applyEvent(session, ev, now = Date.now()) {
     if (!ev.speakerId || !ev.name || session.speakers[ev.speakerId] === ev.name) return false;
     // Nome lido da tela (casado pelo texto) só preenche lacunas; o nome do protocolo tem prioridade.
     if (ev.weak && session.speakers[ev.speakerId]) return false;
+    if (isJunkName(ev.name)) return false;
     session.speakers[ev.speakerId] = ev.name;
+    const twin = sameNameSpeaker(session, ev.speakerId);
+    if (twin) mergeSpeakers(session, ev.speakerId, twin, now);
     session.updatedAt = now;
     return true;
   }
@@ -142,8 +200,13 @@ export function applyEvent(session, ev, now = Date.now()) {
 
   const text = norm(ev.text);
   if (!ev.id || !ev.speakerId) return false;
-  if (ev.speakerName && !session.speakers[ev.speakerId]) {
+  if (ev.speakerName && !session.speakers[ev.speakerId] && !isJunkName(ev.speakerName)) {
     session.speakers[ev.speakerId] = ev.speakerName;
+    const twin = sameNameSpeaker(session, ev.speakerId);
+    if (twin) {
+      mergeSpeakers(session, ev.speakerId, twin, now);
+      ev = { ...ev, speakerId: twin };
+    }
   }
 
   if (ev.lang) session.langs[ev.lang] = (session.langs[ev.lang] || 0) + 1;
@@ -382,7 +445,7 @@ export function effectiveEntries(session) {
 
 export function speakerName(session, speakerId) {
   speakerId = canonicalSpeaker(session, speakerId);
-  if (session.speakers[speakerId]) return session.speakers[speakerId];
+  if (session.speakers[speakerId] && !isJunkName(session.speakers[speakerId])) return session.speakers[speakerId];
   if (!speakerId || speakerId === "desconhecido") return "Desconhecido";
   if (speakerId === "me") return session.myName || "Você";
   if (speakerId.startsWith("dom:")) return speakerId.slice(4);

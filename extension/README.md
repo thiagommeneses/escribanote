@@ -9,6 +9,24 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Modelos de perguntas, painel mais limpo e falantes sem duplicatas (0.9.45)
+
+- **Modelos de perguntas na aba IA:** "Salvar modelo" guarda a pergunta digitada para todas as reuniões
+  (Ajustes `questions`). Cada modelo tem a chave **Automática**: ligada, a pergunta é feita sozinha quando a
+  reunião termina (`maybeAutoQuestions`, chave própria ou 1 crédito do Pro por pergunta) e a resposta vira
+  uma conversa salva. Os automáticos aparecem com a pílula **AUTO**.
+- **Análise com painéis recolhíveis:** "Quem falou e quanto" e "Linha do tempo: quem falou quando" abrem e
+  fecham; o navegador lembra a escolha.
+- **Falantes duplicados:** o Meet dá um id novo a cada reconexão (e outro para a tela apresentada). Quem chega
+  com um nome já usado (sem acento/maiúsculas, "Apresentação de …") é juntado ao primeiro (`dedupeSpeakers`,
+  também aplicado ao abrir reuniões antigas). Identificadores internos como `keep_…` não viram nome.
+- **Nome do arquivo exportado:** `Nome da reunião - Google Meet - 2026-11-05 08h45.md` (a ata leva `Ata - `
+  na frente; o PDF usa o mesmo nome).
+- **Uso pessoal ou institucional:** novo primeiro passo do assistente. No pessoal somem a ata institucional
+  nas exportações e a cópia/HTML para o Editor; religa em Ajustes › Configurações avançadas › Uso.
+- **Ajustes básicos e avançados:** aparência, transcrição, fim da chamada, IA e conta ficam à vista; o resto
+  fica em "Configurações avançadas", recolhido.
+
 ## Slack de três jeitos (novo na 2.8)
 
 - **Huddle no Slack do Chrome (`app.slack.com`), sem seletor de tela:** `src/content/slack.js` percebe o

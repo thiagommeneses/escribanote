@@ -151,7 +151,7 @@
               <div class="menu-wrap"><button class="btn sm" id="ata-copy"><i data-ic="copiar"></i>Copiar</button>
                 <div class="menu" id="ata-copy-menu" hidden>
                   <button data-copy="rich"><span><i data-ic="copiar"></i></span>Texto formatado<small>Docs, Word, e-mail</small></button>
-                  <button data-copy="editor"><span><i data-ic="nota"></i></span>Para o Editor<small>editores TinyMCE</small></button>
+                  <button data-copy="editor" class="inst"><span><i data-ic="nota"></i></span>Para o Editor<small>editores TinyMCE</small></button>
                   <button data-copy="html"><span>&lt;/&gt;</span>Código HTML<small>para o "Código-fonte"</small></button>
                   <button data-copy="plain"><span>Aa</span>Texto simples</button>
                 </div></div>
@@ -159,7 +159,7 @@
                 <div class="menu" id="ata-dl-menu" hidden>
                   <button data-ata="txt"><span><i data-ic="baixar"></i></span>Texto (.txt)<small>para colar no sistema</small></button>
                   <button data-ata="md"><span><i data-ic="baixar"></i></span>Markdown (.md)</button>
-                  <button data-ata="html"><span><i data-ic="baixar"></i></span>HTML (.html)<small>formato do Editor</small></button>
+                  <button data-ata="html" class="inst"><span><i data-ic="baixar"></i></span>HTML (.html)<small>formato do Editor</small></button>
                   <button data-ata="pdf"><span><i data-ic="pdf"></i></span>PDF<small>só a ata</small></button>
                 </div></div>
               <button class="btn sm" id="ata-edit"><i data-ic="editar"></i>Editar</button>
@@ -198,8 +198,15 @@
               <div class="chat-log" id="chat-log"></div>
               <div class="chips" id="quick"></div>
               <div class="chat-input"><textarea id="chat-input" rows="1" placeholder="Pergunte qualquer coisa sobre esta reunião…"></textarea>
+                <button class="btn" id="q-save" type="button" title="Guardar esta pergunta como modelo, para usar em outras reuniões">Salvar modelo</button>
                 <button class="btn primary" id="chat-send">Enviar</button></div>
             </div>
+            <details class="card q-manage" id="q-manage">
+              <summary><b>Modelos de perguntas</b> <span class="muted tiny" id="q-count"></span></summary>
+              <p class="muted tiny">Valem para todas as reuniões. Com <b>Automática</b> ligada, a pergunta é feita sozinha quando a reunião termina e a resposta fica salva aqui, como uma conversa (sua chave de API ou 1 crédito do Pro por pergunta).</p>
+              <div id="q-list" class="q-list"></div>
+              <div class="row"><button type="button" class="btn sm ghost" id="q-add">+ Novo modelo</button><button type="button" class="btn sm ghost" id="q-reset">Restaurar os modelos padrão</button></div>
+            </details>
             <p class="muted tiny ai-foot">A ata da reunião tem aba própria: <button type="button" class="linkish" data-goto-tab="ata">abrir a aba Ata</button>.</p>
           </section>
 
@@ -228,19 +235,77 @@
               <label><input type="radio" name="mode" value="ask"><span>Perguntar</span></label>
               <label><input type="radio" name="mode" value="off"><span>Desligado</span></label>
             </div>
-            <label class="switch"><input type="checkbox" name="autoCaptions"><span></span>Ligar as legendas do Meet automaticamente</label>
-            <label class="switch"><input type="checkbox" name="domFallback"><span></span>Ler as legendas da tela como plano B (Meet)</label>
-          </div>
-
-          <div class="card">
-            <h3>Reconhecimento</h3>
             <label class="field"><span>Idioma falado nas reuniões</span>
               <select name="captionLang"><option value="pt-BR">Português (Brasil)</option><option value="pt-PT">Português (Portugal)</option><option value="en-US">Inglês</option><option value="es-ES">Espanhol</option></select></label>
             <p class="muted tiny">O Escribanote avisa quando as legendas da plataforma estão em outro idioma, a causa nº 1 de transcrição ruim.</p>
-
             <label class="field"><span>Alta precisão (Whisper no seu computador)</span>
               <select name="hq" id="hq-select"></select></label>
             <p class="muted tiny" id="hq-info">Ouve o áudio da reunião e transcreve de novo, com mais precisão para fala rápida ou pouco clara. O modelo é baixado uma vez; o áudio não sai do computador.</p>
+            <label class="field"><span>Seu nome nas reuniões</span><input name="myName" placeholder="Ex.: Thiago Meneses"></label>
+          </div>
+
+          <div class="card">
+            <h3>Quando a chamada termina</h3>
+            <label class="field"><span>Ao sair da reunião</span>
+              <select name="afterCall" id="after-call">
+                <option value="off">Só encerrar a transcrição (nada abre)</option>
+                <option value="app">Encerrar e abrir a reunião no Escribanote: ata, destaques, exportação e IA</option>
+                <option value="web" id="after-call-web">Encerrar e abrir no app web da conta Pro: transcrição, ata e chat em qualquer computador</option>
+              </select></label>
+            <p class="muted tiny" id="after-call-info">A extensão percebe que você saiu pelo botão "Sair da chamada" do Meet e encerra a transcrição em 20 segundos, sem precisar fechar a aba. Reuniões vazias não abrem nada. No app web, a reunião é enviada para a conta antes de abrir; se não der, abre no Escribanote.</p>
+          </div>
+
+          <div class="card">
+            <h3>Inteligência artificial <span class="muted">(opcional)</span></h3>
+            <p class="muted">Usa a sua chave da API do Claude. Nada é enviado até você pedir uma ata ou fazer uma pergunta.</p>
+            <label class="field"><span>Chave de API</span>
+              <div class="row"><input name="apiKey" type="password" placeholder="sk-ant-…" class="grow"><button type="button" class="btn sm primary" id="save-key">Salvar</button></div></label>
+            <span id="key-status" class="muted tiny"></span>
+            <label class="field"><span>Modelo</span><select name="aiModel" id="model-select"></select></label>
+            <label class="switch"><input type="checkbox" name="autoAta"><span></span>Gerar a ata automaticamente quando a reunião terminar (sem chave, usa 1 crédito do Pro)</label>
+            <label class="switch"><input type="checkbox" name="chaptersAuto"><span></span>Dividir em capítulos automaticamente quando a reunião terminar (a partir de 3 min; sem chave, usa 1 crédito do Pro)</label>
+            <p class="muted tiny">Perguntas que você faz sempre? Salve-as como <b>modelos de perguntas</b> na aba IA de qualquer reunião e ligue <b>Automática</b> para recebê-las respondidas ao fim de cada reunião.</p>
+          </div>
+
+          <div class="card" id="account-card">
+            <h3>Conta Escribanote Pro</h3>
+            <div id="acct-off">
+              <p class="muted">Com o Escribanote Pro (R$ 15/mês), suas reuniões ficam salvas na conta e aparecem em qualquer computador,
+                numa área web com busca em todas as falas, e a IA funciona sem chave de API: 15 créditos por mês, que acumulam até 30.</p>
+              <div class="row"><button type="button" class="btn sm primary" id="acct-connect">Entrar ou assinar o Pro</button></div>
+            </div>
+            <div id="acct-on" hidden>
+              <p id="acct-status" class="bk-status"></p>
+              <p id="acct-sync" class="muted tiny"></p>
+              <div class="row">
+                <button type="button" class="btn sm" id="acct-sync-now">Sincronizar agora</button>
+                <button type="button" class="btn sm" id="acct-web">Abrir o Escribanote na web</button>
+                <button type="button" class="btn sm ghost" id="acct-off-btn">Desconectar</button>
+              </div>
+            </div>
+          </div>
+
+          <details class="adv-settings" id="adv-settings">
+            <summary><b>Configurações avançadas</b><span class="muted tiny">uso institucional, legendas, voz, vocabulário, modelos de ata, widget, tags, atalhos, backup e áudio</span></summary>
+            <div class="adv-body">
+          <div class="card">
+            <h3>Uso</h3>
+            <div class="seg" role="radiogroup" aria-label="Uso">
+              <label><input type="radio" name="usage" value="personal"><span>Pessoal ou profissional</span></label>
+              <label><input type="radio" name="usage" value="institutional"><span>Institucional</span></label>
+            </div>
+            <p class="muted tiny">Institucional mostra as funções de órgão público: a ata no modelo da instituição nas exportações, a cópia para o Editor (TinyMCE) e o HTML nesse formato.</p>
+          </div>
+
+          <div class="card">
+            <h3>Legendas da plataforma</h3>
+            <label class="switch"><input type="checkbox" name="autoCaptions"><span></span>Ligar as legendas do Meet automaticamente</label>
+            <label class="switch"><input type="checkbox" name="domFallback"><span></span>Ler as legendas da tela como plano B (Meet)</label>
+            <label class="switch"><input type="checkbox" name="hideCaptions"><span></span>Ocultar as legendas nativas do Meet (a transcrição continua)</label>
+          </div>
+
+          <div class="card">
+            <h3>Reconhecimento, voz e vocabulário</h3>
             <label class="switch"><input type="checkbox" name="hqMic"><span></span>Incluir o meu microfone (sua própria voz não vem no áudio da aba)</label>
             <label class="switch"><input type="checkbox" name="echoFilter"><span></span>Filtrar o eco da caixa de som no microfone (desligue se a sua própria fala estiver sendo cortada)</label>
             <label class="switch" id="diarize-row"><input type="checkbox" name="diarize"><span></span>Identificar falantes pela voz <span class="badge" title="Recurso do Escribanote Pro">Pro</span></label>
@@ -264,7 +329,7 @@
               <select name="ataTemplate" id="tpl-default"><option value="">Formato do Escribanote (resumo, decisões, ações)</option></select></label>
             <label class="field"><span>Instruções extras padrão para todas as atas (opcional; cada reunião pode ter as suas na aba Ata, que substituem estas)</span>
               <textarea name="ataInstructions" rows="3" maxlength="4000" placeholder="Ex.: conclusão em um parágrafo só; nunca abreviar nomes; chamar a equipe de 'Assessoria 2'."></textarea></label>
-            <label class="switch"><input type="checkbox" name="exportAta"><span></span>Incluir a ata e os textos institucionais ao exportar a reunião (PDF, cópia formatada, Markdown, JSON e pasta <b>Reuniões/</b>). Desligado, sai só a reunião: transcrição, destaques, notas e capítulos.</label>
+            <label class="switch inst"><input type="checkbox" name="exportAta"><span></span>Incluir a ata e os textos institucionais ao exportar a reunião (PDF, cópia formatada, Markdown, JSON e pasta <b>Reuniões/</b>). Desligado, sai só a reunião: transcrição, destaques, notas e capítulos.</label>
             <div id="tpl-list" class="tpl-list"></div>
             <div class="row"><button type="button" class="btn sm" id="tpl-import">Importar de PDF ou texto</button><button type="button" class="btn sm ghost" id="tpl-new">Escrever um modelo</button><input type="file" id="tpl-file" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden><span class="muted tiny" id="tpl-status"></span></div>
             <div id="tpl-editor" class="tpl-editor" hidden>
@@ -276,25 +341,10 @@
           </div>
 
           <div class="card">
-            <h3>Quando a chamada termina</h3>
-            <label class="field"><span>Ao sair da reunião</span>
-              <select name="afterCall" id="after-call">
-                <option value="off">Só encerrar a transcrição (nada abre)</option>
-                <option value="app">Encerrar e abrir a reunião no Escribanote: ata, destaques, exportação e IA</option>
-                <option value="web" id="after-call-web">Encerrar e abrir no app web da conta Pro: transcrição, ata e chat em qualquer computador</option>
-              </select></label>
-            <p class="muted tiny" id="after-call-info">A extensão percebe que você saiu pelo botão "Sair da chamada" do Meet e encerra a transcrição em 20 segundos, sem precisar fechar a aba. Reuniões vazias não abrem nada. No app web, a reunião é enviada para a conta antes de abrir; se não der, abre no Escribanote.</p>
-          </div>
-
-          <div class="card">
             <h3>Widget na reunião</h3>
             <label class="switch"><input type="checkbox" name="widget"><span></span>Mostrar o widget do Escribanote dentro da reunião</label>
-            <label class="switch"><input type="checkbox" name="hideCaptions"><span></span>Ocultar as legendas nativas do Meet (a transcrição continua)</label>
-            <div class="grid2">
-              <label class="field"><span>Seu nome na reunião</span><input name="myName" placeholder="Ex.: Thiago Meneses"></label>
-              <label class="field"><span>Meta de parcela de fala (%)</span><input name="talkTarget" type="number" min="5" max="95" step="5"></label>
-            </div>
             <label class="field"><span>Mensagem para avisar os participantes</span><textarea name="notifyMessage" rows="2"></textarea></label>
+            <label class="field"><span>Meta de parcela de fala (%)</span><input name="talkTarget" type="number" min="5" max="95" step="5"></label>
           </div>
 
           <div class="card">
@@ -304,40 +354,11 @@
           </div>
 
           <div class="card">
-            <h3>Inteligência artificial <span class="muted">(opcional)</span></h3>
-            <p class="muted">Usa a sua chave da API do Claude. Nada é enviado até você pedir uma ata ou fazer uma pergunta.</p>
-            <label class="field"><span>Chave de API</span>
-              <div class="row"><input name="apiKey" type="password" placeholder="sk-ant-…" class="grow"><button type="button" class="btn sm primary" id="save-key">Salvar</button></div></label>
-            <span id="key-status" class="muted tiny"></span>
-            <label class="field"><span>Modelo</span><select name="aiModel" id="model-select"></select></label>
-            <label class="switch"><input type="checkbox" name="autoAta"><span></span>Gerar a ata automaticamente quando a reunião terminar (sem chave, usa 1 crédito do Pro)</label>
-            <label class="switch"><input type="checkbox" name="chaptersAuto"><span></span>Dividir em capítulos automaticamente quando a reunião terminar (a partir de 3 min; sem chave, usa 1 crédito do Pro)</label>
-          </div>
-
-          <div class="card">
             <h3>Capturas de tela e atalhos</h3>
             <p class="muted">O Chrome libera capturas depois que você clica no ícone do Escribanote na aba da reunião ou usa um atalho. Para capturar sempre pelo widget, autorize abaixo.</p>
             <div class="row"><button type="button" class="btn sm" id="grant-shots">Autorizar capturas pelo widget</button><span id="shots-status" class="muted tiny"></span></div>
             <ul class="kbd-list" id="kbd-list"></ul>
             <button type="button" class="btn sm ghost" id="edit-shortcuts">Alterar atalhos</button>
-          </div>
-
-          <div class="card" id="account-card">
-            <h3>Conta Escribanote Pro</h3>
-            <div id="acct-off">
-              <p class="muted">Com o Escribanote Pro (R$ 15/mês), suas reuniões ficam salvas na conta e aparecem em qualquer computador,
-                numa área web com busca em todas as falas, e a IA funciona sem chave de API: 15 créditos por mês, que acumulam até 30.</p>
-              <div class="row"><button type="button" class="btn sm primary" id="acct-connect">Entrar ou assinar o Pro</button></div>
-            </div>
-            <div id="acct-on" hidden>
-              <p id="acct-status" class="bk-status"></p>
-              <p id="acct-sync" class="muted tiny"></p>
-              <div class="row">
-                <button type="button" class="btn sm" id="acct-sync-now">Sincronizar agora</button>
-                <button type="button" class="btn sm" id="acct-web">Abrir o Escribanote na web</button>
-                <button type="button" class="btn sm ghost" id="acct-off-btn">Desconectar</button>
-              </div>
-            </div>
           </div>
 
           <div class="card" id="backup-card">
@@ -395,6 +416,8 @@
             <p id="usage" class="muted"></p>
             <button type="button" class="btn sm danger" id="wipe">Apagar todas as reuniões</button>
           </div>
+            </div>
+          </details>
         </form>
       </section>
     </div>
@@ -405,10 +428,17 @@
   <script type="module" src="app.js"></script>
   <dialog id="welcome" class="welcome">
     <form method="dialog" id="welcome-form">
-      <div class="w-head"><img class="brand-mark" src="../../icons/logo.svg" alt=""><div><b>Bem-vindo ao Escribanote</b><span class="muted tiny">Três escolhas rápidas. Dá para mudar tudo depois em Ajustes.</span></div></div>
-      <ol class="w-steps" id="w-steps"><li class="on">Backup</li><li>Gravação</li><li>IA</li></ol>
+      <div class="w-head"><img class="brand-mark" src="../../icons/logo.svg" alt=""><div><b>Bem-vindo ao Escribanote</b><span class="muted tiny">Quatro escolhas rápidas. Dá para mudar tudo depois em Ajustes.</span></div></div>
+      <ol class="w-steps" id="w-steps"><li class="on">Uso</li><li>Backup</li><li>Gravação</li><li>IA</li></ol>
 
       <section class="w-step" data-step="1">
+        <h4>Como você vai usar o Escribanote?</h4>
+        <label class="w-opt"><input type="radio" name="w-usage" value="personal" checked><div><b>Pessoal ou profissional</b><span>Transcrição, ata, destaques, IA e exportações. Painel mais simples, sem as funções de órgão público.</span></div></label>
+        <label class="w-opt"><input type="radio" name="w-usage" value="institutional"><div><b>Institucional (órgão público, equipe com modelo próprio)</b><span>Mostra também a ata no modelo da instituição nas exportações, a cópia para o Editor (TinyMCE) e o HTML nesse formato.</span></div></label>
+        <p class="tiny muted">Dá para trocar depois em Ajustes › Avançado › Uso.</p>
+      </section>
+
+      <section class="w-step" data-step="2" hidden>
         <h4>Onde guardar o backup automático?</h4>
         <p class="muted tiny">Cada reunião é salva sozinha, a cada mudança. Isso protege o que foi transcrito se o Chrome fechar ou a extensão for removida.</p>
         <label class="w-opt"><input type="radio" name="w-backup" value="downloads" checked><div><b>Pasta Downloads\Escribanote\backup</b><span>Arquivos reais no seu usuário do Windows, sem perguntas. O Chrome mostra o balão de download ao gravar.</span></div></label>
@@ -417,7 +447,7 @@
         <p class="tiny muted">Quer uma segunda cópia no OneDrive, Google Drive ou outra pasta? <button type="button" class="linkish" id="w-pick">Escolher pasta…</button> <span id="w-pick-status"></span></p>
       </section>
 
-      <section class="w-step" data-step="2" hidden>
+      <section class="w-step" data-step="3" hidden>
         <h4>Como gravar as reuniões?</h4>
         <label class="w-opt"><input type="radio" name="w-mode" value="always" checked><div><b>Transcrever sempre</b><span>Ao entrar numa reunião do Meet, Teams ou Zoom, começa sozinho.</span></div></label>
         <label class="w-opt"><input type="radio" name="w-mode" value="ask"><div><b>Perguntar antes</b><span>O widget pergunta em cada reunião. Nada é gravado até você aceitar.</span></div></label>
@@ -426,7 +456,7 @@
         <label class="w-opt"><input type="radio" name="w-after" value="app"><div><b>Abrir a reunião no Escribanote</b><span>Ata, destaques e exportação logo depois da chamada.</span></div></label>
       </section>
 
-      <section class="w-step" data-step="3" hidden>
+      <section class="w-step" data-step="4" hidden>
         <h4>Inteligência artificial (ata, revisão, perguntas)</h4>
         <label class="w-opt"><input type="radio" name="w-ai" value="later" checked><div><b>Decidir depois</b><span>A transcrição funciona sem IA. Dá para configurar em Ajustes.</span></div></label>
         <label class="w-opt"><input type="radio" name="w-ai" value="pro"><div><b>Conectar a conta Escribanote Pro</b><span>15 créditos por mês, reuniões na nuvem e app web. Abre o site para entrar ou assinar.</span></div></label>

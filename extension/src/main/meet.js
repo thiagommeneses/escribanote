@@ -83,7 +83,8 @@
   }
 
   function plausibleName(s) {
-    return typeof s === "string" && s.length > 0 && s.length <= 80 && !/[\n\r\u0000]/.test(s);
+    // "keep_…" e outros identificadores internos do Meet chegam no mesmo campo do nome: não são gente.
+    return typeof s === "string" && s.length > 0 && s.length <= 80 && !/[\n\r\u0000]/.test(s) && !/devices\/|spaces\//.test(s) && !/^keep_/i.test(s) && !(!/\s/.test(s) && /^[a-z0-9]+_[A-Za-z0-9_-]{3,}$/.test(s));
   }
 
   // collections: Device 1→2→13→1→2 → {1 deviceId, 2 nome}. Como o esquema muda,

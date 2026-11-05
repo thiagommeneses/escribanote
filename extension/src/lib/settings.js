@@ -38,7 +38,19 @@ export const HQ_MODELS = {
 
 export const WHISPER_LANG = { pt: "portuguese", en: "english", es: "spanish", fr: "french", de: "german", it: "italian" };
 
+// Modelos de perguntas da aba IA: valem para todas as reuniões. auto = roda sozinho quando a reunião termina.
+export const DEFAULT_QUESTIONS = [
+  { id: "pontos", label: "Pontos principais", text: "Quais são os pontos principais discutidos até agora?", auto: false },
+  { id: "acoes", label: "Itens de ação", text: "Liste os itens de ação até agora, com responsável e prazo quando mencionados.", auto: false },
+  { id: "decisoes", label: "O que foi decidido?", text: "O que já foi decidido nesta reunião? Cite quem decidiu quando possível.", auto: false },
+  { id: "perguntas", label: "Sugira 3 perguntas", text: "Sugira 3 perguntas pertinentes que eu poderia fazer agora, com base no que foi dito.", auto: false },
+  { id: "prep", label: "Preparo rápido (3 itens)", text: "Me dê os 3 itens mais importantes que eu preciso saber desta reunião, em uma frase cada.", auto: false },
+  { id: "email", label: "E-mail de follow-up", text: "Escreva um e-mail curto de follow-up para os participantes com resumo, decisões e próximos passos.", auto: false },
+];
+
 export const DEFAULTS = {
+  usage: "", // "" (ainda não escolhido) | "personal" | "institutional": decide se as funções institucionais aparecem
+  questions: DEFAULT_QUESTIONS,
   mode: "always", // "always" | "ask" | "off"
   theme: "auto", // "auto" (segue o sistema) | "light" | "dark"
   widget: true,
