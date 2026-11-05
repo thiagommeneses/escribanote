@@ -2342,6 +2342,9 @@ async function renderSettings() {
   form.elements.diarize.disabled = !pro;
   $("diarize-row").title = pro ? "" : "Disponível no Escribanote Pro";
   $("diarize-row").classList.toggle("muted", !pro);
+  form.elements.voiceProfiles.disabled = !pro;
+  $("vp-row").classList.toggle("muted", !pro);
+  renderVoiceProfiles();
   $("after-call-web").disabled = !pro;
   if (!pro) $("after-call-web").textContent += " (Pro)";
 
@@ -2361,6 +2364,30 @@ async function renderSettings() {
   $("usage").textContent = `${index.length} reuniões · ${(bytes / 1024 / 1024).toFixed(2)} MB usados neste computador.`;
   renderAudioUsage();
 }
+// Perfis de voz salvos neste computador: lista com apagar por pessoa e apagar todos.
+async function renderVoiceProfiles() {
+  const { voiceProfiles: list = [] } = await chrome.storage.local.get("voiceProfiles");
+  $("vp-list").innerHTML = list.length
+    ? `<div class="vp-head"><b class="tiny">${list.length} voz${list.length === 1 ? "" : "es"} guardada${list.length === 1 ? "" : "s"}</b><button type="button" class="linkish tiny" data-vp-all>Apagar todas</button></div>` +
+      list.map((p, i) => `<span class="vp">${esc(p.name)}<small>${p.meetings || 1} reuniã${(p.meetings || 1) === 1 ? "o" : "es"}</small><button type="button" class="x" data-vp-rm="${i}" title="Apagar a voz de ${esc(p.name)}" aria-label="Apagar a voz de ${esc(p.name)}">${icon("fechar")}</button></span>`).join("")
+    : "";
+}
+$("vp-list").addEventListener("click", async (e) => {
+  const { voiceProfiles: list = [] } = await chrome.storage.local.get("voiceProfiles");
+  if (e.target.closest("[data-vp-all]")) {
+    if (!confirm("Apagar todas as vozes guardadas neste computador?")) return;
+    await chrome.storage.local.remove("voiceProfiles");
+    toast("Vozes apagadas");
+  } else {
+    const rm = e.target.closest("[data-vp-rm]");
+    if (!rm) return;
+    const p = list[+rm.dataset.vpRm];
+    await chrome.storage.local.set({ voiceProfiles: list.filter((_, i) => i !== +rm.dataset.vpRm) });
+    toast(`Voz de ${p?.name || "participante"} apagada`);
+  }
+  renderVoiceProfiles();
+});
+
 async function renderAudioUsage() {
   const u = await send({ type: "audio-usage" }).catch(() => null);
   if (!u) return;
@@ -2382,6 +2409,10 @@ $("settings").addEventListener("change", async (e) => {
   const el = e.target;
   if (!el.name || el.name === "apiKey" || el.closest(".tag-editor")) return;
   if (el.name === "audioKeep" && el.checked && !confirm("O som das próximas reuniões com captura de áudio (alta precisão ou gravador) será guardado neste computador, em duas faixas: a dos outros participantes e a do seu microfone. Nada sai do computador e você pode apagar por reunião. Avise os participantes quando for o caso. Ligar?")) {
+    el.checked = false;
+    return;
+  }
+  if (el.name === "voiceProfiles" && el.checked && !confirm("Guardar a impressão de voz das pessoas com nome nas próximas reuniões, só neste computador? É um dado biométrico: avise os participantes. Dá para apagar cada voz aqui em Ajustes.")) {
     el.checked = false;
     return;
   }

@@ -634,3 +634,15 @@ body.usage-personal .inst { display: none !important; }
 .t-replace { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-soft); }
 .t-replace #t-repl { flex: 1 1 180px; min-width: 0; font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); }
 .t-replace label { display: inline-flex; gap: 4px; align-items: center; color: var(--text-2); }
+
+/* Perfis de voz */
+.vp-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.vp-head { width: 100%; display: flex; justify-content: space-between; align-items: center; }
+.vp { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 12.5px; background: var(--surface); }
+.vp small { color: var(--muted); }
+.vp .x { border: 0; background: none; cursor: pointer; color: var(--muted); display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; }
+.vp .x:hover { color: var(--danger); background: var(--bg-soft); }
+.vp .x svg { width: 13px; height: 13px; }
+/* Selo dentro de um interruptor: não herda o desenho do botão deslizante */
+.switch .badge { width: auto; height: auto; flex: none; border-radius: 999px; background: var(--bg-soft); transition: none; padding: 0 6px; }
+.switch .badge::after { content: none; }

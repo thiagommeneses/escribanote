@@ -217,7 +217,8 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
           if (!text) continue;
           // "Obrigado.", "Tchau." sozinhos com áudio baixo são legenda inventada, não fala.
           if (isStockPhrase(text) && (seg.speechRms == null || seg.speechRms < 0.02)) { state.stats.droppedStock++; continue; }
-          onResult({ start: seg.start + part.startMs, end: seg.start + part.endMs, text, source: seg.source, ...(part.voice ? { voice: part.voice } : {}) });
+          const voiceName = part.voice && state.speakers ? state.speakers.book.nameOf(part.voice) : null;
+          onResult({ start: seg.start + part.startMs, end: seg.start + part.endMs, text, source: seg.source, ...(part.voice ? { voice: part.voice } : {}), ...(voiceName ? { voiceName } : {}) });
         }
         state.stats.workMs += performance.now() - t0;
         state.stats.audioMs += (seg.samples.length / SR) * 1000;
@@ -289,13 +290,14 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
 
   // Começa a transcrever o que já foi (e será) segmentado; o áudio capturado durante o
   // carregamento do modelo fica na fila, então nada se perde.
-  async function run(modelKey, lang, { diarize = false } = {}) {
+  async function run(modelKey, lang, { diarize = false, profiles = null } = {}) {
     state.stats = { segments: 0, audioMs: 0, workMs: 0 };
     const engine = await loadEngine(modelKey, lang);
     if (diarize) {
       try {
         await loadSpeakers();
-        emit("speakers-loaded", {});
+        if (profiles && profiles.length) state.speakers.book.seed(profiles);
+        emit("speakers-loaded", { profiles: profiles ? profiles.length : 0 });
       } catch (err) {
         saveDiag({ speakersError: err.message || String(err) });
         emit("speakers-error", { message: err.message || String(err) });
@@ -321,9 +323,15 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
     emit("voices-merged", { merges });
     onResult({ mergeVoices: merges, source, start: 0, end: 0, text: "" });
   }
-  // Fim da captura: junta as vozes com pouquíssima fala à mais parecida.
+  // Fim da captura: junta as vozes com pouquíssima fala à mais parecida e entrega as impressões de voz
+  // (a sessão decide, pelos nomes, se viram perfis salvos — só com a opção ligada).
   function finalizeVoices() {
-    if (state.speakers) sendVoiceMerges(state.speakers.book.finalize(), "tab");
+    if (!state.speakers) return;
+    const merges = state.speakers.book.finalize();
+    const voicePrints = state.speakers.book.snapshot();
+    if (!merges.length && !Object.keys(voicePrints).length) return;
+    if (merges.length) emit("voices-merged", { merges });
+    onResult({ mergeVoices: merges, voicePrints, source: "tab", start: 0, end: 0, text: "" });
   }
 
   // Para a captura e termina o que já estava na fila.

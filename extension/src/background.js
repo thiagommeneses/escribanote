@@ -8,6 +8,7 @@ import { mergeSpeakers, dedupeSpeakers, mergeVoices, keepApart, replaceAll,
 import { getSettings, DEFAULTS, HQ_MODELS, pushSyncedSettings, pullSyncedSettings } from "./lib/settings.js";
 import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, writeSettingsFile, internalBackupDir, backupFileName, sessionFileText, settingsFileText, SETTINGS_FILE, readBackupFolder, writeMeetingFolder, removeMeetingFolder, meetingManifest } from "./lib/backup.js";
 import { toMarkdown } from "./lib/format.js";
+import { learnProfiles, loadProfiles, saveProfiles } from "./lib/voiceprofiles.js";
 import { readTrack } from "./lib/audiovault.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
@@ -803,7 +804,9 @@ async function startHq(tabId) {
   const hs = await activeFor(tabId);
   if (hs) noteEvent(await getSession(hs.id), "hq-start", { model: modelKey, mic: !!settings.hqMic, diarize: !!settings.diarize, audio: !!settings.audioKeep });
   const keep = settings.audioKeep && hs ? { sessionId: hs.id } : null;
-  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: settings.hqMic, echo: settings.echoFilter !== false, diarize: settings.diarize && (await isPro()), keep });
+  const diarize = settings.diarize && (await isPro());
+  const profiles = diarize && settings.voiceProfiles ? await loadProfiles() : null;
+  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: settings.hqMic, echo: settings.echoFilter !== false, diarize, keep, profiles });
   if (r && r.error) {
     broadcastHq(tabId, { state: "error", message: r.error });
     throw new Error(r.error);
@@ -852,9 +855,18 @@ async function onAsrResult(msg) {
     if (!s || s.paused || s.endedAt) return;
   }
   if (msg.seg && Array.isArray(msg.seg.mergeVoices)) {
-    mergeVoices(s, msg.seg.mergeVoices);
-    noteEvent(s, "voices-merged", { merges: msg.seg.mergeVoices });
-    await changed(s);
+    if (msg.seg.mergeVoices.length) {
+      mergeVoices(s, msg.seg.mergeVoices);
+      noteEvent(s, "voices-merged", { merges: msg.seg.mergeVoices });
+      await changed(s);
+    }
+    // Perfis de voz (opcional): as vozes com nome desta reunião passam a ser reconhecidas nas próximas.
+    if (msg.seg.voicePrints && (await getSettings()).voiceProfiles && (await isPro())) {
+      const before = await loadProfiles();
+      const next = learnProfiles(s, msg.seg.voicePrints, before);
+      await saveProfiles(next);
+      noteEvent(s, "voice-profiles", { learned: next.length - before.length, total: next.length });
+    }
     return;
   }
   const settings = await getSettings();
@@ -1039,7 +1051,8 @@ async function handle(msg, sender) {
       s.reviewed = {};
       await changed(s, { now: true });
       await ensureOffscreen();
-      const r = await toOffscreen({ type: "retranscribe", sessionId: s.id, modelKey, lang: msg.lang || st.captionLang, diarize, startedAt: s.audio.startedAt, tracks: s.audio.tracks });
+      const profiles = diarize && st.voiceProfiles ? await loadProfiles() : null;
+      const r = await toOffscreen({ type: "retranscribe", sessionId: s.id, modelKey, lang: msg.lang || st.captionLang, diarize, startedAt: s.audio.startedAt, tracks: s.audio.tracks, profiles });
       if (r && r.error) { noteEvent(s, "retranscribe-error", { message: r.error }); await changed(s, { now: true }); throw new Error(r.error); }
       const done = await getSession(s.id);
       done.audio = { ...(done.audio || {}), model: modelKey, durationMs: done.audio?.durationMs || r.durationMs };

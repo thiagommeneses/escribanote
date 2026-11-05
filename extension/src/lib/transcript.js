@@ -403,6 +403,15 @@ export function addAsrSegment(session, seg, meId) {
       speakerId = byCaption || (learned && learned[1] >= 2 ? learned[0] : seg.voice);
     } else speakerId = seg.source === "system" || seg.source === "import" ? "outros" : byCaption;
   }
+  // Voz reconhecida por um perfil salvo: o nome vem dele (e junta com o participante de mesmo nome).
+  if (seg.voiceName && seg.voice && speakerId === seg.voice && !isJunkName(seg.voiceName)) {
+    if (!session.speakers[seg.voice]) session.speakers[seg.voice] = seg.voiceName;
+    const twin = sameNameSpeaker(session, seg.voice);
+    if (twin) {
+      mergeSpeakers(session, seg.voice, twin);
+      speakerId = twin;
+    }
+  }
   session.asr.push({ id: `asr/${seg.start}/${seg.source}`, start: seg.start, end: seg.end, text, source: seg.source, speakerId, ...(seg.voice ? { voice: seg.voice } : {}) });
   session.updatedAt = Math.max(session.updatedAt, seg.end);
   return true;
