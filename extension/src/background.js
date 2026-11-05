@@ -12,7 +12,7 @@ import { learnProfiles, loadProfiles, saveProfiles } from "./lib/voiceprofiles.j
 import { readTrack } from "./lib/audiovault.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
-import { streamClaude, ataRequest, chatRequest, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS } from "./lib/ai.js";
+import { streamClaude, ataRequest, chatRequest, previousContext, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
 import { compileGlossary, applyGlossary, glossaryForPrompt, fuzzyTargets, applyFuzzy } from "./lib/glossary.js";
 import { deleteAudio, audioInfo, vaultUsage, listAudio, enforceQuota } from "./lib/audiovault.js";
@@ -692,13 +692,20 @@ async function runAta(ai, s, settings, { onDelta, signal } = {}) {
   return { text: done.text, model: done.model, stopReason: "end_turn", createdAt: Date.now(), via: "account" };
 }
 
+function withPrevious(messages, previous, tags) {
+  const out = messages.map((m) => ({ role: m.role, text: m.text }));
+  const ctx = previousContext(previous, tags).trim();
+  if (ctx && out.length) out[out.length - 1] = { ...out.at(-1), text: `${ctx}\n\n${out.at(-1).text}` };
+  return out;
+}
 async function runChat(ai, s, messages, settings, { previous, onDelta, signal } = {}) {
   if (ai.kind === "key") {
     const reqBody = chatRequest(s, messages, { tags: settings.tags, previous, glossary: promptGlossary(settings) });
     return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...reqBody, maxTokens: 8000, onDelta, signal });
   }
   const done = await accountCall(() =>
-    accountStream("/ai/ask", { meeting: forAccount(s), history: messages.map((m) => ({ role: m.role, text: m.text })), tags: settings.tags, glossary: promptGlossary(settings) }, { onDelta, signal }),
+    // A conta recebe a reunião atual; as anteriores vão como material de consulta junto da última pergunta.
+    accountStream("/ai/ask", { meeting: forAccount(s), history: withPrevious(messages, previous, settings.tags), tags: settings.tags, glossary: promptGlossary(settings) }, { onDelta, signal }),
   );
   return { text: done.text, model: done.model };
 }
@@ -1719,7 +1726,8 @@ chrome.runtime.onConnect.addListener((port) => {
       }
       chat.messages.push({ role: "user", text: req.question, at: Date.now() });
       post({ type: "chat", chatId: chat.id });
-      const previous = req.previousId ? await getSession(req.previousId) : null;
+      const prevIds = [...new Set([...(Array.isArray(req.previousIds) ? req.previousIds : []), ...(req.previousId ? [req.previousId] : [])])].slice(0, 8);
+      const previous = (await Promise.all(prevIds.map((pid) => getSession(pid)))).filter(Boolean);
       const result = await runChat(ai, s, chat.messages, settings, { previous, onDelta, signal: abort.signal });
       chat.messages.push({ role: "assistant", text: result.text, at: Date.now() });
       await changed(s, { now: true });

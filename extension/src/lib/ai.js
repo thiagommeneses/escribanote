@@ -117,14 +117,27 @@ export function templateFromTextRequest(text) {
   };
 }
 
+// Outras reuniões como material de consulta (uma ou várias). Com ata, vai a ata; sem, a transcrição,
+// cortada para caber (as mais recentes primeiro). Os horários [hh:mm:ss] valem para a reunião atual.
+const PREV_MAX_CHARS = 14000;
+export function previousContext(previous, tags) {
+  const list = (Array.isArray(previous) ? previous : previous ? [previous] : []).filter(Boolean).slice(0, 8);
+  return list
+    .map((p) => {
+      let body = p.summary?.text || toText(p, { tags });
+      if (body.length > PREV_MAX_CHARS) body = body.slice(0, PREV_MAX_CHARS) + "\n[… trecho cortado …]";
+      return `\n\n<reuniao_anterior titulo="${(p.title || "").replace(/"/g, "'")}" data="${dateLabel(p.startedAt)}">\n${body}\n</reuniao_anterior>`;
+    })
+    .join("");
+}
+
 // Chat sobre a reunião. `history` = [{role, text}] já trocadas; a última é a pergunta.
 export function chatRequest(session, history, { tags, previous, glossary } = {}) {
-  const prev = previous
-    ? `\n\n<reuniao_anterior titulo="${previous.title.replace(/"/g, "'")}" data="${dateLabel(previous.startedAt)}">\n${previous.summary?.text || toText(previous, { tags })}\n</reuniao_anterior>`
-    : "";
+  const prev = previousContext(previous, tags);
   return {
     system: `Você é o assistente de reuniões do Escribanote e responde em português do Brasil, de forma direta e curta (use listas quando ajudar).
 A reunião pode estar em andamento: responda com base no que foi dito até agora e diga quando algo ainda não foi discutido.
+Quando houver reuniões anteriores como consulta, diga de qual reunião (título e data) vem cada informação delas; os horários entre colchetes valem só para a reunião atual.
 ${GUARD}
 ${CITE}${glossaryNoteOf(glossary)}
 

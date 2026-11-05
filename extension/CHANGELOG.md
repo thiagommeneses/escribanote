@@ -2,6 +2,9 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.52 beta — 2026-11-05
+- Perguntas sobre várias reuniões: na aba IA, "Perguntar sobre" escolhe entre só esta reunião, esta + as anteriores com os mesmos participantes, ou esta + as 5 últimas. A IA diz de qual reunião (título e data) vem cada informação. Funciona com a chave própria e com o Pro.
+
 ## 0.9.51 beta — 2026-11-05
 - Alta precisão "Automático": escolhe o modelo pelo computador (placa de vídeo ou processador forte → equilibrado; senão, rápido) e, na bateria abaixo de 30% sem carregar, usa o rápido, que gasta menos. A escolha fica registrada no Diagnóstico.
 

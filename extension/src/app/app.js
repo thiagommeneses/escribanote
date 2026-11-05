@@ -1220,6 +1220,7 @@ async function renderAI() {
   const quick = questions().filter((p) => p.pinned !== false).map((p) => `<button class="chip" data-q="${esc(p.text)}" title="${esc(p.text)}">${esc(p.label)}${p.auto ? '<span class="pill-auto" title="Feita sozinha quando a reunião termina">auto</span>' : ""}</button>`);
   if (prev) quick.push(`<button class="chip" data-prev="${esc(prev.id)}">${icon("anterior")}Reunião anterior com estes participantes</button>`);
   $("quick").innerHTML = quick.join("");
+  renderScope();
   renderQuestionList();
 }
 
@@ -1756,6 +1757,23 @@ $("tpl-file").addEventListener("change", async () => {
   }
 });
 
+// Outras reuniões que a IA consulta junto com esta (seletor "Perguntar sobre").
+function scopeIds() {
+  const s = state.session;
+  const scope = $("chat-scope").value;
+  if (!s || scope === "this") return [];
+  if (scope === "same") return previousWithSame(s).map((m) => m.id);
+  return state.index.filter((m) => m.id !== s.id && (m.endedAt || m.updatedAt) <= (s.endedAt || Date.now())).slice(0, 5).map((m) => m.id);
+}
+function renderScope() {
+  const s = state.session;
+  const same = s ? previousWithSame(s).length : 0;
+  const opt = $("chat-scope").querySelector('[value="same"]');
+  opt.disabled = !same;
+  opt.textContent = same ? `esta + ${same} anterior${same === 1 ? "" : "es"} com estes participantes` : "esta + anteriores com estes participantes (nenhuma)";
+  if (opt.disabled && $("chat-scope").value === "same") $("chat-scope").value = "this";
+}
+
 async function ask(question, previousId) {
   question = (question || "").trim();
   if (!question || !state.session || state.busy) return;
@@ -1765,7 +1783,7 @@ async function ask(question, previousId) {
   $("chat-input").value = "";
   renderChatLog("");
   runAI(
-    { action: "chat", id: state.session.id, chatId: state.chatId, question, previousId },
+    { action: "chat", id: state.session.id, chatId: state.chatId, question, previousId, previousIds: scopeIds() },
     (t) => renderChatLog(t),
     async (m) => {
       state.busy = null;

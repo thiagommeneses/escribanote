@@ -205,6 +205,8 @@
                 <select id="chat-select" aria-label="Conversas"></select></div>
               <div class="chat-log" id="chat-log"></div>
               <div class="chips" id="quick"></div>
+              <label class="chat-scope tiny"><span>Perguntar sobre</span><select id="chat-scope" class="sm" aria-label="Quais reuniões a IA consulta">
+                <option value="this">esta reunião</option><option value="same">esta + as anteriores com estes participantes</option><option value="recent">esta + as 5 últimas reuniões</option></select></label>
               <div class="chat-input"><textarea id="chat-input" rows="1" placeholder="Pergunte qualquer coisa sobre esta reunião…"></textarea>
                 <button class="btn" id="q-save" type="button" title="Guardar esta pergunta como modelo, para usar em outras reuniões">Salvar modelo</button>
                 <button class="btn primary" id="chat-send">Enviar</button></div>
