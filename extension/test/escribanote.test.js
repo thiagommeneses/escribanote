@@ -1117,3 +1117,15 @@ test("perfis de voz: aprende pelo nome, reconhece na reunião seguinte e não ju
   // atualizar o perfil soma as reuniões
   assert.equal(learnProfiles(s, prints, profiles)[0].meetings, 2);
 });
+test("chat sobre várias reuniões: cada anterior vira material de consulta, cortado para caber", async () => {
+  const { chatRequest, previousContext } = await import("../src/lib/ai.js");
+  const a = session(); a.title = "Reunião A"; a.summary = { text: "Decidimos o orçamento." };
+  const b = session(); b.title = "Reunião B"; applyEvent(b, { kind: "caption", id: "1/x", speakerId: "x", text: "x ".repeat(9000) }, 1_001_000);
+  const ctx = previousContext([a, b]);
+  assert.equal((ctx.match(/<reuniao_anterior/g) || []).length, 2);
+  assert.match(ctx, /Decidimos o orçamento/);
+  assert.match(ctx, /trecho cortado/);
+  const req = chatRequest(session(), [{ role: "user", text: "e aí?" }], { previous: [a, b] });
+  assert.match(req.system, /titulo="Reunião B"/);
+  assert.match(req.system, /\[00:12:31\]/);
+});
