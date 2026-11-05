@@ -1,7 +1,7 @@
 // Service worker: mantém as sessões de reunião e as salva localmente
 // (chrome.storage.local). Só fala com a rede quando o usuário usa a IA.
 import { commitSummary } from "./lib/diff.js";
-import { mergeSpeakers, dedupeSpeakers,
+import { mergeSpeakers, dedupeSpeakers, mergeVoices, keepApart,
   createSession, applyEvent, normalize, setBlockTags, toggleLastBlockTag, participantNames, editBlock, undoEdit, splitBlock,
   addAsrSegment, effectiveEntries, toBlocks, speakerName,
 } from "./lib/transcript.js";
@@ -844,6 +844,12 @@ async function onAsrResult(msg) {
     s = await getSession(active.id);
     if (!s || s.paused || s.endedAt) return;
   }
+  if (msg.seg && Array.isArray(msg.seg.mergeVoices)) {
+    mergeVoices(s, msg.seg.mergeVoices);
+    noteEvent(s, "voices-merged", { merges: msg.seg.mergeVoices });
+    await changed(s);
+    return;
+  }
   const settings = await getSettings();
   s.myName = settings.myName || "";
   if (msg.seg && msg.seg.text) msg.seg.text = fixSpelling(s, msg.seg.text);
@@ -1219,7 +1225,8 @@ async function handle(msg, sender) {
       return loadIndex();
     case "get":
       // Reuniões gravadas antes da junção automática: o mesmo nome em vários ids vira um só participante.
-      if (s && dedupeSpeakers(s)) await changed(s, { now: true });
+      // Só nas encerradas: na ao vivo a junção acontece a cada evento e gravar aqui competiria com as falas chegando.
+      if (s && s.endedAt && dedupeSpeakers(s)) await changed(s, { now: true });
       return s;
     case "active-for-tab": {
       const active = await activeFor(msg.tabId);
@@ -1230,6 +1237,7 @@ async function handle(msg, sender) {
       if (typeof msg.title === "string" && msg.title.trim()) s.title = msg.title.trim().slice(0, 200);
       if (msg.summary !== undefined) s.summary = msg.summary;
       if (msg.speakers) Object.assign(s.speakers, msg.speakers);
+      if (Array.isArray(msg.apart) && msg.apart.length === 2) keepApart(s, msg.apart[0], msg.apart[1]);
       if (typeof msg.notesText === "string") s.notes.text = msg.notesText;
       if ("ataTemplateId" in msg) s.ataTemplateId = msg.ataTemplateId || null;
       if (typeof msg.ataPrompt === "string") s.ataPrompt = msg.ataPrompt.trim().slice(0, 4000);

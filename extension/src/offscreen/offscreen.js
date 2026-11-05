@@ -21,6 +21,7 @@ function report(patch) {
 const pipe = createPipeline({
   onStatus: (patch) => { if (state.retrans) retransProgress(patch); else report(patch); },
   onResult: (seg) => {
+    if (state.retrans && seg.mergeVoices) return chrome.runtime.sendMessage({ type: "asr-result", sessionId: state.retrans.sessionId, seg }).catch(() => {});
     if (state.retrans) {
       state.retrans.segments++;
       retransProgress({ progress: Math.min(99, Math.round(((seg.end - state.retrans.startedAt) / Math.max(1, state.retrans.durationMs)) * 100)) });

@@ -74,17 +74,20 @@ try {
   await sleep(1000);
   const t0 = Date.now();
   const r = await send("Runtime.evaluate", {
-    expression: `chrome.runtime.sendMessage({ type: "speakers-test", clips: ${JSON.stringify([q(a), q(a), q(b)])} })`,
+    expression: `chrome.runtime.sendMessage({ type: "speakers-test", clips: ${JSON.stringify([q(a), q(a), q(b), q(b), q(b)])} })`,
     awaitPromise: true, returnByValue: true, timeout: 600000,
   }, sessionId);
   const v = r.result.value || {};
   if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
   if (v.error) throw new Error(v.error);
-  console.log(`modelos carregados e 3 trechos analisados em ${Math.round((Date.now() - t0) / 1000)} s`);
+  console.log(`modelos carregados e 5 trechos analisados em ${Math.round((Date.now() - t0) / 1000)} s`);
   for (const [i, res] of v.results.entries()) console.log(`  trecho ${i + 1}: ${res.ms} ms ·`, res.parts.map((p) => `${p.voice} ${p.startMs}-${p.endMs} ms`).join(", "));
   const voices = v.results.map((res) => res.parts[0].voice);
   assert.equal(voices[0], voices[1], "o mesmo trecho duas vezes tem de dar a mesma voz");
   assert.notEqual(voices[0], voices[2], "o trecho com o tom alterado tem de dar outra voz");
+  // com fala suficiente das duas vozes, a consolidação (que junta vozes parecidas) não pode juntá-las
+  assert.equal(voices[3], voices[2]);
+  assert.equal(voices[4], voices[2]);
   assert.equal(v.voices, 2);
   console.log("✓ identificação de falantes OK (2 vozes)");
 } finally {

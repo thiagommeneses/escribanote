@@ -9,6 +9,19 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## A mesma voz não vira dois falantes (0.9.46)
+
+- **Agrupamento de vozes novo** (`src/asr/voicebook.js`, ideias do diart e do pyannote): o centroide de cada
+  voz é a média ponderada pelos segundos de fala (turno curto pesa pouco); duas vozes com 3 s de fala ou mais
+  e centroides muito parecidos (cosseno ≥ 0,6) viram uma só durante a reunião; no fim, voz com menos de 4 s
+  de fala vai para a mais parecida. As junções chegam à sessão como `mergeVoices` e remapeiam falas, votos
+  das legendas e o nome dado à mão.
+- **"Manter separados" é respeitado:** a junção automática por nome não junta dois participantes que você
+  pediu para manter separados (`session.apart`).
+- **Correção:** abrir uma reunião ao vivo não grava mais a sessão (a junção por nome na leitura vale só para
+  reuniões encerradas), o que podia competir com as falas chegando.
+- Modelos de perguntas: ações em ícones (perguntar, apagar) com dica ao passar o mouse.
+
 ## Modelos de perguntas, painel mais limpo e falantes sem duplicatas (0.9.45)
 
 - **Modelos de perguntas na aba IA:** "Salvar modelo" guarda a pergunta digitada para todas as reuniões
