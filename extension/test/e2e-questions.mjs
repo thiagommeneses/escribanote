@@ -283,6 +283,66 @@ try {
     await waitFor(() => ev("document.querySelector('#chat-log').textContent.includes('Resposta com contexto.')"), "resposta no chat", 10000);
     console.log("✓ pergunta: etapa 'Pesquisando na web…' no lugar de 'Pensando…' até o texto chegar");
 
+    // Exportar a resposta (só ela ou com a pergunta), editar e reenviar, gerar de novo e excluir a conversa com Desfazer.
+    {
+      const reply = (text) => evIn(swSid)(`(() => {
+        globalThis.fetch = async (url, init) => {
+          if (!String(url).startsWith("https://api.anthropic.com/")) return globalThis.__realFetch(url, init);
+          const ev = (e) => "data: " + JSON.stringify(e) + "\\n\\n";
+          return new Response(ev({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }) + ev({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: ${JSON.stringify(text)} } }) + ev({ type: "message_delta", delta: { stop_reason: "end_turn" } }), { status: 200 });
+        };
+      })()`);
+      const ctxClick = (label) => ev(`[...document.querySelectorAll('.ctx button')].find((b) => b.textContent.includes(${JSON.stringify(label)})).click()`);
+      const stored = () => ev("(async () => { const id = document.querySelector('#chat-select').value; const s = (await chrome.storage.local.get('session:teste-q-1'))['session:teste-q-1']; return JSON.stringify(s.chats.find((c) => c.id === id)?.messages.map((m) => [m.role, m.text, !!m.edited]) || null); })()");
+      await ev(`(() => { window.__exp = []; const real = URL.createObjectURL; URL.createObjectURL = (b) => (b.text().then((t) => window.__exp.push(t)), real(b)); })()`);
+      assert.equal(await ev("document.querySelector('#chat-export').hidden || document.querySelector('#chat-del').hidden"), false, "exportar e excluir no topo da conversa");
+      await ev("document.querySelector('#chat-log [data-export]').click()");
+      await waitFor(() => ev("!!document.querySelector('.ctx')"), "menu de exportar");
+      assert.deepEqual(JSON.parse(await ev("JSON.stringify([...document.querySelectorAll('.ctx button')].map((b) => b.textContent.trim().replace('›', '').trim()))")), ["Só a resposta", "Pergunta e resposta"]);
+      await ctxClick("Pergunta e resposta");
+      await ctxClick("Markdown");
+      await waitFor(() => ev("window.__exp.length === 1"), "arquivo exportado");
+      const md = await ev("window.__exp[0]");
+      assert.match(md, /## Pergunta\n\nQual o contexto do dia\?/);
+      assert.match(md, /## Resposta\n\nResposta com contexto\./);
+      await ev("document.querySelector('#chat-log [data-export]').click()");
+      await ctxClick("Só a resposta");
+      await ctxClick("Word");
+      await waitFor(() => ev("window.__exp.length === 2"), "Word exportado");
+      assert.match(await ev("window.__exp[1]"), /<p>Resposta com contexto\.<\/p>/);
+      assert.doesNotMatch(await ev("window.__exp[1].split('<body>')[1]"), /Qual o contexto/);
+      console.log("✓ exportar: só a resposta ou pergunta e resposta, em Markdown e Word");
+
+      await reply("Resposta nova.");
+      await ev("document.querySelector('#chat-log [data-edit]').click()");
+      await waitFor(() => ev("document.querySelector('#chat-log .msg.editing textarea')?.value === 'Qual o contexto do dia?'"), "pergunta em edição");
+      await ev(`(() => { const t = document.querySelector('#chat-log .msg.editing textarea'); t.value = 'Qual o contexto de hoje?'; document.querySelector('#chat-log .msg.editing [data-send]').click(); })()`);
+      await waitFor(() => ev("document.querySelector('#chat-log').textContent.includes('Resposta nova.')"), "resposta da pergunta editada", 10000);
+      await waitFor(async () => (await stored()) === JSON.stringify([["user", "Qual o contexto de hoje?", true], ["assistant", "Resposta nova.", false]]), "par substituído na reunião");
+      assert.equal(await ev("document.querySelector('#chat-log').textContent.includes('Resposta com contexto.')"), false, "a resposta antiga sai");
+      assert.match(await ev("document.querySelector('#chat-log .msg.user .edited')?.textContent || ''"), /editada/);
+      await reply("Resposta gerada de novo.");
+      await ev("document.querySelector('#chat-log [data-redo]').click()");
+      await waitFor(async () => (await stored()) === JSON.stringify([["user", "Qual o contexto de hoje?", true], ["assistant", "Resposta gerada de novo.", false]]), "gerar de novo substitui só a resposta");
+      if (process.env.SHOT_CHAT) {
+        await send("Emulation.setDeviceMetricsOverride", { width: 900, height: 700, deviceScaleFactor: 1, mobile: false }, sessionId);
+        await ev("document.documentElement.dataset.theme = 'dark'; document.querySelector('.card.chat').scrollIntoView(); document.querySelector('#chat-log [data-edit]').closest('.msg-edit').style.opacity = 1; document.querySelector('#chat-log [data-export]').click()");
+        await sleep(300);
+        const { data } = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+        (await import("node:fs")).writeFileSync(process.env.SHOT_CHAT, Buffer.from(data, "base64"));
+        await ev("document.body.click(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))");
+      }
+      console.log("✓ editar e reenviar a última pergunta, e gerar de novo, substituem o último par");
+
+      const before = await ev("document.querySelector('#chat-select').value");
+      await ev("document.querySelector('#chat-del').click()");
+      await waitFor(() => ev("document.querySelector('#chat-select').value === '' && !document.querySelector('#chat-select option[value=\"" + before + "\"]')"), "conversa excluída");
+      assert.match(await ev("document.querySelector('#toast').textContent"), /excluída/);
+      await ev("document.querySelector('#toast button').click()");
+      await waitFor(() => ev("document.querySelector('#chat-select').value === " + JSON.stringify(before) + " && document.querySelector('#chat-log').textContent.includes('Resposta gerada de novo.')"), "Desfazer devolve a conversa");
+      console.log("✓ excluir a conversa pelo topo, com Desfazer");
+    }
+
     // Conexão que cai no meio (o Chrome encerrou o service worker): erro claro e a pergunta volta para a caixa.
     await evIn(swSid)(`(() => { globalThis.fetch = async (url, init) => String(url).startsWith("https://api.anthropic.com/") ? new Response(new ReadableStream({ start() {} }), { status: 200 }) : globalThis.__realFetch(url, init); })()`);
     await ev(`(() => { const i = document.querySelector('#chat-input'); i.value = 'Pergunta que vai cair'; document.querySelector('#chat-send').click(); })()`);

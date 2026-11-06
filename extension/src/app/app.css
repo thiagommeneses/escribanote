@@ -732,6 +732,24 @@ body.usage-personal .inst { display: none !important; }
 .msg-acts .linkish { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); text-decoration: none; }
 .msg-acts .linkish:hover, .msg-acts .linkish:focus-visible { color: var(--accent); }
 .msg-acts .ic { width: 14px; height: 14px; }
+/* Conversa: exportar e excluir no topo; editar a última pergunta */
+.chat-head-r { display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 70%; }
+.chat-head-r select { max-width: none; min-width: 0; flex: 1 1 auto; }
+.hbtn { display: inline-grid; place-items: center; width: 28px; height: 28px; flex: none; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.hbtn:hover, .hbtn:focus-visible { background: var(--bg-soft); border-color: var(--border); color: var(--text); }
+.hbtn.danger:hover, .hbtn.danger:focus-visible { color: var(--danger); }
+.hbtn .ic { width: 16px; height: 16px; }
+.msg-edit { align-self: flex-end; display: flex; gap: 12px; margin-top: -4px; font-size: 12px; opacity: .0; transition: opacity .15s; }
+.chat-log:hover .msg-edit, .msg-edit:focus-within { opacity: 1; }
+@media (hover: none) { .msg-edit { opacity: 1; } }
+.msg-edit .linkish { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); text-decoration: none; }
+.msg-edit .linkish:hover, .msg-edit .linkish:focus-visible { color: var(--accent); }
+.msg-edit .ic { width: 14px; height: 14px; }
+.msg.editing { align-self: stretch; max-width: none; background: var(--bg-soft); border: 1px solid var(--accent); color: var(--text); padding: 8px; }
+.msg.editing textarea { width: 100%; min-height: 64px; max-height: 40vh; resize: vertical; font: inherit; border: 0; background: transparent; color: inherit; outline: none; }
+.msg.editing .edit-acts { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 6px; }
+.msg.editing .edit-acts .muted { margin-right: auto; }
+.msg .edited { display: block; margin-top: 4px; font-size: 11px; opacity: .75; }
 /* Exportar: partes incluídas */
 .menu .menu-head { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
 .menu .menu-opt.none { opacity: .55; }

@@ -2,6 +2,13 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.67 beta — 2026-11-06
+- Corrigido: respostas muito longas (roteiros detalhados) paravam no meio de uma frase sem aviso, porque a IA chegava ao limite de tamanho. O limite das perguntas dobrou (32 mil tokens) e, se ainda assim a resposta for cortada, a IA continua sozinha do ponto exato onde parou, até duas vezes, e o texto sai emendado. Se mesmo assim faltar, a resposta termina com um aviso claro. Vale também para a ata, com a sua chave e no Pro, sem custo extra de créditos.
+- Pergunte à IA: botão **Exportar** em cada resposta, com "Só a resposta", "Pergunta e resposta" ou "Conversa inteira", em Markdown, Word, texto ou PDF.
+- **Excluir a conversa**: ícone de lixeira ao lado do seletor de conversas (e no botão direito), com "Desfazer" por alguns segundos. O ícone vizinho exporta a conversa inteira.
+- **Editar e reenviar** a última pergunta, e **Gerar de novo** a última resposta, como no Claude e no ChatGPT: a resposta anterior é substituída e a pergunta fica marcada como "editada". Se a nova tentativa falhar, a conversa volta como estava. Também pelo botão direito.
+- Conversas excluídas ou editadas não voltam ao sincronizar com a conta Pro.
+
 ## 0.9.66 beta — 2026-11-06
 - Aparência: dois estilos novos, escolhidos por miniaturas com as cores reais. No claro, **Papel** (off-white quente com tons pastel, como o site). No escuro, **Editor** (grafite no estilo VS Code / Cursor, cantos retos e horários em fonte monoespaçada). No modo Automático, cada lado usa o estilo escolhido para ele (por exemplo, Papel de dia e Editor à noite) e troca junto com o sistema.
 - O widget dentro da reunião agora segue o tema (claro, Papel, escuro ou Editor), com as cores dos falantes e das marcações ajustadas a cada fundo. Quem preferir o widget sempre escuro, como antes, desliga a opção em Ajustes › Aparência.

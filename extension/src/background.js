@@ -1514,6 +1514,23 @@ async function handle(msg, sender) {
     case "support-add":
       if (!s) throw new Error("Reunião não encontrada.");
       return addSupport(s, msg.item || {});
+    case "chat-delete": {
+      // Excluir uma conversa da aba IA; o app guarda a conversa e o lugar para o "Desfazer".
+      if (!s) return null;
+      const at = s.chats.findIndex((c) => c.id === msg.chatId);
+      if (at < 0) return s;
+      s.chats.splice(at, 1);
+      s.deletedChats = [...(s.deletedChats || []).filter((d) => d.id !== msg.chatId), { id: msg.chatId, at: Date.now() }].slice(-200);
+      await changed(s, { now: true });
+      return s;
+    }
+    case "chat-restore": {
+      if (!s || !msg.chat?.id || s.chats.some((c) => c.id === msg.chat.id)) return s;
+      s.deletedChats = (s.deletedChats || []).filter((d) => d.id !== msg.chat.id);
+      s.chats.splice(Math.max(0, Math.min(Number(msg.at) || 0, s.chats.length)), 0, { ...msg.chat, updatedAt: Date.now() });
+      await changed(s, { now: true });
+      return s;
+    }
     case "support-remove": {
       if (!s) return null;
       s.support = (s.support || []).filter((x) => x.id !== msg.supportId);
@@ -1867,6 +1884,7 @@ chrome.runtime.onConnect.addListener((port) => {
     }, 15_000);
     port.onDisconnect.addListener(() => clearInterval(beat));
     const onPhase = (text) => post({ type: "phase", text });
+    let replaced = null; // "Editar e reenviar": o par pergunta/resposta substituído volta se a nova pergunta falhar
     try {
       const s = await getSession(req.id);
       if (!s) throw new Error("Reunião não encontrada.");
@@ -1897,12 +1915,16 @@ chrome.runtime.onConnect.addListener((port) => {
         chat = { id: Date.now().toString(36), createdAt: Date.now(), messages: [] };
         s.chats.push(chat);
       }
-      chat.messages.push({ role: "user", text: req.question, at: Date.now() });
+      if (req.replaceLast && chat.messages.length >= 2 && chat.messages.at(-1).role === "assistant" && chat.messages.at(-2).role === "user") {
+        replaced = { chatId: chat.id, pair: chat.messages.splice(-2) };
+      }
+      chat.messages.push({ role: "user", text: req.question, at: Date.now(), ...(replaced ? { edited: true } : {}) });
       post({ type: "chat", chatId: chat.id });
       const prevIds = [...new Set([...(Array.isArray(req.previousIds) ? req.previousIds : []), ...(req.previousId ? [req.previousId] : [])])].slice(0, 8);
       const previous = (await Promise.all(prevIds.map((pid) => getSession(pid)))).filter(Boolean);
       const result = await runChat(ai, s, chat.messages, settings, { previous, onDelta, onPhase, signal: abort.signal });
       chat.messages.push({ role: "assistant", text: result.text, at: Date.now() });
+      chat.updatedAt = Date.now();
       await changed(s, { now: true });
       post({ type: "done", text: result.text, chatId: chat.id });
     } catch (err) {
@@ -1911,6 +1933,7 @@ chrome.runtime.onConnect.addListener((port) => {
       const chat = s && s.chats.find((c) => c.messages.at(-1)?.role === "user" && c.messages.at(-1)?.text === req.question);
       if (chat) {
         chat.messages.pop();
+        if (replaced?.chatId === chat.id) chat.messages.push(...replaced.pair);
         if (!chat.messages.length) s.chats = s.chats.filter((c) => c !== chat);
         await changed(s, { now: true });
       }

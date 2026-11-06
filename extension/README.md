@@ -9,6 +9,18 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Respostas longas, exportar, excluir e editar conversas (0.9.67)
+
+- `ANSWER_MAX_TOKENS` = 32000. `stop_reason: "max_tokens"` com texto: `streamClaude` (sem `format`) e o
+  `streamAnswer` do servidor pedem a continuação com `continuation(messages, texto)` (resposta parcial como
+  turno do assistente + `CONTINUE_PROMPT`), até `MAX_CONTINUES` = 2; esgotadas, o texto ganha `CUT_NOTE`.
+- Porta `ai`, ação `chat` com `replaceLast`: tira o último par pergunta/resposta antes de perguntar e o devolve
+  se a nova tentativa falhar; a pergunta nova leva `edited: true`. Cada conversa grava `updatedAt`.
+- Mensagens `chat-delete` (marca `deletedChats: [{ id, at }]`) e `chat-restore`. `mergeDocs` não ressuscita
+  conversas marcadas e, com `updatedAt` nos dois lados, fica com a mais recente (antes: a mais longa).
+- `print.html?id&chat&what=a|qa|all&i` imprime resposta, par ou conversa; os arquivos saem em `.md`, `.doc`
+  (HTML para Word) e `.txt`.
+
 ## Estilos Papel e Editor (0.9.66)
 
 - Ajustes `themeLight` (`default` | `paper`), `themeDark` (`default` | `editor`) e `widgetTheme` (`follow` | `dark`).

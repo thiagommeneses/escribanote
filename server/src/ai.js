@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { refund, reserve } from "./credits.js";
 import { fail } from "./http.js";
-import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, isHeavyQuestion, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, SHOTS_MAX, withSources, phaseOf, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
+import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, isHeavyQuestion, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, SHOTS_MAX, withSources, phaseOf, continuation, MAX_CONTINUES, CUT_NOTE, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
 import { cleanDoc, loadDoc, requirePro, saveMeeting } from "./meetings.js";
 
 // US$ por milhão de tokens (entrada, saída, leitura de cache, escrita de cache de 5 min).
@@ -125,7 +125,7 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
   }
 
   // Resposta em streaming (SSE): "delta" com o texto parcial, "done" no fim, "error" se falhar.
-  async function streamAnswer(req, reply, { kind, model, credits, meetingId, system, messages, effort, cache, maxTokens = 8000, tools, onDone }) {
+  async function streamAnswer(req, reply, { kind, model, credits, meetingId, system, messages, effort, cache, maxTokens = 16000, tools, onDone }) {
     const call = { ...(await start(req, kind, model, credits, meetingId)), model };
     reply.hijack();
     const res = reply.raw;
@@ -159,7 +159,8 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
       const sources = [];
       let final;
       let convo = messages;
-      for (let turn = 0; turn < 4 && !closed; turn++) {
+      let pauses = 0, continues = 0;
+      while (!closed) {
         stream = anthropic.messages.stream({ ...params, messages: convo });
         for await (const ev of stream) {
           if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") {
@@ -173,7 +174,17 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
         final = await stream.finalMessage();
         for (const k of Object.keys(usage)) usage[k] += (k === "web_search_requests" ? final.usage?.server_tool_use?.web_search_requests : final.usage?.[k]) || 0;
         for (const b of final.content || []) for (const c of b.citations || []) if (c.url) sources.push({ url: c.url, title: c.title });
-        if (final.stop_reason !== "pause_turn") break;
+        // Cortada pelo limite de tamanho: pede a continuação e emenda no mesmo texto.
+        if (final.stop_reason === "max_tokens" && text.trim() && continues < MAX_CONTINUES) {
+          continues++;
+          convo = continuation(messages, text);
+          continue;
+        }
+        if (final.stop_reason === "max_tokens" && text.trim()) {
+          text += CUT_NOTE;
+          send("delta", { text: CUT_NOTE });
+        }
+        if (final.stop_reason !== "pause_turn" || ++pauses >= 4) break;
         convo = [...convo, { role: "assistant", content: final.content }];
       }
       if (final?.stop_reason === "refusal") throw new Error("O modelo recusou esta solicitação.");

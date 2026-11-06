@@ -135,7 +135,7 @@ export function previousContext(previous, tags) {
 // No Pro, uma pergunta com mais de LONG_QUESTION caracteres custa 2 créditos (a resposta pode ir a ANSWER_MAX_TOKENS).
 export const QUESTION_MAX = 10000;
 export const LONG_QUESTION = 2000;
-export const ANSWER_MAX_TOKENS = 16000;
+export const ANSWER_MAX_TOKENS = 32000;
 // Conta só o que a pessoa escreveu: o material de reuniões anteriores colado antes da pergunta não entra.
 export function questionLength(text) {
   return String(text || "").replace(/<reuniao_anterior[^>]*>[\s\S]*?<\/reuniao_anterior>/g, "").trim().length;
@@ -371,6 +371,14 @@ function friendlyError(status, detail) {
   return `Erro ${status}${hint ? ` (${hint})` : ""}${detail ? `: ${detail}` : ""}`;
 }
 
+// Resposta cortada pelo limite de tokens: até MAX_CONTINUES pedidos de continuação, emendados no mesmo texto.
+export const MAX_CONTINUES = 2;
+export const CONTINUE_PROMPT = "Sua resposta acima foi cortada pelo limite de tamanho. Continue exatamente do ponto onde parou (mesmo que no meio de uma palavra), sem repetir nada, sem introdução e sem comentar a interrupção.";
+export const CUT_NOTE = "\n\n*[A resposta foi cortada pelo limite de tamanho. Peça a continuação ou divida a pergunta.]*";
+export function continuation(messages, partial) {
+  return [...messages, { role: "assistant", content: partial.replace(/\s+$/, "") }, { role: "user", content: CONTINUE_PROMPT }];
+}
+
 // Resposta sem texto: carrega o motivo para quem chamou decidir se tenta de outro jeito.
 export class EmptyAnswer extends Error {
   constructor(message, r) {
@@ -385,7 +393,8 @@ export async function streamClaude({ apiKey, model, system, messages, effort = "
   let convo = messages;
   let text = "";
   const sources = [];
-  for (let turn = 0; turn < 4; turn++) {
+  let pauses = 0, continues = 0;
+  for (;;) {
     const r = await streamOnce({ apiKey, model, system, messages: convo, effort, maxTokens, format, tools, signal, onPhase, idleMs, onText: (t) => { text += t; onDelta?.(text); } });
     for (const b of r.blocks) for (const c of b.citations || []) if (c.url) sources.push({ url: c.url, title: c.title });
     if (r.stopReason === "refusal") throw new Error("O modelo recusou esta solicitação.");
@@ -394,11 +403,19 @@ export async function streamClaude({ apiKey, model, system, messages, effort = "
       const whole = r.blocks.filter((b) => b.type === "text").map((b) => b.text || "").join("");
       if (whole.trim()) { text = whole; onDelta?.(text); }
     }
+    // Cortada pelo limite de tamanho: pede a continuação (texto livre; JSON estruturado não se emenda).
+    if (r.stopReason === "max_tokens" && text.trim() && !format && continues < MAX_CONTINUES) {
+      continues++;
+      convo = continuation(messages, text);
+      continue;
+    }
     if (r.stopReason !== "pause_turn") {
+      if (r.stopReason === "max_tokens" && text.trim() && !format) { text += CUT_NOTE; onDelta?.(text); }
       if (!text.trim() && r.stopReason === "max_tokens") throw new EmptyAnswer("A resposta veio vazia: o modelo usou todo o limite de tokens raciocinando. Tente de novo ou escolha um modelo mais rápido em Ajustes › IA.", r);
       if (!text.trim()) throw new EmptyAnswer(`A resposta veio vazia (motivo: ${r.stopReason || "sem stop_reason"}; blocos: ${r.blocks.map((b) => b.type).join(", ") || "nenhum"}; eventos: ${r.events}).`, r);
       return { text, sources, model, stopReason: r.stopReason, createdAt: Date.now() };
     }
+    if (++pauses >= 4) break;
     convo = [...convo, { role: "assistant", content: r.blocks }];
   }
   if (!text.trim()) throw new EmptyAnswer("A resposta veio vazia (a pesquisa não terminou).", {});

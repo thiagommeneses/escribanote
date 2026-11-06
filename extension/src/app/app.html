@@ -203,7 +203,9 @@
             </div>
             <div class="card chat">
               <div class="card-head"><b>Pergunte à IA</b>
-                <select id="chat-select" aria-label="Conversas"></select></div>
+                <div class="chat-head-r"><select id="chat-select" aria-label="Conversas"></select>
+                  <button type="button" class="hbtn" id="chat-export" title="Exportar esta conversa" aria-label="Exportar esta conversa" hidden><i data-ic="baixar"></i></button>
+                  <button type="button" class="hbtn danger" id="chat-del" title="Excluir esta conversa" aria-label="Excluir esta conversa" hidden><i data-ic="apagar"></i></button></div></div>
               <div class="chat-log" id="chat-log"></div>
               <div class="chips" id="quick"></div>
               <div class="support" id="support">

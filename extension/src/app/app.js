@@ -1596,20 +1596,29 @@ function userMsgHtml(text) {
 function renderChatLog(streamText) {
   const chat = state.session.chats.find((c) => c.id === state.chatId);
   const msgs = chat ? chat.messages.slice() : [];
+  // "Editar e reenviar" / "Gerar de novo": o último par some enquanto a nova resposta chega.
+  if (streamText !== undefined && state.replacing && msgs.length >= 2) msgs.splice(-2);
   if (streamText !== undefined) {
     if (state.pendingQuestion && (!msgs.length || msgs.at(-1).role !== "user")) msgs.push({ role: "user", text: state.pendingQuestion });
     msgs.push({ role: "assistant", text: streamText, waiting: !streamText });
   }
   const streaming = streamText !== undefined;
   const answers = msgs.filter((m) => m.role === "assistant").length;
+  $("chat-export").hidden = $("chat-del").hidden = !chat || streaming;
+  // A última pergunta já respondida pode ser editada e reenviada (ou gerada de novo), como no Claude e no ChatGPT.
+  const editable = !streaming && msgs.length >= 2 && msgs.at(-1).role === "assistant" && msgs.at(-2).role === "user" ? msgs.length - 2 : -1;
   $("chat-log").innerHTML = msgs.length
     ? msgs
         .map((m, i) => {
-          if (m.role !== "assistant") return `<div class="msg user">${userMsgHtml(m.text)}</div>`;
+          if (m.role !== "assistant") {
+            const edited = m.edited ? `<small class="edited">editada</small>` : "";
+            const tools = i === editable ? `<div class="msg-edit"><button type="button" class="linkish" data-edit>${icon("editar")}Editar e reenviar</button><button type="button" class="linkish" data-redo>${icon("refazer")}Gerar de novo</button></div>` : "";
+            return `<div class="msg user" data-i="${i}">${userMsgHtml(m.text)}${edited}</div>${tools}`;
+          }
           if (m.waiting) return `<div class="msg assistant">${spinHtml(state.chatPhase || "Pensando…", state.chatT0 || Date.now())}</div>`;
           const done = !streaming || i < msgs.length - 1;
           const acts = done
-            ? `<div class="msg-acts"><button type="button" class="linkish" data-copy="a" data-i="${i}">${icon("copiar")}Copiar resposta</button>${msgs[i - 1]?.role === "user" ? `<button type="button" class="linkish" data-copy="qa" data-i="${i}">${icon("copiar")}Copiar com a pergunta</button>` : ""}</div>`
+            ? `<div class="msg-acts"><button type="button" class="linkish" data-copy="a" data-i="${i}">${icon("copiar")}Copiar resposta</button>${msgs[i - 1]?.role === "user" ? `<button type="button" class="linkish" data-copy="qa" data-i="${i}">${icon("copiar")}Copiar com a pergunta</button>` : ""}<button type="button" class="linkish" data-export data-i="${i}" aria-haspopup="menu">${icon("baixar")}Exportar</button></div>`
             : "";
           return `<div class="msg assistant"><div class="md">${withCites(mdToHtml(m.text))}</div>${acts}</div>`;
         })
@@ -1630,6 +1639,13 @@ async function copyRich(html, text) {
 const qaHtml = (q, a) => `<p><b>Pergunta:</b><br>${esc(q).replace(/\n/g, "<br>")}</p><p><b>Resposta:</b></p>${mdToHtml(a)}`;
 const qaText = (q, a) => `Pergunta: ${q}\n\nResposta:\n${a}`;
 $("chat-log").addEventListener("click", async (e) => {
+  if (e.target.closest("[data-edit]")) return startEditLast();
+  if (e.target.closest("[data-redo]")) return resendLast();
+  const exp = e.target.closest("[data-export]");
+  if (exp) {
+    const r = exp.getBoundingClientRect();
+    return openMenu(r.left, r.bottom + 4, answerExportMenu(+exp.dataset.i));
+  }
   const b = e.target.closest("[data-copy]");
   if (!b) return;
   const chat = state.session.chats.find((c) => c.id === state.chatId);
@@ -1664,6 +1680,120 @@ $("chat-select").addEventListener("change", (e) => {
   state.chatId = e.target.value || null;
   renderChatLog();
 });
+
+// ----- Exportar, excluir e editar conversas -----
+const currentChat = () => state.session?.chats.find((c) => c.id === state.chatId) || null;
+function chatPairs(chat) {
+  const pairs = [];
+  for (const [i, m] of chat.messages.entries()) {
+    if (m.role === "user") pairs.push({ q: stripPrev(m.text), a: "", i: -1 });
+    else if (pairs.length) Object.assign(pairs.at(-1), { a: m.text, i });
+  }
+  return pairs.filter((p) => p.a);
+}
+const chatTitle = (chat) => (questions().find((q) => q.id === chat.tplId)?.label || stripPrev(chat.messages[0]?.text).split("\n")[0] || "Conversa").slice(0, 80);
+// what: "a" (só a resposta), "qa" (pergunta e resposta) ou "all" (conversa inteira); i = índice da resposta.
+function chatMarkdown(chat, what, i) {
+  const s = state.session;
+  if (what === "a") return chat.messages[i].text;
+  const pairs = what === "all" ? chatPairs(chat) : chatPairs(chat).filter((p) => p.i === i);
+  const head = `# ${what === "all" ? chatTitle(chat) : "Pergunta à IA"}\n\n${s.title || "Reunião"} · ${dateLabel(s.startedAt)}\n\n`;
+  return head + pairs.map((p) => `## Pergunta\n\n${p.q}\n\n## Resposta\n\n${p.a}`).join("\n\n---\n\n") + "\n";
+}
+function exportChat(what, kind, i) {
+  const s = state.session;
+  const chat = currentChat();
+  if (!s || !chat) return;
+  if (kind === "pdf") {
+    const q = new URLSearchParams({ id: s.id, chat: chat.id, what, ...(what === "all" ? {} : { i: String(i) }) });
+    return void chrome.tabs.create({ url: chrome.runtime.getURL(`src/app/print.html?${q}`) });
+  }
+  const md = chatMarkdown(chat, what, i);
+  const body = kind === "txt" ? ataPlainText(md) : kind === "doc" ? `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<title>${esc(chatTitle(chat))}</title>\n</head>\n<body>\n${mdToHtml(md)}\n</body>\n</html>` : md;
+  const mime = kind === "txt" ? "text/plain" : kind === "doc" ? "application/msword" : "text/markdown";
+  const base = fileName(s, "md").replace(/\.md$/, "");
+  const name = `${base} - IA - ${what === "all" ? "conversa" : what === "qa" ? "pergunta e resposta" : "resposta"}.${kind}`;
+  const url = URL.createObjectURL(new Blob([body], { type: `${mime};charset=utf-8` }));
+  Object.assign(document.createElement("a"), { href: url, download: name }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast(`Arquivo ${kind === "doc" ? "do Word" : kind === "txt" ? "de texto" : "Markdown"} baixado`);
+}
+const exportFormats = (what, i) => [
+  { label: "Markdown (.md)", icon: "baixar", run: () => exportChat(what, "md", i) },
+  { label: "Word (.doc)", icon: "texto", run: () => exportChat(what, "doc", i) },
+  { label: "Texto (.txt)", icon: "texto", run: () => exportChat(what, "txt", i) },
+  { label: "Salvar como PDF", icon: "pdf", run: () => exportChat(what, "pdf", i) },
+];
+function answerExportMenu(i) {
+  const chat = currentChat();
+  const hasQ = chat?.messages[i - 1]?.role === "user";
+  return [
+    { label: "Só a resposta", icon: "ia", sub: () => exportFormats("a", i) },
+    hasQ ? { label: "Pergunta e resposta", icon: "chat", sub: () => exportFormats("qa", i) } : null,
+    chat && chatPairs(chat).length > 1 ? { label: "Conversa inteira", icon: "lista", sub: () => exportFormats("all", i) } : null,
+  ];
+}
+$("chat-export").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const r = $("chat-export").getBoundingClientRect();
+  openMenu(r.right - 200, r.bottom + 4, exportFormats("all"));
+});
+async function deleteChat(id = state.chatId) {
+  const s = state.session;
+  const at = s?.chats.findIndex((c) => c.id === id) ?? -1;
+  if (at < 0 || state.busy === "chat") return;
+  const chat = structuredClone(s.chats[at]);
+  state.session = await send({ type: "chat-delete", id: s.id, chatId: id });
+  if (state.chatId === id) state.chatId = null;
+  await renderAI();
+  toast(`Conversa “${chatTitle(chat).slice(0, 40)}” excluída`, {
+    label: "Desfazer",
+    run: async () => {
+      if (state.session?.id !== s.id) return;
+      state.session = await send({ type: "chat-restore", id: s.id, chat, at });
+      state.chatId = chat.id;
+      await renderAI();
+      toast("Conversa de volta");
+    },
+  });
+}
+$("chat-del").addEventListener("click", () => deleteChat());
+
+function startEditLast() {
+  const chat = currentChat();
+  if (!chat || state.busy) return;
+  const i = chat.messages.length - 2;
+  const el = $("chat-log").querySelector(`.msg.user[data-i="${i}"]`);
+  if (!el) return;
+  const original = stripPrev(chat.messages[i].text);
+  el.classList.add("editing");
+  el.nextElementSibling?.classList.contains("msg-edit") && el.nextElementSibling.remove();
+  el.innerHTML = `<textarea maxlength="${QUESTION_MAX}" aria-label="Editar a pergunta"></textarea>
+    <div class="edit-acts"><span class="muted tiny">A resposta atual será substituída</span><button type="button" class="btn sm" data-cancel>Cancelar</button><button type="button" class="btn sm primary" data-send>Reenviar</button></div>`;
+  const ta = el.querySelector("textarea");
+  ta.value = original;
+  ta.style.height = Math.min(ta.scrollHeight + 2, innerHeight * 0.4) + "px";
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+  const submit = () => {
+    const text = ta.value.trim();
+    if (!text) return toast("Escreva a pergunta");
+    ask(text, undefined, { replaceLast: true });
+  };
+  el.querySelector("[data-cancel]").onclick = () => renderChatLog();
+  el.querySelector("[data-send]").onclick = submit;
+  ta.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); renderChatLog(); }
+    else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+  });
+  ta.addEventListener("input", () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight + 2, innerHeight * 0.4) + "px"; });
+}
+function resendLast() {
+  const chat = currentChat();
+  const m = chat?.messages.at(-2);
+  if (!m || m.role !== "user" || state.busy) return;
+  ask(stripPrev(m.text), undefined, { replaceLast: true });
+}
 
 // ----- Espera da IA: indicador animado, tempo decorrido e prévia opcional do texto -----
 const since = (t0) => {
@@ -2199,23 +2329,32 @@ function renderScope() {
   if (opt.disabled && $("chat-scope").value === "same") $("chat-scope").value = "this";
 }
 
-async function ask(question, previousId) {
+async function ask(question, previousId, { replaceLast = false } = {}) {
   question = (question || "").trim();
   if (!question || !state.session || state.busy) return;
   if (!(await ensureApiPermission())) return toast("Permissão para a API negada");
+  replaceLast = replaceLast && !!currentChat();
   state.busy = "chat";
+  state.replacing = replaceLast;
   state.chatT0 = Date.now();
   state.chatPhase = null;
   state.pendingQuestion = question;
-  $("chat-input").value = "";
+  if (!replaceLast) $("chat-input").value = "";
   if (document.activeElement === $("chat-input")) paintCount($("chat-input"));
   renderChatLog("");
   runAI(
-    { action: "chat", id: state.session.id, chatId: state.chatId, question, previousId, previousIds: scopeIds() },
+    { action: "chat", id: state.session.id, chatId: state.chatId, question, previousId, previousIds: scopeIds(), ...(replaceLast ? { replaceLast: true } : {}) },
     (t) => renderChatLog(t),
     async (m) => {
       state.busy = null;
       state.pendingQuestion = null;
+      state.replacing = false;
+      if (m.type === "error" && replaceLast) {
+        // O serviço devolve o par anterior à conversa; mostra-o de novo com o erro embaixo.
+        renderChatLog();
+        $("chat-log").insertAdjacentHTML("beforeend", `<div class="msg assistant" style="color:var(--danger)">${esc(m.message)}</div>`);
+        return;
+      }
       if (m.type === "error") {
         // Troca o indicador de espera pelo erro e devolve a pergunta à caixa, para tentar de novo sem redigitar.
         $("chat-log").querySelector(".msg.assistant:last-child .wait-inline")?.closest(".msg")?.remove();
@@ -3011,13 +3150,24 @@ function blockMenu(blk) {
 }
 function chatMenu(msg) {
   const copy = (sel) => () => msg.querySelector(sel)?.click();
+  const tail = state.chatId && !state.busy ? [{ sep: true }, { label: "Exportar a conversa", icon: "baixar", sub: () => exportFormats("all") }, { label: "Excluir a conversa", icon: "apagar", danger: true, run: () => deleteChat() }] : [];
+  if (msg.classList.contains("editing")) return null;
   if (msg.classList.contains("user")) {
-    return [{ label: "Copiar pergunta", icon: "copiar", run: async () => { await navigator.clipboard.writeText(msg.innerText.trim()); toast("Pergunta copiada"); } }];
+    const last = msg.nextElementSibling?.classList.contains("msg-edit");
+    return [
+      { label: "Copiar pergunta", icon: "copiar", run: async () => { await navigator.clipboard.writeText(msg.innerText.trim()); toast("Pergunta copiada"); } },
+      last ? { label: "Editar e reenviar", icon: "editar", run: () => startEditLast() } : null,
+      last ? { label: "Gerar a resposta de novo", icon: "refazer", run: () => resendLast() } : null,
+      ...tail,
+    ];
   }
   if (!msg.querySelector("[data-copy]")) return null;
+  const i = +msg.querySelector('[data-copy="a"]').dataset.i;
   return [
     { label: "Copiar resposta", icon: "copiar", run: copy('[data-copy="a"]') },
     msg.querySelector('[data-copy="qa"]') ? { label: "Copiar com a pergunta", icon: "copiar", run: copy('[data-copy="qa"]') } : null,
+    { label: "Exportar", icon: "baixar", sub: () => answerExportMenu(i).filter(Boolean) },
+    ...tail,
   ];
 }
 function menuFor(target) {
