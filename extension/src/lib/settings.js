@@ -88,6 +88,7 @@ export const DEFAULTS = {
   tags: DEFAULT_TAGS,
   shotArea: "tab", // capturas de tela: "tab" (a aba inteira) | "shared" (só o vídeo em destaque: apresentação ou tela compartilhada)
   cleanSpeech: false, // leitura limpa: tela e exportações sem "ahn", "hum" e repetições coladas (o texto guardado não muda)
+  exportInclude: null, // partes da exportação ({ chat, notes, highlights, chapters, ai }); null = padrão (tudo, menos a IA)
   exportAta: false, // ligado: exportações da reunião levam a ata (modelo institucional, assinatura) e o rodapé; padrão = só a reunião
   webhookOn: false, // envia a reunião (ata, transcrição, perguntas automáticas) para webhookUrl quando ela termina
   webhookUrl: "",
