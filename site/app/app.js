@@ -1,7 +1,7 @@
 // Escribanote — área logada. Rotas pelo fragmento (#/…); dados pela API; transcrição, ata, exportações
 // e análise com as mesmas bibliotecas da extensão (copiadas para ./lib na publicação).
 import { api, ApiError, stream } from "./api.js";
-import { QUICK_PROMPTS } from "./lib/ai.js";
+import { QUICK_PROMPTS, QUESTION_MAX, questionCredits } from "./lib/ai.js";
 import { clock, FORMATS, fileName, mdToHtml, PLATFORM, toHtml, ataPlainText, ataFileName, ataEditorHtml } from "./lib/format.js";
 import { DEFAULT_TAGS } from "./lib/settings.js";
 import { computeStats, fmtDuration } from "./lib/stats.js";
@@ -656,6 +656,13 @@ function renderPane() {
   else if (tab === "ia") pane.innerHTML = iaPane();
   else if (tab === "hl") pane.innerHTML = hlPane();
   else pane.innerHTML = analysisPane();
+  // Contagem e custo: pergunta com mais de 2.000 caracteres custa 2 créditos.
+  if (tab === "ia") $("ask-input")?.addEventListener("input", (e) => {
+    const v = e.target.value;
+    $("ask-count").textContent = `${v.length.toLocaleString("pt-BR")}/${QUESTION_MAX.toLocaleString("pt-BR")}`;
+    const c = questionCredits(v);
+    $("ask-cost").textContent = `${c} crédito${c === 1 ? "" : "s"}`;
+  });
   if (tab === "ia") $("ask-input")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) askMeeting($("ask-input").value);
   });
@@ -791,8 +798,8 @@ function iaPane() {
   const quick = QUICK_PROMPTS.filter((p) => ["email", "acoes", "decisoes", "pontos"].includes(p.id));
   return `<div class="qa" id="qa">${qa.map((x) => `<div class="q">${esc(x.q)}</div><div class="a">${x.a ? mdToHtml(x.a) : '<span class="typing"></span>'}</div>`).join("")}</div>
     <div class="quick">${quick.map((p) => `<button class="chip" data-act="quick" data-q="${esc(p.text)}">${esc(p.label)}</button>`).join("")}</div>
-    <div class="ask-box"><textarea class="input" id="ask-input" placeholder="Pergunte qualquer coisa sobre esta reunião…" aria-label="Pergunta"></textarea>
-      <div class="row"><button class="btn dark" data-act="ask">Perguntar <span class="cost">1 crédito</span></button><span class="small muted">Ctrl+Enter envia</span></div></div>`;
+    <div class="ask-box"><textarea class="input" id="ask-input" maxlength="${QUESTION_MAX}" placeholder="Pergunte qualquer coisa sobre esta reunião…" aria-label="Pergunta"></textarea>
+      <div class="row"><button class="btn dark" data-act="ask">Perguntar <span class="cost" id="ask-cost">1 crédito</span></button><span class="small muted"><span id="ask-count">0/${QUESTION_MAX.toLocaleString("pt-BR")}</span> · Ctrl+Enter envia</span></div></div>`;
 }
 
 function hlPane() {
@@ -1202,7 +1209,7 @@ async function renderAccount(params) {
         <dl class="kv"><dt>Assinatura</dt><dd>${esc(statusText)}</dd><dt>Plano</dt><dd>${sub?.interval === "year" ? "Anual" : "Mensal"} · ${PLAN_NAMES[sub?.currency === "usd" ? "usd" : "brl"][sub?.interval === "year" ? "year" : "month"]}</dd></dl>
         <div><div class="row" style="justify-content:space-between"><b>Créditos de IA</b><span class="small muted">${c.balance} de ${c.max} · +${c.perCycle} ${c.renewsAt ? `em ${dateShort(c.renewsAt)}` : "a cada mês"}</span></div>
         <div class="meter" style="margin-top:6px"><b style="width:${Math.min(100, (c.balance / c.max) * 100)}%"></b></div>
-        <p class="small muted" style="margin-top:6px">Ata, revisão, pergunta, e-mail de follow-up e tarefas: 1 crédito. Pergunta sobre todas as reuniões: 2. Os que sobram acumulam até ${c.max}${sub?.interval === "year" ? ". No plano anual, os créditos chegam todo mês" : ""}.</p></div>
+        <p class="small muted" style="margin-top:6px">Ata, revisão, pergunta, e-mail de follow-up e tarefas: 1 crédito. Pergunta com mais de 2.000 caracteres ou sobre todas as reuniões: 2. Os que sobram acumulam até ${c.max}${sub?.interval === "year" ? ". No plano anual, os créditos chegam todo mês" : ""}.</p></div>
         <div class="row"><button class="btn" data-act="portal">Forma de pagamento, recibos e cancelamento</button></div></section>`
     : `<section class="panel subscribe" id="subscribe">${subscribeHtml(pendingPlan() || {})}</section>`;
   view.innerHTML = `<section class="page">

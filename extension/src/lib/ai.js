@@ -131,11 +131,25 @@ export function previousContext(previous, tags) {
     .join("");
 }
 
+// Tamanho das perguntas: até QUESTION_MAX caracteres (prompts detalhados, como roteiros de análise).
+// No Pro, uma pergunta com mais de LONG_QUESTION caracteres custa 2 créditos (a resposta pode ir a ANSWER_MAX_TOKENS).
+export const QUESTION_MAX = 10000;
+export const LONG_QUESTION = 2000;
+export const ANSWER_MAX_TOKENS = 16000;
+// Conta só o que a pessoa escreveu: o material de reuniões anteriores colado antes da pergunta não entra.
+export function questionLength(text) {
+  return String(text || "").replace(/<reuniao_anterior[^>]*>[\s\S]*?<\/reuniao_anterior>/g, "").trim().length;
+}
+export function questionCredits(text) {
+  return questionLength(text) > LONG_QUESTION ? 2 : 1;
+}
+
 // Chat sobre a reunião. `history` = [{role, text}] já trocadas; a última é a pergunta.
 export function chatRequest(session, history, { tags, previous, glossary } = {}) {
   const prev = previousContext(previous, tags);
   return {
     system: `Você é o assistente de reuniões do Escribanote e responde em português do Brasil, de forma direta e curta (use listas quando ajudar).
+Quando a pergunta trouxer um roteiro, tópicos ou formato de resposta, siga-o por completo e na ordem pedida, com o detalhamento solicitado, mesmo que a resposta fique longa.
 A reunião pode estar em andamento: responda com base no que foi dito até agora e diga quando algo ainda não foi discutido.
 Quando houver reuniões anteriores como consulta, diga de qual reunião (título e data) vem cada informação delas; os horários entre colchetes valem só para a reunião atual.
 ${GUARD}

@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { refund, reserve } from "./credits.js";
 import { fail } from "./http.js";
-import { ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
+import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
 import { cleanDoc, loadDoc, requirePro, saveMeeting } from "./meetings.js";
 
 // US$ por milhão de tokens (entrada, saída, leitura de cache, escrita de cache de 5 min).
@@ -36,7 +36,8 @@ function historyFrom(body) {
   const h = Array.isArray(body?.history) ? body.history.slice(-20) : [];
   const out = h
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.text === "string" && m.text.trim())
-    .map((m) => ({ role: m.role, text: m.text.slice(0, 8000) }));
+    // Perguntas até QUESTION_MAX (a última pode trazer reuniões anteriores como consulta); respostas longas ficam inteiras.
+    .map((m, i, all) => ({ role: m.role, text: m.text.slice(0, m.role === "assistant" ? 80000 : i === all.length - 1 ? 150000 : QUESTION_MAX + 2000) }));
   if (!out.length || out[out.length - 1].role !== "user") fail(400, "bad_request", "Faltou a pergunta.");
   return out;
 }
@@ -176,13 +177,13 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
     await streamAnswer(req, reply, {
       kind: "ask",
       model: config.models.fast,
-      credits: 1,
+      credits: questionCredits(history.at(-1).text), // pergunta longa (roteiro detalhado) = 2 créditos
       meetingId: doc.id,
       system: r.system,
       messages: r.messages,
       effort: "low",
       cache: true, // a transcrição fica no prompt de sistema: perguntas seguidas leem do cache
-      maxTokens: 4000,
+      maxTokens: ANSWER_MAX_TOKENS,
     });
   });
 

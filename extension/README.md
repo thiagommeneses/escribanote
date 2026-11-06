@@ -9,6 +9,16 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Perguntas longas (0.9.57)
+
+- `lib/ai.js` define `QUESTION_MAX` (10.000 caracteres), `LONG_QUESTION` (2.000) e `ANSWER_MAX_TOKENS` (16.000),
+  usados pela extensão, pelo servidor e pelo app web. `questionCredits()` cobra 2 créditos no Pro por pergunta
+  longa, sem contar as reuniões anteriores coladas como consulta (`questionLength`).
+- Servidor: `historyFrom` aceita perguntas até 12 mil caracteres (a última, com reuniões anteriores, até 150 mil)
+  e respostas anteriores até 80 mil; `/ai/ask` usa `ANSWER_MAX_TOKENS` e `questionCredits`.
+- O prompt do chat manda seguir por completo o roteiro e o formato pedidos na pergunta.
+- `data-count` sem `maxlength` mostra só a contagem ("1.234 caracteres").
+
 ## Contagem de caracteres (0.9.56)
 
 - Campos com `maxlength` e `data-count` mostram "n/máx" (`countHtml`/`paintCount` em `app.js`):

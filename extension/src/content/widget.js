@@ -172,7 +172,7 @@
     <div class="panel" id="ai-panel" hidden>
       <div class="chips" id="ai-chips"></div>
       <div class="answer" id="ai-answer"></div>
-      <div class="input"><input id="ai-input" placeholder="Pergunte sobre a reunião…" maxlength="2000">
+      <div class="input"><input id="ai-input" placeholder="Pergunte sobre a reunião…" maxlength="10000">
         <button class="ib" id="ai-send" title="Perguntar">${svg("send")}</button></div>
     </div>
     <div class="upd" id="upd" hidden></div>

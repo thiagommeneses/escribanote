@@ -26,7 +26,9 @@ async function waitFor(fn, what, ms = 8000) { const end = Date.now() + ms; for (
 
 const t0 = Date.now() - 3600_000;
 const sample = { id: "teste-q-1", title: "Reunião de teste das perguntas", platform: "meet", meetingKey: "meet:abc-defg-hij", startedAt: t0, updatedAt: t0 + 60_000, endedAt: t0 + 60_000,
-  speakers: { a: "Ana" }, entries: [{ id: "1", at: t0 + 1000, speakerId: "a", text: "Bom dia, vamos começar.", kind: "caption", source: "protocol" }], asr: [], notes: { text: "", items: [] }, highlights: {} };
+  speakers: { a: "Ana" }, entries: [{ id: "1", at: t0 + 1000, speakerId: "a", text: "Bom dia, vamos começar.", kind: "caption", source: "protocol" }], asr: [], notes: { text: "", items: [] }, highlights: {},
+  chats: [{ id: "c1", messages: [{ role: "user", text: "# Roteiro de análise\n" + "Detalhe cada operação com horário, entrada, alvo e stop. ".repeat(160), at: t0 }, { role: "assistant", text: "Resposta.", at: t0 }] }] };
+const ROTEIRO = "# Análise detalhada do pregão\n" + "Para cada operação, detalhe horário, direção, gatilho, alvo, stop e resultado. ".repeat(115).trim(); // ~9 mil caracteres
 
 try {
   let extId;
@@ -101,14 +103,40 @@ try {
   console.log("✓ apagar e desfazer");
   // Contagem de caracteres: fixa nos modelos, flutuante no título da reunião.
   assert.equal(await ev("document.querySelector('.q-row[data-id=\"pontos\"] [data-k=\"label\"] + .count').textContent"), "17/60");
-  await ev(`(() => { const el = document.querySelector('.q-row[data-id="pontos"] [data-k="text"]'); el.focus(); el.value = 'x'.repeat(2000); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-  assert.deepEqual(await ev("(() => { const c = document.querySelector('.q-row[data-id=\"pontos\"] [data-k=\"text\"] + .count'); return [c.textContent, c.classList.contains('full')]; })()"), ["2.000/2.000", true]);
+  await ev(`(() => { const el = document.querySelector('.q-row[data-id="pontos"] [data-k="text"]'); el.focus(); el.value = 'x'.repeat(10000); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  assert.deepEqual(await ev("(() => { const c = document.querySelector('.q-row[data-id=\"pontos\"] [data-k=\"text\"] + .count'); return [c.textContent, c.classList.contains('full')]; })()"), ["10.000/10.000", true]);
   await ev(`(() => { const el = document.querySelector('.q-row[data-id="pontos"] [data-k="text"]'); el.value = 'Quais são os pontos principais?'; el.dispatchEvent(new Event('input', { bubbles: true })); el.blur(); })()`);
   await ev("document.querySelector('#m-title').focus()");
   assert.deepEqual(await ev("(() => { const f = document.querySelector('#count-float'); return [f.hidden, f.textContent]; })()"), [false, `${sample.title.length}/200`]);
   await ev("document.querySelector('#m-title').blur()");
   assert.equal(await ev("document.querySelector('#count-float').hidden"), true);
   console.log("✓ contagem de caracteres nos modelos e no título");
+
+  // Pergunta longa (até 10 mil): modelo novo com um roteiro de ~9 mil caracteres.
+  assert.ok(ROTEIRO.length > 8500 && ROTEIRO.length < 10000);
+  await ev("document.querySelector('#q-add').click()");
+  await ev(`(() => { const set = (k, v) => { const el = document.querySelector('[data-draft] [data-k="' + k + '"]'); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+    set('label', 'Análise do pregão'); set('text', ${JSON.stringify(ROTEIRO)}); })()`);
+  assert.equal(await ev("document.querySelector('[data-draft] [data-k=\"text\"] + .count').textContent"), `${ROTEIRO.length.toLocaleString("pt-BR")}/10.000`);
+  await ev("document.querySelector('[data-draft-save]').click()");
+  await waitFor(() => ev(`(async () => { const { settings } = await chrome.storage.local.get('settings'); return settings.questions.some((q) => q.label === 'Análise do pregão' && q.text === ${JSON.stringify(ROTEIRO)}); })()`), "roteiro salvo inteiro").catch(async (err) => {
+    console.log("diag:", JSON.stringify(await ev(`(async () => { const { settings } = await chrome.storage.local.get('settings'); return { toast: document.querySelector('#toast').textContent, draft: !!document.querySelector('[data-draft]'), qs: settings.questions.map((q) => [q.label, q.text.length]) }; })()`)));
+    throw err;
+  });
+  assert.equal(await ev("document.querySelector('#chat-input').maxLength"), 10000);
+  console.log("✓ pergunta de", ROTEIRO.length, "caracteres salva inteira (limite 10.000)");
+
+  // Contagem nos campos sem limite e na caixa de pergunta.
+  await ev("(() => { const el = document.querySelector('#chat-input'); el.focus(); el.value = 'abc'; el.dispatchEvent(new Event('input', { bubbles: true })); })()");
+  assert.equal(await ev("document.querySelector('#count-float').textContent"), "3/10.000");
+  await ev("document.querySelector('#chat-input').value = ''; document.querySelector('#chat-input').blur()");
+  console.log("✓ contagem na caixa de pergunta");
+
+  // Pergunta longa aparece recolhida na conversa.
+  await ev("(() => { const s = document.querySelector('#chat-select'); s.value = 'c1'; s.dispatchEvent(new Event('change', { bubbles: true })); })()");
+  await waitFor(() => ev("!!document.querySelector('#chat-log .long-q')"), "pergunta longa recolhida");
+  assert.match(await ev("document.querySelector('#chat-log .long-q summary').textContent"), /ver a pergunta inteira \(9\.\d{3} caracteres\)/);
+  console.log("✓ pergunta longa recolhida na conversa");
 
   if (process.env.SHOT) {
     // Captura da seção para conferência visual: um modelo desafixado e o rascunho aberto.

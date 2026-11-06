@@ -1,7 +1,7 @@
 import { toBlocks, speakerName, timeline, participantNames, normalize, effectiveEntries, countMatches } from "../lib/transcript.js";
 import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName, ataEditorHtml } from "../lib/format.js";
 import { computeStats, findMe, fmtDuration } from "../lib/stats.js";
-import { API_ORIGIN } from "../lib/ai.js";
+import { API_ORIGIN, QUESTION_MAX, LONG_QUESTION, questionLength } from "../lib/ai.js";
 import { getSettings, setSettings, DEFAULT_TAGS, DEFAULT_QUESTIONS, MODELS, DEFAULTS, HQ_MODELS } from "../lib/settings.js";
 import { LANG_NAMES } from "../lib/lang.js";
 import { diffDocument, diffStats, diffHtml as versionDiffHtml } from "../lib/diff.js";
@@ -110,10 +110,10 @@ countFloat.setAttribute("aria-hidden", "true");
 document.body.append(countFloat);
 function paintCount(el) {
   const max = el.maxLength;
-  if (!(max > 0)) return;
   const n = el.value.length;
-  const text = `${fmtN(n)}/${fmtN(max)}`;
-  const cls = countState(n, max);
+  // Sem maxlength: só a contagem ("1.234 caracteres").
+  const text = max > 0 ? `${fmtN(n)}/${fmtN(max)}` : `${fmtN(n)} caractere${n === 1 ? "" : "s"}`;
+  const cls = max > 0 ? countState(n, max) : "";
   if (el.dataset.count === "always") {
     const span = el.parentElement.querySelector(":scope > .count");
     if (span) {
@@ -556,7 +556,7 @@ function askInline(anchor, { label, value = "", placeholder = "", suggestions = 
     const pop = document.createElement("div");
     pop.className = "ask";
     pop.innerHTML = `<label class="field-label">${esc(label)}</label>
-      <input maxlength="120" list="pop-list" placeholder="${esc(placeholder)}">
+      <input maxlength="120" data-count="focus" list="pop-list" placeholder="${esc(placeholder)}">
       <datalist id="pop-list">${suggestions.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
       <div class="ask-acts"><button class="btn sm" data-cancel>Cancelar</button><button class="btn sm primary" data-ok>Salvar</button></div>`;
     document.body.appendChild(pop);
@@ -596,7 +596,7 @@ function askText(anchor, { label, value = "" }) {
   return new Promise((resolve) => {
     const pop = document.createElement("div");
     pop.className = "ask";
-    pop.innerHTML = `<label class="field-label">${esc(label)}</label><textarea maxlength="20000"></textarea>
+    pop.innerHTML = `<label class="field-label">${esc(label)}</label><textarea maxlength="20000" data-count="focus"></textarea>
       <div class="ask-acts"><button class="btn sm" data-cancel>Cancelar</button><button class="btn sm primary" data-ok>Salvar</button></div>`;
     document.body.appendChild(pop);
     const ta = pop.querySelector("textarea");
@@ -1208,7 +1208,7 @@ async function aiStatus() {
   const model = MODELS.find((m) => m.id === state.settings.aiModel);
   const pro = account?.token && account.plan === "pro" && !account.invalid;
   if (apiKey) return { ok: true, kind: "key", text: `Sua chave da API · ${model ? model.label : state.settings.aiModel}`, hint: "A transcrição só é enviada quando você pede." };
-  if (pro) return { ok: true, kind: "pro", text: `Escribanote Pro · ${account.balance ?? 0} crédito${account.balance === 1 ? "" : "s"}`, hint: "Ata, revisão e pergunta custam 1 crédito cada." };
+  if (pro) return { ok: true, kind: "pro", text: `Escribanote Pro · ${account.balance ?? 0} crédito${account.balance === 1 ? "" : "s"}`, hint: `Ata, revisão e pergunta custam 1 crédito cada; pergunta com mais de ${LONG_QUESTION.toLocaleString("pt-BR")} caracteres, 2.` };
   return { ok: false, kind: "none", text: "IA não configurada", hint: "Cadastre sua chave da API do Claude em Ajustes ou conecte a sua conta Escribanote Pro." };
 }
 
@@ -1289,7 +1289,7 @@ async function renderAI() {
   // Sugestões
   if (!state.index.length) state.index = await send({ type: "list" });
   const prev = previousWithSame(s)[0];
-  const quick = questions().filter((p) => p.pinned !== false).map((p) => `<button class="chip" data-q="${esc(p.text)}" title="${esc(p.text)}">${esc(p.label)}${p.auto ? '<span class="pill-auto" title="Feita sozinha quando a reunião termina">auto</span>' : ""}</button>`);
+  const quick = questions().filter((p) => p.pinned !== false).map((p) => `<button class="chip" data-q="${esc(p.text)}" title="${esc(p.text.length > 280 ? p.text.slice(0, 280) + "…" : p.text)}${questionLength(p.text) > LONG_QUESTION ? " (pergunta longa: 2 créditos no Pro)" : ""}">${esc(p.label)}${p.auto ? '<span class="pill-auto" title="Feita sozinha quando a reunião termina">auto</span>' : ""}</button>`);
   if (!quick.length && questions().length) quick.push(`<button class="chip ghost" data-open-models>Nenhum modelo fixado · escolher atalhos</button>`);
   if (prev) quick.push(`<button class="chip" data-prev="${esc(prev.id)}">${icon("anterior")}Reunião anterior com estes participantes</button>`);
   $("quick").innerHTML = quick.join("");
@@ -1331,7 +1331,7 @@ function renderQuestionList() {
   const draft = qDraft
     ? `<div class="q-row draft" data-draft="1">
       <div class="q-fields"><div class="cw"><input data-k="label" data-count="always" value="${esc(qDraft.label)}" maxlength="60" aria-label="Nome do novo modelo" placeholder="Nome curto (vira o atalho). Ex.: Riscos levantados">${countHtml(qDraft.label, 60)}</div>
-        <div class="cw"><textarea data-k="text" data-count="always" rows="2" maxlength="2000" aria-label="Pergunta do novo modelo" placeholder="A pergunta que a IA deve responder. Ex.: Quais riscos foram levantados e quem ficou de tratá-los?">${esc(qDraft.text)}</textarea>${countHtml(qDraft.text, 2000)}</div></div>
+        <div class="cw"><textarea data-k="text" data-count="always" rows="2" maxlength="${QUESTION_MAX}" aria-label="Pergunta do novo modelo" placeholder="A pergunta que a IA deve responder. Ex.: Quais riscos foram levantados e quem ficou de tratá-los?">${esc(qDraft.text)}</textarea>${countHtml(qDraft.text, QUESTION_MAX)}</div></div>
       <div class="q-side"><button type="button" class="btn sm primary" data-draft-save>Salvar</button><button type="button" class="btn sm ghost" data-draft-cancel>Cancelar</button></div>
     </div>`
     : "";
@@ -1341,7 +1341,7 @@ function renderQuestionList() {
       const id = esc(q.id);
       return `<div class="q-row${on ? "" : " unpinned"}" data-id="${id}">
       <div class="q-fields"><div class="cw"><input data-k="label" data-count="always" value="${esc(q.label)}" maxlength="60" aria-label="Nome do modelo" placeholder="Nome curto">${countHtml(q.label, 60)}</div>
-        <div class="cw"><textarea data-k="text" data-count="always" rows="2" maxlength="2000" aria-label="Pergunta" placeholder="A pergunta que a IA deve responder">${esc(q.text)}</textarea>${countHtml(q.text, 2000)}</div></div>
+        <div class="cw"><textarea data-k="text" data-count="always" rows="2" maxlength="${QUESTION_MAX}" aria-label="Pergunta" placeholder="A pergunta que a IA deve responder">${esc(q.text)}</textarea>${countHtml(q.text, QUESTION_MAX)}</div></div>
       <div class="q-side"><label class="switch sm" title="Fazer esta pergunta sozinha quando a reunião terminar"><input type="checkbox" data-k="auto"${q.auto ? " checked" : ""}><span></span>Automática</label>
         <span class="q-acts">
         <button type="button" class="q-ic pin${on ? " on" : ""}" data-act="pin" data-id="${id}" aria-pressed="${on}" data-tip="${on ? "Fixado nos atalhos · clique para desafixar" : "Fora dos atalhos · clique para fixar"}" aria-label="${on ? "Desafixar dos atalhos" : "Fixar nos atalhos"}">${icon("fixar")}</button>
@@ -1397,7 +1397,7 @@ async function saveDraft() {
   if (questions().some((q) => q.text === text)) return toast("Essa pergunta já é um modelo");
   qDraft = null;
   document.activeElement?.blur();
-  await saveQuestions([{ id: Date.now().toString(36), label: label.slice(0, 60), text: text.slice(0, 2000), auto: false, pinned: true }, ...questions()]);
+  await saveQuestions([{ id: Date.now().toString(36), label: label.slice(0, 60), text: text.slice(0, QUESTION_MAX), auto: false, pinned: true }, ...questions()]);
   toast(`“${label}” salvo e fixado nos atalhos`);
 }
 $("q-list").addEventListener("click", (e) => {
@@ -1461,10 +1461,17 @@ $("q-save").addEventListener("click", async () => {
   if (questions().some((q) => q.text === text)) return toast("Essa pergunta já é um modelo");
   const label = await askInline($("q-save"), { label: "Nome do modelo (vira o atalho)", value: text.slice(0, 40), placeholder: "Ex.: Riscos levantados" });
   if (!label) return;
-  await saveQuestions([...questions(), { id: Date.now().toString(36), label: label.slice(0, 60), text: text.slice(0, 2000), auto: false, pinned: true }]);
+  await saveQuestions([...questions(), { id: Date.now().toString(36), label: label.slice(0, 60), text: text.slice(0, QUESTION_MAX), auto: false, pinned: true }]);
   toast("Modelo salvo e fixado: aparece em todas as reuniões");
 });
 
+// Pergunta longa (roteiro detalhado): mostra o começo e "ver a pergunta inteira".
+function userMsgHtml(text) {
+  const q = text.replace(/<reuniao_anterior[^>]*>[\s\S]*?<\/reuniao_anterior>/g, "").trim();
+  if (q.length <= 600) return esc(q);
+  const head = q.slice(0, 280).replace(/\s+\S*$/, "");
+  return `<details class="long-q"><summary>${esc(head)}… <span class="muted tiny">ver a pergunta inteira (${fmtN(q.length)} caracteres)</span></summary><div class="long-q-body">${esc(q)}</div></details>`;
+}
 function renderChatLog(streamText) {
   const chat = state.session.chats.find((c) => c.id === state.chatId);
   const msgs = chat ? chat.messages.slice() : [];
@@ -1473,7 +1480,7 @@ function renderChatLog(streamText) {
     msgs.push({ role: "assistant", text: streamText || "Pensando…" });
   }
   $("chat-log").innerHTML = msgs.length
-    ? msgs.map((m) => `<div class="msg ${m.role}">${m.role === "assistant" ? `<div class="md">${withCites(mdToHtml(m.text))}</div>` : esc(m.text)}</div>`).join("")
+    ? msgs.map((m) => `<div class="msg ${m.role}">${m.role === "assistant" ? `<div class="md">${withCites(mdToHtml(m.text))}</div>` : userMsgHtml(m.text)}</div>`).join("")
     : `<p class="muted tiny">Faça perguntas durante ou depois da reunião. As conversas ficam salvas junto com a transcrição.</p>`;
   $("chat-log").scrollTop = $("chat-log").scrollHeight;
 }
@@ -1938,6 +1945,7 @@ async function ask(question, previousId) {
   state.busy = "chat";
   state.pendingQuestion = question;
   $("chat-input").value = "";
+  if (document.activeElement === $("chat-input")) paintCount($("chat-input"));
   renderChatLog("");
   runAI(
     { action: "chat", id: state.session.id, chatId: state.chatId, question, previousId, previousIds: scopeIds() },
