@@ -9,6 +9,15 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Estilos Papel e Editor (0.9.66)
+
+- Ajustes `themeLight` (`default` | `paper`), `themeDark` (`default` | `editor`) e `widgetTheme` (`follow` | `dark`).
+  `theme.js` põe `data-palette` no `<html>` conforme o lado em uso (acompanha `prefers-color-scheme` no automático)
+  e guarda `{ theme, themeLight, themeDark }` no localStorage para pintar sem piscar.
+- `app.css`: blocos `:root[data-palette="paper"|"editor"]` com os tokens, mais ajustes de forma (raios, monoespaçada).
+- Widget: cores em variáveis `--w-*` no `:host`, com `:host([data-theme="light"])`, `[data-pal="paper"]` e
+  `[data-pal="editor"]`; `applyTheme()` a cada render e na troca do tema do sistema.
+
 ## Fixadas, pastas e menu do botão direito (0.9.65)
 
 - Sessão: `pinnedAt` e `folderId` (mensagem `update` com `pinned` / `folderId`; entram no índice). Pastas em

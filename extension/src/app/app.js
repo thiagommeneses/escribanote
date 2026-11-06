@@ -2833,7 +2833,9 @@ $("list").addEventListener("dragstart", (e) => {
   e.dataTransfer.setData(DRAG_TYPE, dragId);
   e.dataTransfer.setData("text/plain", c.querySelector(".mcard-name")?.textContent || "");
   e.dataTransfer.effectAllowed = "move";
+  // No quadro seguinte (mudar o cartão no próprio dragstart estraga a imagem arrastada); só se o arraste continua.
   requestAnimationFrame(() => {
+    if (dragId !== c.dataset.open) return;
     c.classList.add("dragging");
     document.body.classList.add("list-dragging");
   });
@@ -3149,6 +3151,7 @@ async function renderSettings() {
   for (const el of form.elements) {
     if (!el.name || el.name === "apiKey") continue;
     if (el.type === "radio") el.checked = s[el.name] === el.value;
+    else if (el.name === "widgetFollow") el.checked = s.widgetTheme !== "dark";
     else if (el.type === "checkbox") el.checked = !!s[el.name];
     else if (document.activeElement !== el) el.value = s[el.name] ?? "";
   }
@@ -3263,6 +3266,10 @@ $("settings").addEventListener("change", async (e) => {
   if (el.name === "voiceProfiles" && el.checked && !confirm("Guardar a impressão de voz das pessoas com nome nas próximas reuniões, só neste computador? É um dado biométrico: avise os participantes. Dá para apagar cada voz aqui em Ajustes.")) {
     el.checked = false;
     return;
+  }
+  if (el.name === "widgetFollow") {
+    state.settings = await setSettings({ widgetTheme: el.checked ? "follow" : "dark" });
+    return toast("Ajuste salvo");
   }
   const v = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
   state.settings = await setSettings({ [el.name]: v });

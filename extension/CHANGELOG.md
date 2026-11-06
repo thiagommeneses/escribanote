@@ -2,6 +2,12 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.66 beta — 2026-11-06
+- Aparência: dois estilos novos, escolhidos por miniaturas com as cores reais. No claro, **Papel** (off-white quente com tons pastel, como o site). No escuro, **Editor** (grafite no estilo VS Code / Cursor, cantos retos e horários em fonte monoespaçada). No modo Automático, cada lado usa o estilo escolhido para ele (por exemplo, Papel de dia e Editor à noite) e troca junto com o sistema.
+- O widget dentro da reunião agora segue o tema (claro, Papel, escuro ou Editor), com as cores dos falantes e das marcações ajustadas a cada fundo. Quem preferir o widget sempre escuro, como antes, desliga a opção em Ajustes › Aparência.
+- Caixas de seleção e controles nativos na cor do tema.
+- Corrigido: a faixa "Solte aqui para fixar no topo" podia ficar presa na lista depois de um arraste muito curto.
+
 ## 0.9.65 beta — 2026-11-06
 - Fixar no topo: reuniões fixadas ficam numa seção "Fixadas" no alto da lista (botão direito › Fixar no topo, ou arraste o cartão para lá).
 - Pastas: "Nova pasta" na lista; o nome é editado no próprio lugar. Arraste os cartões para uma pasta, para "Fixadas" ou de volta para a lista. As pastas recolhem e abrem com um clique, mostram quantas reuniões têm e podem ser renomeadas, reordenadas e apagadas (apagar uma pasta não apaga as reuniões). Elas acompanham os ajustes sincronizados e o backup exportado.

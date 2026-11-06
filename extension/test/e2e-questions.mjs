@@ -375,6 +375,45 @@ try {
     }
   }
 
+  // Aparência: estilos Papel (claro) e Editor (escuro) pelas miniaturas; no automático, segue o sistema.
+  {
+    const pal = () => ev("document.documentElement.getAttribute('data-palette')");
+    const bg = () => ev("getComputedStyle(document.body).backgroundColor");
+    await ev("document.querySelector('[data-nav=\"settings\"]')?.click() ?? document.querySelector('#nav-settings')?.click()");
+    await waitFor(() => ev("!!document.querySelector('input[name=\"themeLight\"][value=\"paper\"]') && document.querySelector('#view-settings').hidden === false"), "ajustes abertos");
+    await ev("document.querySelector('input[name=\"theme\"][value=\"light\"]').click()");
+    await ev("document.querySelector('input[name=\"themeLight\"][value=\"paper\"]').click()");
+    await waitFor(async () => (await pal()) === "paper", "tema Papel aplicado");
+    assert.match(await bg(), /246, 242, 234/);
+    if (process.env.SHOT_THEME) {
+      await send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 760, deviceScaleFactor: 1, mobile: false }, sessionId);
+      await ev("document.querySelector('.theme-rows').scrollIntoView({ block: 'center' })");
+      await sleep(300);
+      const { data } = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+      (await import("node:fs")).writeFileSync(process.env.SHOT_THEME + "-papel.png", Buffer.from(data, "base64"));
+    }
+    await ev("document.querySelector('input[name=\"theme\"][value=\"dark\"]').click()");
+    await waitFor(async () => (await pal()) === null && (await ev("document.documentElement.dataset.theme")) === "dark", "Papel não vale no escuro");
+    await ev("document.querySelector('input[name=\"themeDark\"][value=\"editor\"]').click()");
+    await waitFor(async () => (await pal()) === "editor", "tema Editor aplicado");
+    assert.match(await bg(), /30, 30, 30/);
+    if (process.env.SHOT_THEME) {
+      await ev("document.querySelector('[data-nav=\"list\"], [data-goto-view=\"meeting\"], #nav-meeting')?.click(); document.querySelector('[data-nav=\"meeting\"]')?.click()");
+      await sleep(500);
+      const { data } = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+      (await import("node:fs")).writeFileSync(process.env.SHOT_THEME + "-editor.png", Buffer.from(data, "base64"));
+      await ev("document.querySelector('[data-nav=\"settings\"]')?.click()");
+    }
+    // Automático: o sistema decide o lado; a variante escolhida para cada lado vale.
+    await ev("document.querySelector('input[name=\"theme\"][value=\"auto\"]').click()");
+    await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "light" }] }, sessionId);
+    await waitFor(async () => (await pal()) === "paper", "automático claro usa Papel");
+    await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] }, sessionId);
+    await waitFor(async () => (await pal()) === "editor", "automático escuro usa Editor");
+    await send("Emulation.setEmulatedMedia", { features: [] }, sessionId);
+    console.log("✓ aparência: Papel e Editor pelas miniaturas; no automático cada lado usa o seu estilo");
+  }
+
   if (process.env.SHOT) {
     // Captura da seção para conferência visual: um modelo desafixado e o rascunho aberto.
     await send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 1400, deviceScaleFactor: 1, mobile: false }, sessionId);
