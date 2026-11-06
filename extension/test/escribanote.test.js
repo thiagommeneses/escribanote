@@ -1174,3 +1174,38 @@ test("exportação: escolher chat, notas, destaques, capítulos e perguntas à I
 
   assert.deepEqual(aiConversations(s)[0].pairs, [{ q: "# Roteiro\nListe as decisões.", a: "- Orçamento aprovado [00:00:01]" }]);
 });
+
+// ---------------- Perguntas longas e material de apoio ----------------
+import { chatRequest as chatReq, supportBlocks, chatModel, questionCredits as qCredits } from "../src/lib/ai.js";
+test("chat: material de apoio entra antes da primeira pergunta; pergunta pesada raciocina mais", () => {
+  const s = session();
+  applyEvent(s, { kind: "caption", id: "1/a", speakerId: "a", text: "abriu em alta" }, 1_001_000);
+  const support = [{ kind: "text", name: "cotações", text: "09:00 WIN 130000" }, { kind: "image", name: "grafico.png", mime: "image/png", data: "iVBORw0KGgo=" }, { kind: "image", name: "x.bmp", mime: "image/bmp", data: "AAAA" }];
+  const hist = [{ role: "user", text: "Como abriu?" }, { role: "assistant", text: "Em alta." }, { role: "user", text: "E depois?" }];
+  const r = chatReq(s, hist, { support });
+  assert.equal(r.effort, "medium");
+  assert.equal(r.heavy, true);
+  const c = r.messages[0].content;
+  assert.match(c[0].text, /<material_de_apoio nome="cotações">\n09:00 WIN 130000/);
+  assert.equal(c[2].type, "image");
+  assert.deepEqual(c[2].cache_control, { type: "ephemeral" }, "material fica no cache");
+  assert.equal(c.length, 4, "bmp não entra");
+  assert.equal(c.at(-1).text, "Como abriu?");
+  assert.equal(r.messages[2].content, "E depois?");
+  assert.match(r.system, /nunca peça permissão para continuar/);
+  assert.match(r.system, /material de apoio/);
+
+  const curta = chatReq(s, [{ role: "user", text: "Quem falou?" }]);
+  assert.equal(curta.effort, "low");
+  assert.doesNotMatch(curta.system, /<material_de_apoio>|material de apoio \(dentro/);
+  assert.equal(chatReq(s, [{ role: "user", text: "x".repeat(2500) }]).effort, "medium");
+
+  assert.equal(supportBlocks([]).length, 0);
+  assert.equal(qCredits("Oi"), 1);
+  assert.equal(qCredits("Oi", { support: true }), 2);
+  // modelo da chave própria: sobe para o de perguntas longas, nunca desce
+  assert.equal(chatModel({ aiModel: "claude-haiku-5-5" }, true), "claude-sonnet-5-5");
+  assert.equal(chatModel({ aiModel: "claude-haiku-5-5" }, false), "claude-haiku-5-5");
+  assert.equal(chatModel({ aiModel: "claude-opus-5-5", aiModelLong: "claude-sonnet-5-5" }, true), "claude-opus-5-5");
+  assert.equal(chatModel({ aiModel: "claude-haiku-5-5", aiModelLong: "same" }, true), "claude-haiku-5-5");
+});

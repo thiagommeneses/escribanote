@@ -1235,7 +1235,7 @@ async function aiStatus() {
   const model = MODELS.find((m) => m.id === state.settings.aiModel);
   const pro = account?.token && account.plan === "pro" && !account.invalid;
   if (apiKey) return { ok: true, kind: "key", text: `Sua chave da API · ${model ? model.label : state.settings.aiModel}`, hint: "A transcrição só é enviada quando você pede." };
-  if (pro) return { ok: true, kind: "pro", text: `Escribanote Pro · ${account.balance ?? 0} crédito${account.balance === 1 ? "" : "s"}`, hint: `Ata, revisão e pergunta custam 1 crédito cada; pergunta com mais de ${LONG_QUESTION.toLocaleString("pt-BR")} caracteres, 2.` };
+  if (pro) return { ok: true, kind: "pro", text: `Escribanote Pro · ${account.balance ?? 0} crédito${account.balance === 1 ? "" : "s"}`, hint: `Ata, revisão e pergunta custam 1 crédito cada; pergunta com mais de ${LONG_QUESTION.toLocaleString("pt-BR")} caracteres ou com material de apoio, 2.` };
   return { ok: false, kind: "none", text: "IA não configurada", hint: "Cadastre sua chave da API do Claude em Ajustes ou conecte a sua conta Escribanote Pro." };
 }
 
@@ -1321,8 +1321,82 @@ async function renderAI() {
   if (prev) quick.push(`<button class="chip" data-prev="${esc(prev.id)}">${icon("anterior")}Reunião anterior com estes participantes</button>`);
   $("quick").innerHTML = quick.join("");
   renderScope();
+  renderSupport();
   renderQuestionList();
 }
+
+// ----- Material de apoio (fontes externas à reunião, vão junto em toda pergunta) -----
+const fmtSize = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1).replace(".", ",")} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
+const SUPPORT_ICON = { text: "texto", pdf: "pdf", image: "captura" };
+function renderSupport() {
+  const s = state.session;
+  const list = s?.support || [];
+  $("support-count").textContent = list.length ? `${list.length} · vai junto em toda pergunta desta reunião` : "";
+  $("support-list").innerHTML = list
+    .map((x) => `<span class="support-item" title="${esc(x.name)}">${icon(SUPPORT_ICON[x.kind] || "texto")}<span class="support-name">${esc(x.name)}</span><small>${x.kind === "text" ? `${fmtN(x.size)} caract.` : fmtSize(x.size)}</small><button type="button" class="x" data-support-rm="${esc(x.id)}" aria-label="Remover ${esc(x.name)}" title="Remover">${icon("fechar")}</button></span>`)
+    .join("");
+}
+const TEXT_EXT = /\.(txt|md|csv|tsv|json)$/i;
+function readAs(file, how) {
+  return new Promise((ok, fail) => {
+    const r = new FileReader();
+    r.onload = () => ok(r.result);
+    r.onerror = () => fail(r.error);
+    how === "text" ? r.readAsText(file) : r.readAsDataURL(file);
+  });
+}
+async function addSupportItem(item) {
+  const next = await send({ type: "support-add", id: state.session.id, item });
+  if (next?.error) throw new Error(next.error);
+  if (next) state.session = next;
+  renderSupport();
+}
+async function addSupportFiles(files) {
+  let ok = 0;
+  for (const f of files) {
+    try {
+      if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) await addSupportItem({ kind: "pdf", name: f.name, data: (await readAs(f, "url")).split(",")[1] });
+      else if (/^image\//.test(f.type)) await addSupportItem({ kind: "image", name: f.name, mime: f.type, data: (await readAs(f, "url")).split(",")[1] });
+      else if (/^text\//.test(f.type) || f.type === "application/json" || TEXT_EXT.test(f.name)) await addSupportItem({ kind: "text", name: f.name, data: await readAs(f, "text") });
+      else throw new Error(`${f.name}: use texto, CSV, JSON, PDF ou imagem`);
+      ok++;
+    } catch (err) {
+      toast(err.message);
+      return;
+    }
+  }
+  if (ok) toast(ok === 1 ? "Material de apoio anexado" : `${ok} materiais anexados`);
+}
+$("support-file").addEventListener("click", () => $("support-input").click());
+$("support-input").addEventListener("change", async (e) => {
+  await addSupportFiles([...e.target.files]);
+  e.target.value = "";
+});
+$("support-paste").addEventListener("click", async () => {
+  const text = await askText($("support-paste"), { label: "Cole o material (cotações, notícias, calendário…). Ctrl+Enter salva" });
+  if (!text || !text.trim()) return;
+  const first = text.trim().split("\n")[0].replace(/^#+\s*/, "").slice(0, 50);
+  try {
+    await addSupportItem({ kind: "text", name: first || "Texto colado", data: text.trim() });
+    toast("Texto anexado como material de apoio");
+  } catch (err) {
+    toast(err.message);
+  }
+});
+$("support-list").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-support-rm]");
+  if (!b) return;
+  const next = await send({ type: "support-remove", id: state.session.id, supportId: b.dataset.supportRm });
+  if (next) state.session = next;
+  renderSupport();
+  toast("Material removido");
+});
+for (const ev of ["dragover", "dragenter"]) $("support").addEventListener(ev, (e) => (e.preventDefault(), $("support").classList.add("drop")));
+for (const ev of ["dragleave", "drop"]) $("support").addEventListener(ev, () => $("support").classList.remove("drop"));
+$("support").addEventListener("drop", (e) => {
+  e.preventDefault();
+  if (e.dataTransfer?.files?.length) addSupportFiles([...e.dataTransfer.files]);
+});
 
 // ----- Modelos de perguntas (Ajustes "questions", valem para todas as reuniões) -----
 // Rascunho de um modelo novo: só entra na lista (e nos atalhos) quando tem nome e pergunta.

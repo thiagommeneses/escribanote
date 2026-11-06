@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.59 beta — 2026-11-06
+- A IA não para mais no meio de um roteiro: quando parte do pedido não está na transcrição, ela faz todo o resto, marca "não informado" no que falta e deixa as limitações num bloco curto no fim (antes podia responder só com a lista do que faltava e pedir permissão para continuar).
+- Perguntas longas (mais de 2.000 caracteres) ou com material de apoio usam um modelo mais forte e raciocinam mais: com a sua chave, o Sonnet 5.5 por padrão (Ajustes › IA › "Perguntas longas ou com material de apoio"; nunca um modelo mais fraco que o escolhido); no Pro, o modelo forte, por 2 créditos.
+- Material de apoio na aba IA: anexe cotações (CSV), notícias (PDF), calendário econômico, prints de gráficos (PNG/JPEG) ou cole um texto. Vai junto em toda pergunta daquela reunião, inclusive pelo widget e nas perguntas automáticas, e a IA diz o que veio dele e o que veio da transcrição. Até 10 itens, 5 MB por arquivo e 8 MB no total; dá para arrastar os arquivos para a caixa. Os anexos ficam só neste computador e não entram no backup.
+
 ## 0.9.58 beta — 2026-11-06
 - Pergunte à IA: cada resposta tem "Copiar resposta" e "Copiar com a pergunta" (formatado para Docs, Notion ou e-mail, e texto puro); conversas com mais de uma pergunta têm "Copiar a conversa inteira".
 - Exportar › "Incluir na exportação": escolha se entram o chat da reunião, as notas, os destaques, os capítulos e as perguntas e respostas da IA, com a quantidade de cada um nesta reunião. A escolha fica lembrada. Vale para copiar, PDF, Markdown e texto; o padrão continua como antes (tudo, menos as conversas com a IA).

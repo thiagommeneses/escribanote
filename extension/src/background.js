@@ -12,7 +12,7 @@ import { learnProfiles, loadProfiles, saveProfiles } from "./lib/voiceprofiles.j
 import { readTrack } from "./lib/audiovault.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
-import { streamClaude, ataRequest, chatRequest, previousContext, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS, ANSWER_MAX_TOKENS } from "./lib/ai.js";
+import { streamClaude, ataRequest, chatRequest, previousContext, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS, ANSWER_MAX_TOKENS, chatModel, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
 import { compileGlossary, applyGlossary, glossaryForPrompt, fuzzyTargets, applyFuzzy } from "./lib/glossary.js";
 import { deleteAudio, audioInfo, vaultUsage, listAudio, enforceQuota } from "./lib/audiovault.js";
@@ -737,13 +737,14 @@ function withPrevious(messages, previous, tags) {
   return out;
 }
 async function runChat(ai, s, messages, settings, { previous, onDelta, signal } = {}) {
+  const support = await supportItems(s);
   if (ai.kind === "key") {
-    const reqBody = chatRequest(s, messages, { tags: settings.tags, previous, glossary: promptGlossary(settings) });
-    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...reqBody, maxTokens: ANSWER_MAX_TOKENS, onDelta, signal });
+    const { heavy, ...reqBody } = chatRequest(s, messages, { tags: settings.tags, previous, glossary: promptGlossary(settings), support });
+    return streamClaude({ apiKey: ai.apiKey, model: chatModel(settings, heavy), ...reqBody, maxTokens: ANSWER_MAX_TOKENS, onDelta, signal });
   }
   const done = await accountCall(() =>
     // A conta recebe a reunião atual; as anteriores vão como material de consulta junto da última pergunta.
-    accountStream("/ai/ask", { meeting: forAccount(s), history: withPrevious(messages, previous, settings.tags), tags: settings.tags, glossary: promptGlossary(settings) }, { onDelta, signal }),
+    accountStream("/ai/ask", { meeting: forAccount(s), history: withPrevious(messages, previous, settings.tags), tags: settings.tags, glossary: promptGlossary(settings), ...(support.length ? { support } : {}) }, { onDelta, signal }),
   );
   return { text: done.text, model: done.model };
 }
@@ -981,6 +982,39 @@ async function cropShot(dataUrl, rect, vw) {
   return `data:image/jpeg;base64,${btoa(bin)}`;
 }
 
+// ---------------- Material de apoio (aba IA) ----------------
+// Metadados na sessão (s.support); conteúdo em chrome.storage.local "support:<sessão>:<id>" (texto ou base64).
+async function addSupport(s, item) {
+  const kind = item.kind;
+  if (!["text", "pdf", "image"].includes(kind)) throw new Error("Tipo de material não aceito.");
+  if (s.support.length >= SUPPORT_LIMITS.items) throw new Error(`No máximo ${SUPPORT_LIMITS.items} materiais por reunião.`);
+  const data = String(item.data || "");
+  if (!data.trim()) throw new Error("O material está vazio.");
+  if (kind === "image" && !SUPPORT_IMAGE_TYPES.includes(item.mime)) throw new Error("Imagem em formato não aceito (use PNG, JPEG, WebP ou GIF).");
+  const size = kind === "text" ? Math.min(data.length, SUPPORT_LIMITS.textChars) : Math.floor((data.length * 3) / 4);
+  if (kind !== "text" && size > SUPPORT_LIMITS.fileBytes) throw new Error("Arquivo grande demais (máximo 5 MB).");
+  const total = s.support.filter((x) => x.kind !== "text").reduce((n, x) => n + x.size, 0) + (kind === "text" ? 0 : size);
+  if (total > SUPPORT_LIMITS.totalBytes) throw new Error("Os anexos desta reunião passariam de 8 MB.");
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  await chrome.storage.local.set({ [`support:${s.id}:${id}`]: kind === "text" ? data.slice(0, SUPPORT_LIMITS.textChars) : data });
+  s.support.push({ id, kind, name: String(item.name || "Material").slice(0, 120), mime: kind === "pdf" ? "application/pdf" : kind === "image" ? item.mime : "text/plain", size, at: Date.now() });
+  noteEvent(s, "support-add", { kind, size });
+  await changed(s, { now: true });
+  return s;
+}
+async function supportItems(s) {
+  if (!s.support?.length) return [];
+  const keys = s.support.map((x) => `support:${s.id}:${x.id}`);
+  const got = await chrome.storage.local.get(keys);
+  return s.support
+    .map((x) => {
+      const v = got[`support:${s.id}:${x.id}`];
+      if (!v) return null;
+      return x.kind === "text" ? { kind: "text", name: x.name, text: v } : { kind: x.kind, name: x.name, mime: x.mime, data: v };
+    })
+    .filter(Boolean);
+}
+
 async function getShots(s) {
   const keys = s.shots.map((x) => `shot:${s.id}:${x.id}`);
   const got = keys.length ? await chrome.storage.local.get(keys) : {};
@@ -993,7 +1027,7 @@ async function deleteSession(id) {
   cache.delete(id);
   dirty.delete(id);
   const index = (await loadIndex()).filter((e) => e.id !== id);
-  const keys = [`session:${id}`, ...(s ? s.shots.map((x) => `shot:${id}:${x.id}`) : [])];
+  const keys = [`session:${id}`, ...(s ? s.shots.map((x) => `shot:${id}:${x.id}`) : []), ...(s ? (s.support || []).map((x) => `support:${id}:${x.id}`) : [])];
   await chrome.storage.local.remove(keys);
   await chrome.storage.local.set({ index });
   queueBackup([id]); // apaga também o arquivo da pasta de backup
@@ -1426,6 +1460,23 @@ async function handle(msg, sender) {
       await chrome.storage.local.remove(`shot:${s.id}:${msg.shotId}`);
       await changed(s, { now: true });
       return s;
+    }
+    case "support-add":
+      if (!s) throw new Error("Reunião não encontrada.");
+      return addSupport(s, msg.item || {});
+    case "support-remove": {
+      if (!s) return null;
+      s.support = (s.support || []).filter((x) => x.id !== msg.supportId);
+      await chrome.storage.local.remove(`support:${s.id}:${msg.supportId}`);
+      await changed(s, { now: true });
+      return s;
+    }
+    case "support-get": {
+      if (!s) return null;
+      const x = (s.support || []).find((i) => i.id === msg.supportId);
+      if (!x) return null;
+      const k = `support:${s.id}:${x.id}`;
+      return { ...x, data: (await chrome.storage.local.get(k))[k] || "" };
     }
     case "get-shots":
       return s ? getShots(s) : {};

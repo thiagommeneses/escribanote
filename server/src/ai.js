@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { refund, reserve } from "./credits.js";
 import { fail } from "./http.js";
-import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
+import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, isHeavyQuestion, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
 import { cleanDoc, loadDoc, requirePro, saveMeeting } from "./meetings.js";
 
 // US$ por milhão de tokens (entrada, saída, leitura de cache, escrita de cache de 5 min).
@@ -40,6 +40,25 @@ function historyFrom(body) {
     .map((m, i, all) => ({ role: m.role, text: m.text.slice(0, m.role === "assistant" ? 80000 : i === all.length - 1 ? 150000 : QUESTION_MAX + 2000) }));
   if (!out.length || out[out.length - 1].role !== "user") fail(400, "bad_request", "Faltou a pergunta.");
   return out;
+}
+
+// Material de apoio enviado pela extensão: texto, PDF ou imagem (base64), dentro dos limites da extensão.
+function supportFrom(body) {
+  const list = Array.isArray(body?.support) ? body.support : [];
+  if (list.length > SUPPORT_LIMITS.items) fail(400, "bad_request", `No máximo ${SUPPORT_LIMITS.items} materiais de apoio.`);
+  let total = 0;
+  return list.map((it) => {
+    const name = String(it?.name || "material").slice(0, 120);
+    if (it?.kind === "text" && typeof it.text === "string") return { kind: "text", name, text: it.text.slice(0, SUPPORT_LIMITS.textChars) };
+    const data = typeof it?.data === "string" ? it.data : "";
+    if (!data || !/^[A-Za-z0-9+/=]+$/.test(data.slice(0, 4000))) fail(400, "bad_request", "Material de apoio inválido.");
+    const bytes = Math.floor((data.length * 3) / 4);
+    total += bytes;
+    if (bytes > SUPPORT_LIMITS.fileBytes || total > SUPPORT_LIMITS.totalBytes) fail(413, "too_large", "Material de apoio grande demais (até 5 MB por arquivo e 8 MB no total).");
+    if (it.kind === "pdf") return { kind: "pdf", name, data };
+    if (it.kind === "image" && SUPPORT_IMAGE_TYPES.includes(it.mime)) return { kind: "image", name, mime: it.mime, data };
+    fail(400, "bad_request", "Tipo de material de apoio não aceito.");
+  });
 }
 
 const ASK_ALL_SYSTEM = `Você é o assistente de reuniões do Escribanote e responde em português do Brasil, de forma direta e curta.
@@ -169,19 +188,22 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
     });
   });
 
-  app.post("/api/v1/ai/ask", { ...auth, bodyLimit: 9 * 1024 * 1024 }, async (req, reply) => {
+  app.post("/api/v1/ai/ask", { ...auth, bodyLimit: 20 * 1024 * 1024 }, async (req, reply) => {
     await guard(req);
     const doc = await meetingFrom(req);
     const history = historyFrom(req.body);
-    const r = chatRequest(doc, history, { tags: tagsFrom(req.body), glossary: glossaryFrom(req.body) });
+    const support = supportFrom(req.body);
+    const r = chatRequest(doc, history, { tags: tagsFrom(req.body), glossary: glossaryFrom(req.body), support });
+    // Pergunta longa (roteiro detalhado) ou com material de apoio: modelo forte, mais raciocínio e 2 créditos.
+    const heavy = isHeavyQuestion(history.at(-1).text, { support: support.length > 0 });
     await streamAnswer(req, reply, {
       kind: "ask",
-      model: config.models.fast,
-      credits: questionCredits(history.at(-1).text), // pergunta longa (roteiro detalhado) = 2 créditos
+      model: heavy ? config.models.strong : config.models.fast,
+      credits: questionCredits(history.at(-1).text, { support: support.length > 0 }),
       meetingId: doc.id,
       system: r.system,
       messages: r.messages,
-      effort: "low",
+      effort: r.effort,
       cache: true, // a transcrição fica no prompt de sistema: perguntas seguidas leem do cache
       maxTokens: ANSWER_MAX_TOKENS,
     });

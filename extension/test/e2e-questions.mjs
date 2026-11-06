@@ -165,6 +165,29 @@ try {
   await waitFor(async () => /=== Perguntas à IA ===\n\nPergunta: # Roteiro de análise/.test(await clip()), "exportação com as perguntas à IA");
   console.log("✓ exportar com as perguntas e respostas da IA (escolha lembrada)");
 
+  // Material de apoio: arquivo de texto, PDF e imagem pelo botão; texto colado; remover.
+  await ev("document.querySelector('[data-tab=\"ai\"]').click()");
+  await ev(`(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File(["hora,WIN\\n09:00,130000"], "cotacoes.csv", { type: "text/csv" }));
+    dt.items.add(new File([new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52])], "noticias.pdf", { type: "application/pdf" }));
+    dt.items.add(new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], "grafico.png", { type: "image/png" }));
+    const input = document.querySelector('#support-input'); input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
+  await waitFor(() => ev("document.querySelectorAll('#support-list .support-item').length === 3"), "três anexos");
+  await ev("document.querySelector('#support-paste').click()");
+  await waitFor(() => ev("!!document.querySelector('.ask textarea')"), "caixa de colar");
+  await ev("(() => { const ta = document.querySelector('.ask textarea'); ta.value = 'Calendário: IPCA às 9h\\nPayroll às 10h30'; ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })); })()");
+  await waitFor(() => ev("document.querySelectorAll('#support-list .support-item').length === 4"), "texto colado anexado");
+  const sup = await ev(`(async () => { const s = await chrome.runtime.sendMessage({ type: "get", id: "${sample.id}" }); return s.support.map((x) => [x.kind, x.name]); })()`);
+  assert.deepEqual(sup, [["text", "cotacoes.csv"], ["pdf", "noticias.pdf"], ["image", "grafico.png"], ["text", "Calendário: IPCA às 9h"]]);
+  const csv = await ev(`(async () => { const s = await chrome.runtime.sendMessage({ type: "get", id: "${sample.id}" }); return (await chrome.runtime.sendMessage({ type: "support-get", id: s.id, supportId: s.support[0].id })).data; })()`);
+  assert.equal(csv, "hora,WIN\n09:00,130000");
+  assert.match(await ev("document.querySelector('#support-count').textContent"), /^4 · vai junto/);
+  await ev("document.querySelector('#support-list [data-support-rm]').click()");
+  await waitFor(() => ev("document.querySelectorAll('#support-list .support-item').length === 3"), "remover anexo");
+  console.log("✓ material de apoio: arquivo, PDF, imagem, texto colado e remover");
+
   if (process.env.SHOT) {
     // Captura da seção para conferência visual: um modelo desafixado e o rascunho aberto.
     await send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 1400, deviceScaleFactor: 1, mobile: false }, sessionId);

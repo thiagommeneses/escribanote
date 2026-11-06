@@ -9,6 +9,16 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## IA que não para e material de apoio (0.9.59)
+
+- `chatRequest` manda executar o roteiro inteiro, com "não informado" no que falta e as limitações no fim, sem
+  pedir permissão. Pergunta pesada (`isHeavyQuestion`: mais de 2.000 caracteres ou com material de apoio) usa
+  esforço `medium`; com chave própria, `chatModel()` sobe para `aiModelLong` (padrão Sonnet, nunca desce); no
+  servidor, `config.models.strong` e 2 créditos.
+- Material de apoio: metadados em `session.support`, conteúdo em `support:<sessão>:<id>` (texto ou base64).
+  `supportBlocks()` vira blocos `text`/`document`/`image` no começo da primeira pergunta, com `cache_control`.
+  O Pro recebe `support` no corpo de `/ai/ask` (validado em `supportFrom`, até 20 MB por pedido).
+
 ## Copiar respostas e escolher o que exportar (0.9.58)
 
 - `lib/format.js`: `toText`, `toMarkdown` e `toHtml` aceitam `include` (`{ chat, notes, highlights, chapters, ai }`,
