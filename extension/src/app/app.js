@@ -1,5 +1,5 @@
 import { toBlocks, speakerName, timeline, participantNames, normalize, effectiveEntries, countMatches } from "../lib/transcript.js";
-import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName, ataEditorHtml } from "../lib/format.js";
+import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName, ataEditorHtml, EXPORT_PARTS, EXPORT_DEFAULT, aiConversations } from "../lib/format.js";
 import { computeStats, findMe, fmtDuration } from "../lib/stats.js";
 import { API_ORIGIN, QUESTION_MAX, LONG_QUESTION, questionLength } from "../lib/ai.js";
 import { getSettings, setSettings, DEFAULT_TAGS, DEFAULT_QUESTIONS, MODELS, DEFAULTS, HQ_MODELS } from "../lib/settings.js";
@@ -478,6 +478,21 @@ $("m-delete").addEventListener("click", async () => {
 });
 
 // ----- Exportar -----
+// Partes escolhidas (lembradas em Ajustes "exportInclude"); quantas há nesta reunião, para mostrar ao lado.
+function exportInclude() {
+  return { ...EXPORT_DEFAULT, ...(state.settings.exportInclude || {}) };
+}
+function exportCounts(s) {
+  if (!s) return {};
+  const blocks = toBlocks(s);
+  return {
+    chat: blocks.filter((b) => b.kind === "chat").length,
+    notes: s.notes.items.length + (s.notes.text.trim() ? 1 : 0),
+    highlights: blocks.filter((b) => b.tags.length).length,
+    chapters: (s.chapters || []).length,
+    ai: aiConversations(s).reduce((n, c) => n + c.pairs.length, 0),
+  };
+}
 function buildExportMenu() {
   const items = [
     ["rich", "copiar", "Copiar formatado", "Docs, Notion, e-mail"],
@@ -490,6 +505,13 @@ function buildExportMenu() {
     // Uso institucional (MPGO), desligado por padrão: ligado, a ata no modelo da equipe vai junto.
     `<label class="menu-opt inst"><input type="checkbox" id="exp-ata"${state.settings.exportAta === true ? " checked" : ""}>Incluir a ata e os textos institucionais</label>` +
     `<label class="menu-opt"><input type="checkbox" id="exp-clean"${clean() ? " checked" : ""}>Leitura limpa (sem “ahn”, “hum” e repetições)</label><hr>` +
+    `<div class="menu-head">Incluir na exportação</div>` +
+    (() => {
+      const inc = exportInclude();
+      const n = exportCounts(state.session);
+      return EXPORT_PARTS.map(([k, label]) => `<label class="menu-opt${n[k] === 0 ? " none" : ""}"><input type="checkbox" data-inc="${k}"${inc[k] ? " checked" : ""}>${esc(label)}<small>${n[k] ? n[k] : "nenhum"}</small></label>`).join("");
+    })() +
+    `<p class="menu-note">Valem para copiar, PDF, Markdown e texto. SRT e VTT levam só as falas; JSON leva tudo.</p><hr>` +
     items
       .map((it) => (it ? `<button data-exp="${it[0]}"><span>${icon(it[1])}</span>${esc(it[2])}${it[3] ? `<small>${esc(it[3])}</small>` : ""}</button>` : "<hr>"))
       .join("");
@@ -500,6 +522,7 @@ $("m-export").addEventListener("click", (e) => {
   const menu = $("export-menu");
   menu.hidden = !menu.hidden;
   if (menu.hidden) return;
+  buildExportMenu(); // contagens desta reunião
   $("exp-ata").checked = state.settings.exportAta === true;
   $("exp-clean").checked = clean();
   // No painel lateral (estreito) o menu não cabe à direita do botão: ancora pela direita.
@@ -510,6 +533,10 @@ $("m-export").addEventListener("click", (e) => {
 document.addEventListener("click", () => ($("export-menu").hidden = true));
 $("export-menu").addEventListener("change", async (e) => {
   if (e.target.id === "exp-clean") return setClean(e.target.checked);
+  if (e.target.dataset.inc) {
+    state.settings = await setSettings({ exportInclude: { ...exportInclude(), [e.target.dataset.inc]: e.target.checked } });
+    return;
+  }
   if (e.target.id !== "exp-ata") return;
   state.settings = await setSettings({ exportAta: e.target.checked });
   const field = document.querySelector('#settings [name="exportAta"]');
@@ -523,7 +550,7 @@ $("export-menu").addEventListener("click", async (e) => {
   const s = state.session;
   const kind = b.dataset.exp;
   const ata = state.settings.exportAta === true && institutional();
-  const opts = { tags: tags(), ata, clean: clean() };
+  const opts = { tags: tags(), ata, clean: clean(), include: exportInclude() };
   try {
     if (kind === "rich") {
       const html = toHtml(s, opts);
@@ -1479,11 +1506,64 @@ function renderChatLog(streamText) {
     if (state.pendingQuestion && (!msgs.length || msgs.at(-1).role !== "user")) msgs.push({ role: "user", text: state.pendingQuestion });
     msgs.push({ role: "assistant", text: streamText || "Pensando…" });
   }
+  const streaming = streamText !== undefined;
+  const answers = msgs.filter((m) => m.role === "assistant").length;
   $("chat-log").innerHTML = msgs.length
-    ? msgs.map((m) => `<div class="msg ${m.role}">${m.role === "assistant" ? `<div class="md">${withCites(mdToHtml(m.text))}</div>` : userMsgHtml(m.text)}</div>`).join("")
+    ? msgs
+        .map((m, i) => {
+          if (m.role !== "assistant") return `<div class="msg user">${userMsgHtml(m.text)}</div>`;
+          const done = !streaming || i < msgs.length - 1;
+          const acts = done
+            ? `<div class="msg-acts"><button type="button" class="linkish" data-copy="a" data-i="${i}">${icon("copiar")}Copiar resposta</button>${msgs[i - 1]?.role === "user" ? `<button type="button" class="linkish" data-copy="qa" data-i="${i}">${icon("copiar")}Copiar com a pergunta</button>` : ""}</div>`
+            : "";
+          return `<div class="msg assistant"><div class="md">${withCites(mdToHtml(m.text))}</div>${acts}</div>`;
+        })
+        .join("") + (!streaming && answers > 1 ? `<div class="msg-acts all"><button type="button" class="linkish" data-copy="all">${icon("copiar")}Copiar a conversa inteira</button></div>` : "")
     : `<p class="muted tiny">Faça perguntas durante ou depois da reunião. As conversas ficam salvas junto com a transcrição.</p>`;
   $("chat-log").scrollTop = $("chat-log").scrollHeight;
 }
+
+// Copiar da conversa: formatado (Docs, Notion, e-mail) e texto puro juntos.
+const stripPrev = (s) => String(s || "").replace(/<reuniao_anterior[^>]*>[\s\S]*?<\/reuniao_anterior>/g, "").trim();
+async function copyRich(html, text) {
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+  } catch {
+    await navigator.clipboard.writeText(text);
+  }
+}
+const qaHtml = (q, a) => `<p><b>Pergunta:</b><br>${esc(q).replace(/\n/g, "<br>")}</p><p><b>Resposta:</b></p>${mdToHtml(a)}`;
+const qaText = (q, a) => `Pergunta: ${q}\n\nResposta:\n${a}`;
+$("chat-log").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-copy]");
+  if (!b) return;
+  const chat = state.session.chats.find((c) => c.id === state.chatId);
+  if (!chat) return;
+  const msgs = chat.messages;
+  try {
+    if (b.dataset.copy === "all") {
+      const pairs = [];
+      for (const m of msgs) {
+        if (m.role === "user") pairs.push({ q: stripPrev(m.text), a: "" });
+        else if (pairs.length) pairs.at(-1).a = m.text;
+      }
+      const ok = pairs.filter((p) => p.a);
+      await copyRich(ok.map((p) => qaHtml(p.q, p.a)).join("<hr>"), ok.map((p) => qaText(p.q, p.a)).join("\n\n---\n\n"));
+      return toast(`Conversa copiada (${ok.length} pergunta${ok.length === 1 ? "" : "s"})`);
+    }
+    const i = +b.dataset.i;
+    const a = msgs[i]?.text || "";
+    if (b.dataset.copy === "a") {
+      await copyRich(mdToHtml(a), a);
+      return toast("Resposta copiada");
+    }
+    const q = stripPrev(msgs[i - 1]?.text);
+    await copyRich(qaHtml(q, a), qaText(q, a));
+    toast("Pergunta e resposta copiadas");
+  } catch (err) {
+    toast("Não foi possível copiar: " + err.message);
+  }
+});
 
 $("chat-select").addEventListener("change", (e) => {
   state.chatId = e.target.value || null;

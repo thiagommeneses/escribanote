@@ -1129,3 +1129,48 @@ test("chat sobre várias reuniões: cada anterior vira material de consulta, cor
   assert.match(req.system, /titulo="Reunião B"/);
   assert.match(req.system, /\[00:12:31\]/);
 });
+
+// ---------------- Exportação: partes escolhidas e conversas com a IA ----------------
+import { aiConversations } from "../src/lib/format.js";
+test("exportação: escolher chat, notas, destaques, capítulos e perguntas à IA", () => {
+  const s = session();
+  applyEvent(s, { kind: "speaker", speakerId: "a", name: "Ana" });
+  applyEvent(s, { kind: "caption", id: "1/a", speakerId: "a", text: "Vamos aprovar o orçamento." }, 1_001_000);
+  applyEvent(s, { kind: "chat", id: "c/1", speakerId: "a", text: "link da planilha" }, 1_090_000);
+  applyEvent(s, { kind: "caption", id: "2/a", speakerId: "a", text: "Próximo assunto." }, 1_200_000);
+  setBlockTags(s, toBlocks(s)[0].ids, ["decisao"]);
+  s.notes.text = "Pauta: orçamento";
+  s.notes.items.push({ id: "n1", at: 1_100_000, text: "lembrar do prazo" });
+  s.chapters = [{ startAt: 1_001_000, title: "Orçamento" }];
+  s.chats = [{ id: "x", messages: [
+    { role: "user", text: '<reuniao_anterior titulo="A">antes</reuniao_anterior>\n\n# Roteiro\nListe as decisões.' },
+    { role: "assistant", text: "- Orçamento aprovado [00:00:01]" },
+  ] }];
+
+  // Padrão: como sempre foi (tudo, menos a IA).
+  const md = toMarkdown(s);
+  assert.match(md, /## Destaques/);
+  assert.match(md, /## Notas/);
+  assert.match(md, /## Capítulos/);
+  assert.match(md, /link da planilha/);
+  assert.doesNotMatch(md, /Perguntas à IA/);
+
+  // Só a IA ligada além das falas.
+  const only = { chat: false, notes: false, highlights: false, chapters: false, ai: true };
+  const md2 = toMarkdown(s, { include: only });
+  assert.doesNotMatch(md2, /## Destaques|## Notas|## Capítulos|link da planilha|lembrar do prazo|✅/);
+  assert.match(md2, /## Perguntas à IA\n\n### Roteiro\n\n\*\*Pergunta:\*\*\n\n# Roteiro\nListe as decisões\.\n\n\*\*Resposta:\*\*\n\n- Orçamento aprovado/);
+  assert.doesNotMatch(md2, /reuniao_anterior|\bantes\b/);
+  assert.match(md2, /Vamos aprovar o orçamento/);
+
+  const txt = toText(s, { include: only });
+  assert.match(txt, /=== Perguntas à IA ===\n\nPergunta: # Roteiro\nListe as decisões\.\n\nResposta:\n- Orçamento aprovado/);
+  assert.doesNotMatch(txt, /lembrar do prazo|link da planilha|--- 1\. Orçamento ---/);
+
+  const html = toHtml(s, { include: only });
+  assert.match(html, /<h2>Perguntas à IA<\/h2>\s*<h3>Roteiro<\/h3>/);
+  assert.doesNotMatch(html, /<h2>(Destaques|Notas|Capítulos)<\/h2>/);
+  assert.match(toHtml(s), /<h2>Capítulos<\/h2>/);
+
+  assert.deepEqual(aiConversations(s)[0].pairs, [{ q: "# Roteiro\nListe as decisões.", a: "- Orçamento aprovado [00:00:01]" }]);
+});

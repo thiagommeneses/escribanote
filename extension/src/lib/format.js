@@ -31,6 +31,46 @@ export function dateLabel(ts) {
 
 export const PLATFORM = { meet: "Google Meet", teams: "Microsoft Teams", zoom: "Zoom", slack: "Slack", desktop: "Áudio do computador", import: "Arquivo importado" };
 
+// O que entra na exportação (opts.include). Sem escolha, fica como sempre foi: tudo, menos as conversas com a IA.
+export const EXPORT_PARTS = [
+  ["chat", "Chat da reunião"],
+  ["notes", "Notas"],
+  ["highlights", "Destaques"],
+  ["chapters", "Capítulos"],
+  ["ai", "Perguntas e respostas da IA"],
+];
+export const EXPORT_DEFAULT = { chat: true, notes: true, highlights: true, chapters: true, ai: false };
+function inc(opts, key) {
+  const v = opts && opts.include && opts.include[key];
+  return typeof v === "boolean" ? v : EXPORT_DEFAULT[key];
+}
+// Linha do tempo com só as partes escolhidas (capítulos, notas, chat da reunião; destaques viram só a marca).
+function items(session, opts = {}) {
+  return timeline(session, { ...opts, includeChat: inc(opts, "chat") }).filter(
+    (it) =>
+      (it.type !== "chapter" || inc(opts, "chapters")) &&
+      (it.type !== "note" || inc(opts, "notes")) &&
+      (it.type !== "block" || it.block.kind !== "chat" || inc(opts, "chat")),
+  );
+}
+function marks(b, opts) {
+  return inc(opts, "highlights") ? b.tags : [];
+}
+// Conversas da aba IA: [{ title, pairs: [{ q, a }] }]. A pergunta sai sem as reuniões anteriores coladas como consulta.
+export function aiConversations(session) {
+  const strip = (s) => String(s || "").replace(/<reuniao_anterior[^>]*>[\s\S]*?<\/reuniao_anterior>/g, "").trim();
+  return (session.chats || [])
+    .map((c) => {
+      const pairs = [];
+      for (const m of c.messages || []) {
+        if (m.role === "user") pairs.push({ q: strip(m.text), a: "" });
+        else if (m.role === "assistant" && pairs.length) pairs[pairs.length - 1].a = String(m.text || "").trim();
+      }
+      return { auto: !!c.auto, pairs: pairs.filter((p) => p.q && p.a) };
+    })
+    .filter((c) => c.pairs.length);
+}
+
 function tagLabel(tags, id) {
   const t = (tags || DEFAULT_TAGS).find((x) => x.id === id);
   return t ? `${t.emoji} ${t.label}` : id;
@@ -42,7 +82,7 @@ function highlightsOf(session, opts) {
 
 export function toText(session, opts = {}) {
   const head = `${session.title}\n${PLATFORM[session.platform] || session.platform} · ${dateLabel(session.startedAt)}\n`;
-  const body = timeline(session, opts)
+  const body = items(session, opts)
     .map((it) => {
       const t = `[${clock(it.at - session.startedAt)}]`;
       if (it.type === "note") return `${t} 📝 Nota: ${it.note.text}`;
@@ -50,11 +90,17 @@ export function toText(session, opts = {}) {
       if (it.type === "chapter") return `--- ${it.chapter.n}. ${it.chapter.title} ---`;
       const b = it.block;
       const tag = b.kind === "chat" ? " (chat)" : "";
-      const mark = b.tags.length ? ` [${b.tags.map((id) => tagLabel(opts.tags, id)).join(", ")}]` : "";
+      const m = marks(b, opts);
+      const mark = m.length ? ` [${m.map((id) => tagLabel(opts.tags, id)).join(", ")}]` : "";
       return `${t} ${b.speaker}${tag}${mark}: ${blockText(session, b, (c) => `[${c}]`)}`;
     })
     .join("\n\n");
-  return `${head}\n${body}\n`;
+  let ai = "";
+  if (inc(opts, "ai")) {
+    const convs = aiConversations(session);
+    if (convs.length) ai = "\n\n=== Perguntas à IA ===\n\n" + convs.flatMap((c) => c.pairs.map((p) => `Pergunta: ${p.q}\n\nResposta:\n${p.a}`)).join("\n\n---\n\n") + "\n";
+  }
+  return `${head}\n${body}\n${ai}`;
 }
 
 export function toMarkdown(session, opts = {}) {
@@ -67,7 +113,7 @@ export function toMarkdown(session, opts = {}) {
     "",
   ];
   if (opts.ata !== false && session.summary && session.summary.text) lines.push("## Ata", "", session.summary.text.trim(), "");
-  const hls = highlightsOf(session, opts);
+  const hls = inc(opts, "highlights") ? highlightsOf(session, opts) : [];
   if (hls.length) {
     lines.push("## Destaques", "");
     for (const b of hls) {
@@ -75,14 +121,21 @@ export function toMarkdown(session, opts = {}) {
     }
     lines.push("");
   }
-  if (session.notes.text.trim()) lines.push("## Notas", "", session.notes.text.trim(), "");
-  if (session.chapters && session.chapters.length) {
+  if (inc(opts, "notes") && session.notes.text.trim()) lines.push("## Notas", "", session.notes.text.trim(), "");
+  if (inc(opts, "chapters") && session.chapters && session.chapters.length) {
     lines.push("## Capítulos", "");
     for (const c of session.chapters) lines.push(`- \`${clock(c.startAt - session.startedAt)}\` ${c.title}`);
     lines.push("");
   }
+  if (inc(opts, "ai")) {
+    const convs = aiConversations(session);
+    if (convs.length) {
+      lines.push("## Perguntas à IA", "");
+      for (const c of convs) for (const p of c.pairs) lines.push(`### ${firstLine(p.q)}`, "", ...(p.q.length > firstLine(p.q).length ? ["**Pergunta:**", "", p.q, ""] : []), "**Resposta:**", "", p.a, "");
+    }
+  }
   lines.push("## Transcrição", "");
-  for (const it of timeline(session, opts)) {
+  for (const it of items(session, opts)) {
     const t = `\`${clock(it.at - session.startedAt)}\``;
     if (it.type === "chapter") { lines.push(`### ${it.chapter.n}. ${it.chapter.title}`, ""); continue; }
     if (it.type === "note") lines.push(`> 📝 ${t} ${it.note.text}`, "");
@@ -90,11 +143,18 @@ export function toMarkdown(session, opts = {}) {
     else {
       const b = it.block;
       const tag = b.kind === "chat" ? " _(chat)_" : "";
-      const mark = b.tags.length ? " " + b.tags.map((id) => tagLabel(opts.tags, id)).join(" ") : "";
+      const m = marks(b, opts);
+      const mark = m.length ? " " + m.map((id) => tagLabel(opts.tags, id)).join(" ") : "";
       lines.push(`**${b.speaker}**${tag} · ${t}${mark}`, "", blockText(session, b, (c) => `\`${c}\``), "");
     }
   }
   return lines.join("\n");
+}
+
+// Primeira linha da pergunta, sem "#" de título, para o subtítulo da conversa na exportação.
+function firstLine(q) {
+  const l = String(q).split("\n").map((x) => x.replace(/^#+\s*/, "").trim()).find(Boolean) || "Pergunta";
+  return l.length > 120 ? l.slice(0, 117) + "…" : l;
 }
 
 function esc(s) {
@@ -124,14 +184,15 @@ export function mdToHtml(md) {
 
 // HTML autocontido: usado na cópia formatada (Docs, Notion, e-mail) e no PDF.
 // shotUrls: mapa id -> dataURL das capturas (opcional). ata: false deixa a ata de fora. clean: leitura limpa.
-export function toHtml(session, { tags, shotUrls = {}, ata = true, clean = false } = {}) {
+export function toHtml(session, { tags, shotUrls = {}, ata = true, clean = false, include } = {}) {
+  const opts = { clean, include };
   const parts = [
     `<h1>${esc(session.title)}</h1>`,
     `<p><b>Plataforma:</b> ${esc(PLATFORM[session.platform] || session.platform)} · <b>Data:</b> ${esc(dateLabel(session.startedAt))}<br><b>Participantes:</b> ${esc(participantNames(session).join(", ") || "—")}</p>`,
   ];
   if (ata && session.summary && session.summary.text) parts.push("<h2>Ata</h2>", mdToHtml(session.summary.text));
-  if (session.chapters && session.chapters.length) parts.push("<h2>Capítulos</h2><ul>", ...session.chapters.map((c) => `<li><span style="color:#888">${clock(c.startAt - session.startedAt)}</span> ${esc(c.title)}</li>`), "</ul>");
-  const hls = highlightsOf(session, { clean });
+  if (inc(opts, "chapters") && session.chapters && session.chapters.length) parts.push("<h2>Capítulos</h2><ul>", ...session.chapters.map((c) => `<li><span style="color:#888">${clock(c.startAt - session.startedAt)}</span> ${esc(c.title)}</li>`), "</ul>");
+  const hls = inc(opts, "highlights") ? highlightsOf(session, { clean }) : [];
   if (hls.length) {
     parts.push("<h2>Destaques</h2><ul>");
     for (const b of hls) {
@@ -139,9 +200,18 @@ export function toHtml(session, { tags, shotUrls = {}, ata = true, clean = false
     }
     parts.push("</ul>");
   }
-  if (session.notes.text.trim()) parts.push("<h2>Notas</h2>", mdToHtml(session.notes.text));
+  if (inc(opts, "notes") && session.notes.text.trim()) parts.push("<h2>Notas</h2>", mdToHtml(session.notes.text));
+  if (inc(opts, "ai")) {
+    const convs = aiConversations(session);
+    if (convs.length) {
+      parts.push("<h2>Perguntas à IA</h2>");
+      for (const c of convs)
+        for (const p of c.pairs)
+          parts.push(`<h3>${esc(firstLine(p.q))}</h3>`, p.q.length > firstLine(p.q).length ? `<p><b>Pergunta:</b><br>${esc(p.q).replace(/\n/g, "<br>")}</p>` : "", "<p><b>Resposta:</b></p>", mdToHtml(p.a));
+    }
+  }
   parts.push("<h2>Transcrição</h2>");
-  for (const it of timeline(session, { clean })) {
+  for (const it of items(session, opts)) {
     const t = clock(it.at - session.startedAt);
     if (it.type === "chapter") parts.push(`<h3>${it.chapter.n}. ${esc(it.chapter.title)}</h3>`);
     else if (it.type === "note") parts.push(`<blockquote>📝 <i>${t}</i> ${esc(it.note.text)}</blockquote>`);
@@ -150,7 +220,8 @@ export function toHtml(session, { tags, shotUrls = {}, ata = true, clean = false
       parts.push(url ? `<p><i>${t}</i><br><img src="${url}" alt="Captura de tela" style="max-width:100%;border:1px solid #ddd;border-radius:6px"></p>` : `<p><i>${t} 📷 Captura de tela</i></p>`);
     } else {
       const b = it.block;
-      const mark = b.tags.length ? " " + esc(b.tags.map((id) => tagLabel(tags, id)).join(" ")) : "";
+      const m = marks(b, opts);
+      const mark = m.length ? " " + esc(m.map((id) => tagLabel(tags, id)).join(" ")) : "";
       const paras = (b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text }])
         .map((p, i) => (i ? `<span style="color:#888;font-size:smaller">${clock(p.at - session.startedAt)}</span> ` : "") + esc(p.text).replace(/\n+/g, "<br>"))
         .join("<br><br>");

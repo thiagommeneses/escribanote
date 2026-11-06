@@ -138,12 +138,41 @@ try {
   assert.match(await ev("document.querySelector('#chat-log .long-q summary').textContent"), /ver a pergunta inteira \(9\.\d{3} caracteres\)/);
   console.log("✓ pergunta longa recolhida na conversa");
 
+  // Copiar a resposta, a pergunta com a resposta, e exportar com as perguntas à IA.
+  await send("Browser.grantPermissions", { permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"], origin: `chrome-extension://${extId}` });
+  await send("Emulation.setFocusEmulationEnabled", { enabled: true }, sessionId);
+  const clip = () => ev("navigator.clipboard.readText()");
+  await ev("document.querySelector('#chat-log [data-copy=\"a\"]').click()");
+  await waitFor(async () => (await clip()) === "Resposta.", "resposta copiada");
+  await ev("document.querySelector('#chat-log [data-copy=\"qa\"]').click()");
+  await waitFor(async () => /^Pergunta: # Roteiro de análise[\s\S]*\n\nResposta:\nResposta\.$/.test(await clip()), "pergunta e resposta copiadas");
+  console.log("✓ copiar resposta e copiar com a pergunta");
+
+  await ev("document.querySelector('[data-tab=\"transcript\"]')?.click(); document.querySelector('#m-export').click()");
+  const incs = await ev("[...document.querySelectorAll('#export-menu [data-inc]')].map((i) => [i.dataset.inc, i.checked])");
+  assert.deepEqual(incs, [["chat", true], ["notes", true], ["highlights", true], ["chapters", true], ["ai", false]]);
+  await ev("document.querySelector('#export-menu [data-inc=\"ai\"]').click()");
+  await waitFor(() => ev("(async () => (await chrome.storage.local.get('settings')).settings.exportInclude?.ai === true)()"), "escolha lembrada");
+  assert.equal(await ev("document.querySelector('#export-menu').hidden"), false, "marcar não fecha o menu");
+  if (process.env.SHOT_MENU) {
+    await send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false }, sessionId);
+    await ev("document.documentElement.dataset.theme = 'dark'; window.scrollTo(0, 0); document.querySelector('.main, main')?.scrollTo?.(0, 0)");
+    await sleep(300);
+    const { data } = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+    (await import("node:fs")).writeFileSync(process.env.SHOT_MENU, Buffer.from(data, "base64"));
+  }
+  await ev("document.querySelector('#export-menu [data-exp=\"plain\"]').click()");
+  await waitFor(async () => /=== Perguntas à IA ===\n\nPergunta: # Roteiro de análise/.test(await clip()), "exportação com as perguntas à IA");
+  console.log("✓ exportar com as perguntas e respostas da IA (escolha lembrada)");
+
   if (process.env.SHOT) {
     // Captura da seção para conferência visual: um modelo desafixado e o rascunho aberto.
     await send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 1400, deviceScaleFactor: 1, mobile: false }, sessionId);
     await ev("document.documentElement.dataset.theme = 'dark'; document.querySelector('#q-add').click()");
     await ev(`(() => { const el = document.querySelector('[data-draft] [data-k="label"]'); el.value = 'Um nome de modelo bem comprido para ver a contagem ficar laranja'.slice(0, 56); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(500);
+    await ev("document.querySelector('[data-tab=\"ai\"]').click(); document.querySelector('#chat-select').value = 'c1'; document.querySelector('#chat-select').dispatchEvent(new Event('change', { bubbles: true }))");
+    await sleep(300);
     await ev("document.querySelector('.chat').scrollIntoView()");
     await sleep(300);
     const { data } = await send("Page.captureScreenshot", { format: "png" }, sessionId);

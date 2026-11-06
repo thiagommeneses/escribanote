@@ -2,6 +2,10 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.58 beta — 2026-11-06
+- Pergunte à IA: cada resposta tem "Copiar resposta" e "Copiar com a pergunta" (formatado para Docs, Notion ou e-mail, e texto puro); conversas com mais de uma pergunta têm "Copiar a conversa inteira".
+- Exportar › "Incluir na exportação": escolha se entram o chat da reunião, as notas, os destaques, os capítulos e as perguntas e respostas da IA, com a quantidade de cada um nesta reunião. A escolha fica lembrada. Vale para copiar, PDF, Markdown e texto; o padrão continua como antes (tudo, menos as conversas com a IA).
+
 ## 0.9.57 beta — 2026-11-06
 - Perguntas à IA de até 10.000 caracteres (antes 2.000), para roteiros detalhados de análise: nos modelos de perguntas, na caixa de pergunta, no widget e no app web. A resposta pode ir a 16 mil tokens (antes ~4 mil no Pro e ~8 mil com chave própria), então estudos longos não saem cortados, e a IA segue por completo o roteiro e o formato pedidos.
 - No Pro, pergunta com mais de 2.000 caracteres custa 2 créditos (as curtas continuam custando 1); o app web mostra o custo enquanto você escreve.

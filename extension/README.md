@@ -9,6 +9,15 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Copiar respostas e escolher o que exportar (0.9.58)
+
+- `lib/format.js`: `toText`, `toMarkdown` e `toHtml` aceitam `include` (`{ chat, notes, highlights, chapters, ai }`,
+  padrão `EXPORT_DEFAULT`: tudo menos a IA). Com `ai`, entra a seção "Perguntas à IA" (`aiConversations`, sem as
+  reuniões anteriores coladas na pergunta). A escolha fica em Ajustes `exportInclude` e vale também para o PDF
+  (`print.js`). SRT/VTT seguem só com as falas e o JSON leva tudo.
+- Na conversa da aba IA, `data-copy` = `a` (resposta), `qa` (pergunta e resposta) e `all` (conversa inteira),
+  copiados como HTML e texto puro.
+
 ## Perguntas longas (0.9.57)
 
 - `lib/ai.js` define `QUESTION_MAX` (10.000 caracteres), `LONG_QUESTION` (2.000) e `ANSWER_MAX_TOKENS` (16.000),
