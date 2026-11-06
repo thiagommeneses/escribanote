@@ -556,6 +556,19 @@ test("Sincronização: a mesma fala editada nos dois lados fica com a versão ma
   assert.equal(mergeDocs(local, remote).entries[0].text, "Olá a todos");
 });
 
+test("Sincronização: conversa excluída não volta da outra cópia; editada vence pela data; restaurada volta", () => {
+  const c1 = { id: "c1", createdAt: 1, updatedAt: 10, messages: [{ role: "user", text: "a?" }, { role: "assistant", text: "A" }] };
+  const c2 = { id: "c2", createdAt: 2, updatedAt: 10, messages: [{ role: "user", text: "b?" }, { role: "assistant", text: "B" }] };
+  const local = doc({ updatedAt: 3000, chats: [c2], deletedChats: [{ id: "c1", at: 20 }] });
+  const remote = doc({ updatedAt: 2000, chats: [c1, c2] });
+  assert.deepEqual(mergeDocs(local, remote).chats.map((c) => c.id), ["c2"]);
+  assert.deepEqual(mergeDocs(remote, local).chats.map((c) => c.id), ["c2"], "vale nos dois sentidos");
+  const edited = { ...c2, updatedAt: 30, messages: [{ role: "user", text: "b editada?", edited: true }, { role: "assistant", text: "B2" }] };
+  assert.equal(mergeDocs(doc({ updatedAt: 1500, chats: [edited] }), doc({ updatedAt: 2500, chats: [c2] })).chats[0].messages[1].text, "B2");
+  const restored = doc({ updatedAt: 4000, chats: [{ ...c1, updatedAt: 40 }, c2] });
+  assert.deepEqual(mergeDocs(restored, local).chats.map((c) => c.id), ["c1", "c2"]);
+});
+
 test("Sincronização: título e ata vêm do lado alterado por último; nomes, notas e conversas se juntam", () => {
   const local = doc({ updatedAt: 1500, title: "Antigo", speakers: { a: "Ana" }, notes: { text: "nota local", items: [{ id: "n1", at: 1, text: "x" }] }, chats: [{ id: "c1", createdAt: 1, messages: [{ role: "user", text: "?" }] }], shots: [{ id: "s1" }] });
   const remote = doc({ updatedAt: 4000, title: "Orçamento Q4", speakers: { b: "Bruno" }, summary: { text: "## Resumo" }, notes: { text: "", items: [{ id: "n2", at: 2, text: "y" }] }, chats: [{ id: "c2", createdAt: 2, messages: [] }] });
@@ -1286,6 +1299,34 @@ test("streamClaude: só raciocínio até o limite de tokens vira erro claro, nã
   ]);
   try {
     await assert.rejects(streamClaude({ apiKey: "k", model: "claude-opus-5-5", system: "s", messages: [{ role: "user", content: "x" }] }), /limite de tokens raciocinando/);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test("streamClaude: resposta cortada pelo limite de tokens pede continuação e emenda; esgotadas, avisa o corte", async () => {
+  const sse = (events) => new Response(new ReadableStream({ start(c) { for (const e of events) c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(e)}\n\n`)); c.close(); } }), { status: 200 });
+  const part = (t, stop) => sse([
+    { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+    { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: t } },
+    { type: "content_block_stop", index: 0 },
+    { type: "message_delta", delta: { stop_reason: stop } },
+  ]);
+  const real = globalThis.fetch;
+  const bodies = [];
+  let queue = [part("1. Diário. Havia um **v", "max_tokens"), part("azio** de preço.", "end_turn")];
+  globalThis.fetch = async (_u, init) => (bodies.push(JSON.parse(init.body)), queue.shift());
+  try {
+    const r = await streamClaude({ apiKey: "k", model: "m", system: "s", messages: [{ role: "user", content: "análise" }] });
+    assert.equal(r.text, "1. Diário. Havia um **vazio** de preço.");
+    assert.equal(bodies.length, 2);
+    assert.deepEqual(bodies[1].messages.slice(1).map((m) => m.role), ["assistant", "user"]);
+    assert.equal(bodies[1].messages[1].content, "1. Diário. Havia um **v");
+    assert.match(bodies[1].messages[2].content, /Continue exatamente/);
+    queue = [part("a", "max_tokens"), part("b", "max_tokens"), part("c", "max_tokens")];
+    const cut = await streamClaude({ apiKey: "k", model: "m", system: "s", messages: [{ role: "user", content: "x" }] });
+    assert.ok(cut.text.startsWith("abc"));
+    assert.match(cut.text, /cortada pelo limite de tamanho/);
   } finally {
     globalThis.fetch = real;
   }

@@ -74,7 +74,7 @@ test("pergunta usa o modelo rápido e o cache da transcrição", async () => {
   assert.match(p.system[0].text, /Bruno/);
 });
 
-test("pergunta longa (roteiro detalhado) chega inteira, custa 2 créditos e tem resposta de até 16 mil tokens", async () => {
+test("pergunta longa (roteiro detalhado) chega inteira, custa 2 créditos e tem resposta de até 32 mil tokens", async () => {
   const roteiro = "# Análise detalhada do pregão\n" + "Detalhe cada operação com horário, entrada, alvo e stop. ".repeat(160); // ~9 mil caracteres
   const before = await balance();
   ctx.anthropic.calls.length = 0;
@@ -82,7 +82,7 @@ test("pergunta longa (roteiro detalhado) chega inteira, custa 2 créditos e tem 
   assert.ok(parseSse(r.body).some((e) => e.event === "done"));
   const p = ctx.anthropic.calls[0].params;
   assert.equal(p.messages.at(-1).content, roteiro);
-  assert.equal(p.max_tokens, 16000);
+  assert.equal(p.max_tokens, 32000);
   assert.equal(await balance(), before - 2);
   // pergunta curta continua custando 1
   const r2 = await u.post("/api/v1/ai/ask", { meeting: sampleMeeting("mt-roteiro"), history: [{ role: "user", text: "Quem decidiu?" }] });
@@ -138,6 +138,25 @@ test("pesquisa na web e capturas: ferramenta, continuação após pause_turn, fo
   assert.equal(ctx.anthropic.calls[1].params.messages.at(-1).role, "assistant");
   assert.match(done.data.text, /O IPCA veio acima\.\n\n\*\*Fontes da web:\*\*\n- IPCA de outubro — https:\/\/exemplo\.com\/ipca/);
   assert.equal(await balance(), before - 2);
+  ctx.anthropic.finals = null;
+  await ctx.db.query("UPDATE credit_balances SET balance = $2 WHERE user_id = $1", [u.me.id, before]);
+});
+
+test("resposta cortada pelo limite de tokens: pede a continuação e emenda no mesmo texto, sem cobrar a mais", async () => {
+  const before = await balance();
+  ctx.anthropic.calls.length = 0;
+  ctx.anthropic.finals = [
+    { text: "Havia um **v", stop_reason: "max_tokens", content: [{ type: "text", text: "Havia um **v" }] },
+    { text: "azio** de preço.", stop_reason: "end_turn", content: [{ type: "text", text: "azio** de preço." }] },
+  ];
+  const r = await u.post("/api/v1/ai/ask", { meeting: sampleMeeting("mt-cut"), history: [{ role: "user", text: "Análise" }] });
+  const done = parseSse(r.body).find((e) => e.event === "done");
+  assert.ok(done);
+  assert.equal(done.data.text, "Havia um **vazio** de preço.");
+  const msgs = ctx.anthropic.calls[1].params.messages;
+  assert.deepEqual(msgs.slice(-2).map((m) => m.role), ["assistant", "user"]);
+  assert.equal(msgs.at(-2).content, "Havia um **v");
+  assert.equal(await balance(), before - 1);
   ctx.anthropic.finals = null;
   await ctx.db.query("UPDATE credit_balances SET balance = $2 WHERE user_id = $1", [u.me.id, before]);
 });

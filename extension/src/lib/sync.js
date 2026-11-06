@@ -15,11 +15,16 @@ function unionById(a = [], b = []) {
   return [...map.values()].sort((x, y) => order(x) - order(y));
 }
 
-function unionChats(a = [], b = []) {
+// Conversas: vence a alterada por último (updatedAt, gravado ao perguntar, editar ou reenviar);
+// sem essa marca nos dois lados, a mais longa. As excluídas (deletedChats) não voltam da outra cópia.
+function unionChats(a = [], b = [], deleted = []) {
+  const gone = new Set(deleted.map((d) => d.id));
   const map = new Map();
   for (const c of [...a, ...b]) {
+    if (!c || gone.has(c.id)) continue;
     const prev = map.get(c.id);
-    if (!prev || (c.messages?.length || 0) > (prev.messages?.length || 0)) map.set(c.id, c);
+    const newer = prev && c.updatedAt && prev.updatedAt ? c.updatedAt > prev.updatedAt : (c.messages?.length || 0) > (prev?.messages?.length || 0);
+    if (!prev || newer) map.set(c.id, c);
   }
   return [...map.values()].sort((x, y) => (x.createdAt || 0) - (y.createdAt || 0));
 }
@@ -33,7 +38,8 @@ export function mergeDocs(local, remote) {
   const out = structuredClone(newer);
   out.entries = unionById(older.entries, newer.entries);
   out.asr = unionById(older.asr, newer.asr);
-  out.chats = unionChats(older.chats, newer.chats);
+  out.deletedChats = unionById(older.deletedChats, newer.deletedChats).filter((d) => ![...(older.chats || []), ...(newer.chats || [])].some((c) => c.id === d.id && (c.updatedAt || 0) > (d.at || 0))).slice(-200);
+  out.chats = unionChats(older.chats, newer.chats, out.deletedChats);
   out.notes = {
     text: newer.notes?.text || older.notes?.text || "",
     items: unionById(older.notes?.items, newer.notes?.items),
