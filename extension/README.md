@@ -9,6 +9,17 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Capturas para a IA, captura automática e pesquisa na web (0.9.60)
+
+- `session.aiOptions` (`shots`, `web`) vale para toda pergunta da reunião. `shotItems()` escolhe até `SHOTS_MAX`
+  (20) capturas com `sampleShots()` e as manda como blocos `image` precedidos de `<captura_de_tela horario>`.
+- Pesquisa na web: `webSearchTool()` (`web_search_20260209`; `_20250305` no Haiku, `max_uses` 5). `streamClaude`
+  agora monta os blocos do streaming (texto, pensamento com assinatura, `server_tool_use`), continua após
+  `pause_turn` e junta as citações; `withSources()` lista as fontes no fim. O servidor faz o mesmo em
+  `streamAnswer`, recebe `shots` e `web` em `/ai/ask` e soma US$ 0,01 por busca no custo.
+- Captura automática: `bridge.js` (`autoShotTick`, a cada 20 s) respeita `autoShotMin`, compara uma miniatura
+  32×18 com a anterior, ignora quadro preto e manda `auto-shot`; o service worker guarda só em reunião em andamento.
+
 ## IA que não para e material de apoio (0.9.59)
 
 - `chatRequest` manda executar o roteiro inteiro, com "não informado" no que falta e as limitações no fim, sem

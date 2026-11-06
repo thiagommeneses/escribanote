@@ -27,6 +27,7 @@ async function waitFor(fn, what, ms = 8000) { const end = Date.now() + ms; for (
 const t0 = Date.now() - 3600_000;
 const sample = { id: "teste-q-1", title: "Reunião de teste das perguntas", platform: "meet", meetingKey: "meet:abc-defg-hij", startedAt: t0, updatedAt: t0 + 60_000, endedAt: t0 + 60_000,
   speakers: { a: "Ana" }, entries: [{ id: "1", at: t0 + 1000, speakerId: "a", text: "Bom dia, vamos começar.", kind: "caption", source: "protocol" }], asr: [], notes: { text: "", items: [] }, highlights: {},
+  shots: [{ id: "s1", at: t0 + 30_000 }],
   chats: [{ id: "c1", messages: [{ role: "user", text: "# Roteiro de análise\n" + "Detalhe cada operação com horário, entrada, alvo e stop. ".repeat(160), at: t0 }, { role: "assistant", text: "Resposta.", at: t0 }] }] };
 const ROTEIRO = "# Análise detalhada do pregão\n" + "Para cada operação, detalhe horário, direção, gatilho, alvo, stop e resultado. ".repeat(115).trim(); // ~9 mil caracteres
 
@@ -39,7 +40,8 @@ try {
   await sleep(800);
   // Configuração como a do bug: dois "Nova pergunta" salvos pela versão antiga do "+ Novo modelo".
   await evIn(b.sessionId)(`(async () => {
-    await chrome.runtime.sendMessage({ type: "import", sessions: [${JSON.stringify(sample)}] });
+    await chrome.storage.local.set({ "shot:teste-q-1:s1": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==" });
+    await chrome.runtime.sendMessage({ type: "import", sessions: [${JSON.stringify(sample)}, ${JSON.stringify({ ...sample, id: "teste-q-live", title: "Reunião ao vivo", endedAt: null, chats: [], shots: [] })}] });
     const { settings = {} } = await chrome.storage.local.get("settings");
     const questions = [
       { id: "pontos", label: "Pontos principais", text: "Quais são os pontos principais?", auto: false },
@@ -187,6 +189,35 @@ try {
   await ev("document.querySelector('#support-list [data-support-rm]').click()");
   await waitFor(() => ev("document.querySelectorAll('#support-list .support-item').length === 3"), "remover anexo");
   console.log("✓ material de apoio: arquivo, PDF, imagem, texto colado e remover");
+
+  // Opções da reunião (capturas para a IA e pesquisa na web), captura automática e glossário de mercado.
+  const jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==";
+  assert.equal(await ev(`chrome.runtime.sendMessage({ type: "auto-shot", id: "${sample.id}", dataUrl: "${jpeg}" })`), null, "reunião encerrada não recebe captura automática");
+  assert.ok(await ev(`chrome.runtime.sendMessage({ type: "auto-shot", id: "teste-q-live", dataUrl: "${jpeg}" })`), "reunião em andamento recebe");
+  assert.equal(await ev(`(async () => (await chrome.runtime.sendMessage({ type: "get", id: "teste-q-live" })).shots.filter((x) => x.auto).length)()`), 1);
+  assert.equal(await ev("document.querySelector('#opt-shots').disabled"), true, "reunião sem capturas: opção desligada");
+  await ev("document.querySelector('#opt-web').click()");
+  await waitFor(() => ev(`(async () => (await chrome.runtime.sendMessage({ type: "get", id: "${sample.id}" })).aiOptions.web === true)()`), "pesquisa na web salva na reunião");
+  // Na reunião em andamento, que tem a captura automática:
+  await ev(`location.search = "?tab=1&id=teste-q-live"`);
+  await sleep(1200);
+  await waitFor(() => ev("document.querySelector('#m-title')?.value === 'Reunião ao vivo'"), "reunião ao vivo aberta");
+  await ev("document.querySelector('[data-tab=\"ai\"]').click()");
+  await waitFor(() => ev("!document.querySelector('#opt-shots').disabled && document.querySelector('#opt-shots-n').textContent === '(1)'"), "opção de capturas liberada, com 1 captura");
+  await ev("document.querySelector('#opt-shots').click()");
+  await waitFor(() => ev(`(async () => (await chrome.runtime.sendMessage({ type: "get", id: "teste-q-live" })).aiOptions.shots === true)()`), "capturas ligadas na reunião");
+  await ev(`location.search = "?tab=1&id=${sample.id}"`);
+  await sleep(1200);
+  await waitFor(() => ev("document.querySelector('#m-title')?.value === " + JSON.stringify(sample.title)), "volta à reunião");
+  console.log("✓ captura automática guardada; capturas e pesquisa na web ligadas para a reunião");
+
+  await ev("document.querySelector('[data-view=\"settings\"], #nav-settings, [data-goto-view=\"settings\"]')?.click()");
+  await ev("document.querySelector('#gloss-market').click()");
+  await waitFor(() => ev("(async () => /\\bBOVA11\\b/.test((await chrome.storage.local.get('settings')).settings.glossary || ''))()"), "termos do mercado no vocabulário");
+  await ev("document.querySelector('#gloss-market').click()");
+  await waitFor(() => ev("document.querySelector('#toast').textContent.includes('já estão')"), "não duplica os termos");
+  console.log("✓ termos do mercado financeiro no vocabulário, sem duplicar");
+  await ev("document.querySelector('[data-goto-view=\"meeting\"], #nav-meeting, [data-view=\"meeting\"]')?.click()");
 
   if (process.env.SHOT) {
     // Captura da seção para conferência visual: um modelo desafixado e o rascunho aberto.

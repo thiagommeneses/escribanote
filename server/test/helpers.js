@@ -25,13 +25,15 @@ export function fakeAnthropic() {
     messages: {
       stream(params) {
         fake.calls.push({ kind: "stream", params });
-        const parts = fake.text.match(/.{1,12}/gs) || [];
+        // fake.finals: respostas em sequência ({ text, stop_reason, content, usage }), uma por chamada.
+        const next = fake.finals?.shift();
+        const parts = (next?.text ?? fake.text).match(/.{1,12}/gs) || [];
         return {
           async *[Symbol.asyncIterator]() {
             if (fake.failWith) throw fake.failWith;
             for (const p of parts) yield { type: "content_block_delta", delta: { type: "text_delta", text: p } };
           },
-          finalMessage: async () => ({ stop_reason: fake.stopReason, usage: fake.usage }),
+          finalMessage: async () => (next ? { stop_reason: next.stop_reason || "end_turn", content: next.content || [], usage: next.usage || fake.usage } : { stop_reason: fake.stopReason, usage: fake.usage }),
           abort() {},
         };
       },

@@ -30,6 +30,7 @@ export function normalize(s) {
   s.notes ||= { text: "", items: [] }; // items: {id, at, text}
   s.shots ||= []; // {id, at}
   s.chats ||= []; // {id, createdAt, messages: [{role, text, at}]}
+  s.aiOptions ||= {}; // aba IA: { shots: enviar as capturas de tela, web: pesquisar na web } — valem para toda pergunta desta reunião
   s.support ||= []; // material de apoio da aba IA: {id, kind: "text"|"pdf"|"image", name, mime, size, at}; o conteúdo fica em "support:<sessão>:<id>"
   s.asr ||= []; // segmentos do Whisper local: {id, start, end, text, source, speakerId}
   s.fixes ||= {}; // id -> texto corrigido pela revisão da IA

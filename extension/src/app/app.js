@@ -986,7 +986,7 @@ function renderTranscript() {
       const t = clock(it.at - s.startedAt);
       if (it.type === "note") return `<li class="tl-note">${icon("nota")}<time>${t}</time><span>${esc(it.note.text)}</span><button class="x" data-del-note="${esc(it.note.id)}" title="Apagar nota" aria-label="Apagar nota">${icon("fechar")}</button></li>`;
       const url = state.shots[it.shot.id];
-      return `<li class="tl-shot"><time>${icon("captura")}${t}</time>${url ? `<img src="${url}" alt="Captura de tela" data-shot="${esc(it.shot.id)}">` : ""}</li>`;
+      return `<li class="tl-shot${it.shot.auto ? " auto" : ""}"><time>${icon("captura")}${t}${it.shot.auto ? " · automática" : ""}</time>${url ? `<img src="${url}" alt="Captura de tela" data-shot="${esc(it.shot.id)}">` : ""}</li>`;
     })
     .join("");
   $("timeline").innerHTML =
@@ -1235,7 +1235,7 @@ async function aiStatus() {
   const model = MODELS.find((m) => m.id === state.settings.aiModel);
   const pro = account?.token && account.plan === "pro" && !account.invalid;
   if (apiKey) return { ok: true, kind: "key", text: `Sua chave da API · ${model ? model.label : state.settings.aiModel}`, hint: "A transcrição só é enviada quando você pede." };
-  if (pro) return { ok: true, kind: "pro", text: `Escribanote Pro · ${account.balance ?? 0} crédito${account.balance === 1 ? "" : "s"}`, hint: `Ata, revisão e pergunta custam 1 crédito cada; pergunta com mais de ${LONG_QUESTION.toLocaleString("pt-BR")} caracteres ou com material de apoio, 2.` };
+  if (pro) return { ok: true, kind: "pro", text: `Escribanote Pro · ${account.balance ?? 0} crédito${account.balance === 1 ? "" : "s"}`, hint: `Ata, revisão e pergunta custam 1 crédito cada; pergunta com mais de ${LONG_QUESTION.toLocaleString("pt-BR")} caracteres, material de apoio, capturas ou pesquisa na web, 2.` };
   return { ok: false, kind: "none", text: "IA não configurada", hint: "Cadastre sua chave da API do Claude em Ajustes ou conecte a sua conta Escribanote Pro." };
 }
 
@@ -1331,6 +1331,16 @@ const SUPPORT_ICON = { text: "texto", pdf: "pdf", image: "captura" };
 function renderSupport() {
   const s = state.session;
   const list = s?.support || [];
+  const shots = s?.shots?.length || 0;
+  $("opt-shots").checked = !!s?.aiOptions?.shots;
+  $("opt-shots").disabled = !shots && !s?.aiOptions?.shots;
+  $("opt-shots-n").textContent = shots ? `(${shots}${shots > 20 ? ", 20 espaçadas" : ""})` : "(nenhuma nesta reunião)";
+  $("opt-web").checked = !!s?.aiOptions?.web;
+  // Transcrição longa ainda não revisada: revisar antes ajuda roteiros que dependem de preços, nomes e termos.
+  const reviewed = s ? toBlocks(s).some((b) => b.fixed) : true;
+  const tip = s && !reviewed && s.entries.length >= 40;
+  $("review-tip").hidden = !tip;
+  if (tip) $("review-tip").innerHTML = `A transcrição ainda não foi revisada pela IA. Para análises longas, revisar antes corrige termos, nomes e preços mal reconhecidos. <button type="button" class="linkish" id="review-now">Revisar agora</button>`;
   $("support-count").textContent = list.length ? `${list.length} · vai junto em toda pergunta desta reunião` : "";
   $("support-list").innerHTML = list
     .map((x) => `<span class="support-item" title="${esc(x.name)}">${icon(SUPPORT_ICON[x.kind] || "texto")}<span class="support-name">${esc(x.name)}</span><small>${x.kind === "text" ? `${fmtN(x.size)} caract.` : fmtSize(x.size)}</small><button type="button" class="x" data-support-rm="${esc(x.id)}" aria-label="Remover ${esc(x.name)}" title="Remover">${icon("fechar")}</button></span>`)
@@ -1367,6 +1377,16 @@ async function addSupportFiles(files) {
   }
   if (ok) toast(ok === 1 ? "Material de apoio anexado" : `${ok} materiais anexados`);
 }
+for (const [id, key] of [["opt-shots", "shots"], ["opt-web", "web"]])
+  $(id).addEventListener("change", async (e) => {
+    const next = await send({ type: "ai-options", id: state.session.id, [key]: e.target.checked }).catch((err) => (toast(err.message), null));
+    if (next) state.session = next;
+    renderSupport();
+    toast(key === "shots" ? (e.target.checked ? "As perguntas desta reunião levam as capturas de tela" : "Capturas de tela fora das perguntas") : e.target.checked ? "A IA pode pesquisar na web nesta reunião" : "Pesquisa na web desligada");
+  });
+$("review-tip").addEventListener("click", (e) => {
+  if (e.target.id === "review-now") $("review-run").click();
+});
 $("support-file").addEventListener("click", () => $("support-input").click());
 $("support-input").addEventListener("change", async (e) => {
   await addSupportFiles([...e.target.files]);
@@ -2811,6 +2831,17 @@ $("grant-shots").addEventListener("click", async () => {
   const ok = await chrome.permissions.request({ origins: ["<all_urls>"] });
   toast(ok ? "Capturas autorizadas" : "Permissão negada");
   renderSettings();
+});
+// Glossário pronto para salas de mercado: acrescenta só os termos que faltam.
+const MARKET_TERMS = ["WIN", "WDO", "IBOV", "Ibovespa", "BOVA11", "EWZ", "S&P 500", "Nasdaq", "VIX", "DI", "Treasuries", "VWAP", "Max Pain", "Fibonacci", "pullback", "breakout", "stop loss", "stop gain", "gatilho", "saldo de agressão", "book de ofertas", "times and trades", "ajuste", "gap", "Payroll", "CPI", "PCE", "IPCA", "Copom", "FOMC", "Fed", "PETR4", "VALE3", "ITUB4", "BBDC4", "call", "put", "strike", "vencimento", "travas", "gamma", "open interest", "hedge", "rolagem", "day trade", "swing trade", "scalping"];
+$("gloss-market").addEventListener("click", async () => {
+  const field = document.querySelector('#settings [name="glossary"]');
+  const have = new Set(field.value.split("\n").map((l) => l.split("=")[0].trim().toLowerCase()).filter(Boolean));
+  const add = MARKET_TERMS.filter((t) => !have.has(t.toLowerCase()));
+  if (!add.length) return toast("Os termos do mercado já estão no vocabulário");
+  field.value = (field.value.trimEnd() ? field.value.trimEnd() + "\n" : "") + add.join("\n");
+  state.settings = await setSettings({ glossary: field.value });
+  toast(`${add.length} termos do mercado financeiro adicionados`);
 });
 $("edit-shortcuts").addEventListener("click", () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" }));
 
