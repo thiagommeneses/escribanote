@@ -380,6 +380,12 @@
           <div class="card">
             <h3>Capturas de tela e atalhos</h3>
             <p class="muted">O Chrome libera capturas depois que você clica no ícone do Escribanote na aba da reunião ou usa um atalho. Para capturar sempre pelo widget, autorize abaixo.</p>
+            <label class="field"><span>O que capturar</span>
+              <select name="shotArea">
+                <option value="tab">A aba inteira da reunião</option>
+                <option value="shared">Só o conteúdo compartilhado (apresentação ou tela em destaque)</option>
+              </select></label>
+            <p class="muted tiny">No modo "só o compartilhado", a captura pega o vídeo maior da reunião na resolução original; sem apresentação na tela, salva a aba inteira.</p>
             <div class="row"><button type="button" class="btn sm" id="grant-shots">Autorizar capturas pelo widget</button><span id="shots-status" class="muted tiny"></span></div>
             <ul class="kbd-list" id="kbd-list"></ul>
             <button type="button" class="btn sm ghost" id="edit-shortcuts">Alterar atalhos</button>

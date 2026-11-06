@@ -2,6 +2,9 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.54 beta — 2026-11-05
+- Capturas de tela só do conteúdo compartilhado (Ajustes › Capturas de tela e atalhos › "O que capturar"): salva só a apresentação ou a tela em destaque, na resolução original do vídeo, sem a interface da reunião. Sem apresentação na tela, salva a aba inteira. Vale para o botão do widget e para Alt+Shift+S; o padrão continua a aba inteira.
+
 ## 0.9.53 beta — 2026-11-05
 - Webhook pós-reunião (Ajustes › Avançadas › Integrações): ao terminar, a reunião vai em JSON (título, plataforma, horários, participantes, ata, perguntas automáticas, capítulos, transcrição e Markdown) para o endereço escolhido — Zapier, Make, n8n ou servidor próprio levam ao Notion, Google Docs, CRM… Botão "Enviar teste". A permissão é pedida só para aquele site; áudio e capturas não vão.
 

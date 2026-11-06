@@ -220,7 +220,9 @@ Teste real dentro da extensão (Chromium, só processador) com um trecho de 22 s
 
 > **Capturas de tela:** o Chrome só libera a captura depois que você clica no ícone do Escribanote na aba da
 > reunião ou usa <kbd>Alt+Shift+S</kbd>. Para capturar sempre pelo widget, use "Autorizar capturas pelo
-> widget" em Ajustes.
+> widget" em Ajustes. Em "O que capturar" dá para salvar só o conteúdo compartilhado: a captura pega o
+> vídeo maior visível (apresentação ou tela em destaque) na resolução original, recorta a aba nessa área
+> quando o vídeo não pode ser lido e salva a aba inteira quando não há vídeo grande na tela.
 
 ## Como funciona
 
