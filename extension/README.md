@@ -9,6 +9,13 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Contagem de caracteres (0.9.56)
+
+- Campos com `maxlength` e `data-count` mostram "n/máx" (`countHtml`/`paintCount` em `app.js`):
+  `data-count="always"` deixa o contador fixo dentro do campo (envolvido num `.cw`; usado nos modelos de
+  perguntas); `data-count="focus"` mostra um selo flutuante (`#count-float`) sob o campo enquanto ele é editado,
+  sem mexer no layout. Laranja a partir de 90% do limite, vermelho no limite.
+
 ## Modelos de perguntas revistos (0.9.55)
 
 - **Alfinete com resposta imediata:** a lista de modelos não era redesenhada enquanto o foco estava dentro

@@ -63,7 +63,7 @@
         <div id="m" hidden>
           <div class="m-head">
             <div class="m-titlerow">
-              <input id="m-title" class="m-title" aria-label="Título da reunião" maxlength="200" title="Clique para renomear a reunião" placeholder="Nome da reunião">
+              <input id="m-title" data-count="focus" class="m-title" aria-label="Título da reunião" maxlength="200" title="Clique para renomear a reunião" placeholder="Nome da reunião">
               <button type="button" class="m-rename" id="m-rename" title="Renomear a reunião" aria-label="Renomear a reunião"><i data-ic="editar"></i></button>
             </div>
             <div class="m-meta" id="m-meta"></div>
@@ -127,7 +127,7 @@
             <label class="field-label" for="notes-text">Anotações da reunião <span class="muted">(Markdown, salvas automaticamente)</span></label>
             <textarea id="notes-text" class="notes-text" placeholder="Pauta, contexto, combinados…"></textarea>
             <div class="field-label">Notas com horário</div>
-            <div class="note-add"><input id="note-input" placeholder="Nova nota no horário atual…" maxlength="2000"><button class="btn sm primary" id="note-add">Adicionar</button></div>
+            <div class="note-add"><input id="note-input" data-count="focus" placeholder="Nova nota no horário atual…" maxlength="2000"><button class="btn sm primary" id="note-add">Adicionar</button></div>
             <ul class="note-list" id="note-list"></ul>
           </section>
 
@@ -139,7 +139,7 @@
             </div>
             <details class="ata-prompt" id="ata-prompt-box">
               <summary><i data-ic="editar"></i><span>Instruções extras para a IA</span><i class="pill" id="ata-prompt-on" hidden>ativas</i></summary>
-              <textarea id="ata-prompt" rows="3" maxlength="4000" placeholder="Ex.: escreva a conclusão em um parágrafo só; não cite valores em reais; trate o Dr. Rafael como 'o Promotor'; inclua uma seção de riscos."></textarea>
+              <textarea id="ata-prompt" data-count="focus" rows="3" maxlength="4000" placeholder="Ex.: escreva a conclusão em um parágrafo só; não cite valores em reais; trate o Dr. Rafael como 'o Promotor'; inclua uma seção de riscos."></textarea>
               <p class="tiny muted">Valem só para esta reunião e prevalecem sobre o formato e o modelo escolhido. Salvas automaticamente; gere a ata de novo para aplicar. Para instruções fixas em todas as atas, use os Ajustes.</p>
             </details>
             <div class="ata-doc" id="ata-doc">
@@ -152,7 +152,7 @@
               <div class="md ata-text" id="ata-body"></div>
               <div id="ata-editor" class="ata-editor" hidden>
                 <textarea id="ata-editor-text" rows="18" spellcheck="true" aria-label="Texto da ata"></textarea>
-                <div class="row"><input id="ata-editor-label" maxlength="80" placeholder="O que mudou? (opcional, vira o rótulo da versão)"><button class="btn sm primary" id="ata-editor-save">Salvar como nova versão</button><button class="btn sm ghost" id="ata-editor-cancel">Cancelar</button></div>
+                <div class="row"><input id="ata-editor-label" data-count="focus" maxlength="80" placeholder="O que mudou? (opcional, vira o rótulo da versão)"><button class="btn sm primary" id="ata-editor-save">Salvar como nova versão</button><button class="btn sm ghost" id="ata-editor-cancel">Cancelar</button></div>
               </div>
             </div>
             <div class="ata-actions" id="ata-actions" hidden>
@@ -341,7 +341,7 @@
             <p class="muted tiny">Escreva <b>Termo = forma errada, outra forma</b> para corrigir na hora o que as legendas costumam errar, em toda fala que chegar. Os termos também vão para a revisão por IA, a ata e o chat, que passam a grafá-los certo mesmo em variações novas.</p>
             <label class="switch"><input type="checkbox" name="glossaryFuzzy"><span></span>Corrigir também grafias parecidas com os termos e com os nomes dos participantes (“Quitérria” → “Quitéria”, “Andre” → “André”), no computador, sem IA</label>
             <label class="field"><span>Sobre as reuniões (área, assuntos, vocabulário comum)</span>
-              <textarea name="teamContext" rows="2" maxlength="600" placeholder="Equipe de inovação de um órgão público: direito administrativo, licitações e desenvolvimento de software. Termos em inglês de tecnologia são comuns."></textarea></label>
+              <textarea name="teamContext" data-count="focus" rows="2" maxlength="600" placeholder="Equipe de inovação de um órgão público: direito administrativo, licitações e desenvolvimento de software. Termos em inglês de tecnologia são comuns."></textarea></label>
             <p class="muted tiny">Esse contexto vai junto nos prompts da revisão, da ata e do chat, para a IA reconhecer termos da sua área em vez de trocá-los por palavras parecidas.</p>
             <label class="switch"><input type="checkbox" name="autoReview"><span></span>Revisar com IA automaticamente durante a reunião (usa sua chave de API ou 1 crédito do Pro por reunião)</label>
           </div>
@@ -352,12 +352,12 @@
             <label class="field"><span>Modelo padrão para novas atas</span>
               <select name="ataTemplate" id="tpl-default"><option value="">Formato do Escribanote (resumo, decisões, ações)</option></select></label>
             <label class="field"><span>Instruções extras padrão para todas as atas (opcional; cada reunião pode ter as suas na aba Ata, que substituem estas)</span>
-              <textarea name="ataInstructions" rows="3" maxlength="4000" placeholder="Ex.: conclusão em um parágrafo só; nunca abreviar nomes; chamar a equipe de 'Assessoria 2'."></textarea></label>
+              <textarea name="ataInstructions" data-count="focus" rows="3" maxlength="4000" placeholder="Ex.: conclusão em um parágrafo só; nunca abreviar nomes; chamar a equipe de 'Assessoria 2'."></textarea></label>
             <label class="switch inst"><input type="checkbox" name="exportAta"><span></span>Incluir a ata e os textos institucionais ao exportar a reunião (PDF, cópia formatada, Markdown, JSON e pasta <b>Reuniões/</b>). Desligado, sai só a reunião: transcrição, destaques, notas e capítulos.</label>
             <div id="tpl-list" class="tpl-list"></div>
             <div class="row"><button type="button" class="btn sm" id="tpl-import">Importar de PDF ou texto</button><button type="button" class="btn sm ghost" id="tpl-new">Escrever um modelo</button><input type="file" id="tpl-file" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden><span class="muted tiny" id="tpl-status"></span></div>
             <div id="tpl-editor" class="tpl-editor" hidden>
-              <label class="field"><span>Nome do modelo</span><input id="tpl-name" maxlength="80" placeholder="Ex.: Registro de reunião"></label>
+              <label class="field"><span>Nome do modelo</span><input id="tpl-name" data-count="focus" maxlength="80" placeholder="Ex.: Registro de reunião"></label>
               <label class="field"><span>Modelo em Markdown. Use {{data}}, {{horario}}, {{participantes}}, {{resumo_por_participante}}, {{conclusao}}… onde a IA deve preencher; o resto fica como está.</span>
                 <textarea id="tpl-text" rows="16" spellcheck="false"></textarea></label>
               <div class="row"><button type="button" class="btn sm primary" id="tpl-save">Salvar modelo</button><button type="button" class="btn sm ghost" id="tpl-cancel">Cancelar</button></div>

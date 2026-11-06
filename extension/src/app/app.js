@@ -91,6 +91,66 @@ function toast(text, action) {
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => t.classList.remove("show"), action ? 6000 : 2400);
 }
+// ----- Contagem de caracteres -----
+// data-count="always": contador fixo dentro do campo (o campo fica num .cw com um .count).
+// data-count="focus": um selo "n/máx" flutua sob o canto do campo enquanto ele é editado (não mexe no layout).
+const fmtN = (n) => n.toLocaleString("pt-BR");
+function countState(n, max) {
+  return n >= max ? "full" : n >= max * 0.9 ? "warn" : "";
+}
+function countHtml(value, max) {
+  const n = (value || "").length;
+  return `<span class="count ${countState(n, max)}" aria-hidden="true">${fmtN(n)}/${fmtN(max)}</span>`;
+}
+const countFloat = document.createElement("span");
+countFloat.id = "count-float";
+countFloat.className = "count";
+countFloat.hidden = true;
+countFloat.setAttribute("aria-hidden", "true");
+document.body.append(countFloat);
+function paintCount(el) {
+  const max = el.maxLength;
+  if (!(max > 0)) return;
+  const n = el.value.length;
+  const text = `${fmtN(n)}/${fmtN(max)}`;
+  const cls = countState(n, max);
+  if (el.dataset.count === "always") {
+    const span = el.parentElement.querySelector(":scope > .count");
+    if (span) {
+      span.textContent = text;
+      span.className = `count ${cls}`;
+    }
+    return;
+  }
+  countFloat.textContent = text;
+  countFloat.className = `count ${cls}`;
+  countFloat.hidden = false;
+  const r = el.getBoundingClientRect();
+  const w = countFloat.offsetWidth;
+  const h = countFloat.offsetHeight;
+  const below = r.bottom + 4 + h <= innerHeight;
+  countFloat.style.left = `${Math.max(4, Math.min(r.right - w, innerWidth - w - 4))}px`;
+  countFloat.style.top = `${below ? r.bottom + 4 : Math.max(4, r.top - h - 4)}px`;
+}
+const countTarget = (el) => (el instanceof HTMLElement && el.matches("input[data-count], textarea[data-count]") ? el : null);
+document.addEventListener("input", (e) => {
+  const el = countTarget(e.target);
+  if (el) paintCount(el);
+});
+document.addEventListener("focusin", (e) => {
+  const el = countTarget(e.target);
+  if (el && el.dataset.count === "focus") paintCount(el);
+});
+document.addEventListener("focusout", (e) => {
+  if (countTarget(e.target)?.dataset.count === "focus") countFloat.hidden = true;
+});
+const repaintFloat = () => {
+  const el = countTarget(document.activeElement);
+  if (!countFloat.hidden && el?.dataset.count === "focus") paintCount(el);
+};
+addEventListener("scroll", repaintFloat, true);
+addEventListener("resize", repaintFloat);
+
 // Destaca as palavras que a revisão mudou (LCS por palavra).
 function diffHtml(original, fixed) {
   const a = original.split(/\s+/);
@@ -1270,8 +1330,8 @@ function renderQuestionList() {
   const refocus = $("q-list").contains(act) && act.dataset.act ? `[data-act="${act.dataset.act}"][data-id="${act.dataset.id}"]` : null;
   const draft = qDraft
     ? `<div class="q-row draft" data-draft="1">
-      <div class="q-fields"><input data-k="label" value="${esc(qDraft.label)}" maxlength="60" aria-label="Nome do novo modelo" placeholder="Nome curto (vira o atalho). Ex.: Riscos levantados">
-        <textarea data-k="text" rows="2" maxlength="2000" aria-label="Pergunta do novo modelo" placeholder="A pergunta que a IA deve responder. Ex.: Quais riscos foram levantados e quem ficou de tratá-los?">${esc(qDraft.text)}</textarea></div>
+      <div class="q-fields"><div class="cw"><input data-k="label" data-count="always" value="${esc(qDraft.label)}" maxlength="60" aria-label="Nome do novo modelo" placeholder="Nome curto (vira o atalho). Ex.: Riscos levantados">${countHtml(qDraft.label, 60)}</div>
+        <div class="cw"><textarea data-k="text" data-count="always" rows="2" maxlength="2000" aria-label="Pergunta do novo modelo" placeholder="A pergunta que a IA deve responder. Ex.: Quais riscos foram levantados e quem ficou de tratá-los?">${esc(qDraft.text)}</textarea>${countHtml(qDraft.text, 2000)}</div></div>
       <div class="q-side"><button type="button" class="btn sm primary" data-draft-save>Salvar</button><button type="button" class="btn sm ghost" data-draft-cancel>Cancelar</button></div>
     </div>`
     : "";
@@ -1280,8 +1340,8 @@ function renderQuestionList() {
       const on = q.pinned !== false;
       const id = esc(q.id);
       return `<div class="q-row${on ? "" : " unpinned"}" data-id="${id}">
-      <div class="q-fields"><input data-k="label" value="${esc(q.label)}" maxlength="60" aria-label="Nome do modelo" placeholder="Nome curto">
-        <textarea data-k="text" rows="2" maxlength="2000" aria-label="Pergunta" placeholder="A pergunta que a IA deve responder">${esc(q.text)}</textarea></div>
+      <div class="q-fields"><div class="cw"><input data-k="label" data-count="always" value="${esc(q.label)}" maxlength="60" aria-label="Nome do modelo" placeholder="Nome curto">${countHtml(q.label, 60)}</div>
+        <div class="cw"><textarea data-k="text" data-count="always" rows="2" maxlength="2000" aria-label="Pergunta" placeholder="A pergunta que a IA deve responder">${esc(q.text)}</textarea>${countHtml(q.text, 2000)}</div></div>
       <div class="q-side"><label class="switch sm" title="Fazer esta pergunta sozinha quando a reunião terminar"><input type="checkbox" data-k="auto"${q.auto ? " checked" : ""}><span></span>Automática</label>
         <span class="q-acts">
         <button type="button" class="q-ic pin${on ? " on" : ""}" data-act="pin" data-id="${id}" aria-pressed="${on}" data-tip="${on ? "Fixado nos atalhos · clique para desafixar" : "Fora dos atalhos · clique para fixar"}" aria-label="${on ? "Desafixar dos atalhos" : "Fixar nos atalhos"}">${icon("fixar")}</button>
@@ -2596,7 +2656,7 @@ function renderTagEditor() {
   $("tag-editor").innerHTML = tags()
     .map((t, i) => `<div class="tag-row" data-i="${i}"><div class="menu-wrap"><button type="button" class="tag-ic" data-pick="${i}" style="color:${esc(t.color)}" title="Escolher o ícone" aria-label="Ícone da tag ${esc(t.label)}" aria-expanded="false">${icon(tagIcon(t))}</button>
       <div class="menu ic-grid" hidden>${TAG_ICONS.map(([n]) => `<button type="button" data-ic-pick="${n}" aria-pressed="${tagIcon(t) === n}" title="${n}" style="color:${esc(t.color)}">${icon(n)}</button>`).join("")}</div></div>
-      <input value="${esc(t.label)}" data-k="label" maxlength="30" aria-label="Nome"><input type="color" value="${esc(t.color)}" data-k="color" aria-label="Cor">
+      <input value="${esc(t.label)}" data-k="label" data-count="focus" maxlength="30" aria-label="Nome"><input type="color" value="${esc(t.color)}" data-k="color" aria-label="Cor">
       <button type="button" class="x" data-rm="${i}" title="Remover" aria-label="Remover">${icon("fechar")}</button></div>`)
     .join("");
 }
