@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Escribanote — transcrição de reuniões que fica com você</title>
-  <meta name="description" content="Transcrição ao vivo do Google Meet, Microsoft Teams, Zoom e huddles do Slack, com destaques, notas, ata por IA e reconhecimento de alta precisão. Grátis, sem conta e guardada só no seu computador.">
+  <meta name="description" content="Transcrição ao vivo do Google Meet, Microsoft Teams, Zoom e huddles do Slack, com destaques, notas, capítulos, ata por IA que lê os slides e o seu material de apoio, pastas e reconhecimento de alta precisão. Grátis, sem conta e guardada só no seu computador.">
   <meta property="og:title" content="Escribanote — transcrição de reuniões que fica com você">
   <meta property="og:description" content="Meet, Teams, Zoom e Slack transcritos ao vivo. Destaques, notas, ata por IA. Tudo salvo só no seu computador.">
   <meta property="og:image" content="https://escribanote.com/img/og.png">
@@ -32,6 +32,7 @@
       <a href="#caminho">Privacidade</a>
       <a href="#recursos">Recursos</a>
       <a href="#reconhecimento">Reconhecimento</a>
+      <a href="#novidades">Novidades</a>
       <a href="#perguntas">Perguntas</a>
       <a class="nav-pro" href="pro/">Pro <span class="badge">novo</span></a>
     </nav>
@@ -43,7 +44,7 @@
     <!-- ============ HERO ============ -->
     <section class="hero">
       <div class="hero-copy">
-        <a class="announce" href="pro/"><span class="announce-tag">Novo</span>Escribanote Pro: suas reuniões em todos os computadores <span aria-hidden="true">→</span></a>
+        <a class="announce" href="#ia"><span class="announce-tag">Novo</span>A IA agora lê os slides da reunião e pesquisa o contexto do dia <span aria-hidden="true">→</span></a>
         <p class="eyebrow">Para Google Meet, Microsoft Teams, Zoom e Slack</p>
         <h1 class="split">Cada palavra da reunião, <em>anotada</em>. E guardada só com você.</h1>
         <p class="lede">O Escribanote transcreve suas reuniões ao vivo, entende quem fala rápido ou embolado, marca o que importa e
@@ -138,32 +139,51 @@
             <li class="tags-li">Tags com ícone próprio: <span class="t" style="--tc:#d97706"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.6l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z" fill="currentColor" style="fill-opacity:var(--ic-fill,.16)"/></g></svg>Importante</span> <span class="t" style="--tc:#16a34a"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0z" fill="currentColor" style="fill-opacity:var(--ic-fill,.16)"/><path d="M8.2 12.4l2.6 2.6 5-5.2"/></g></svg>Decisão</span> <span class="t" style="--tc:#2563eb"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4h11.8l-2.4 4 2.4 4H5.5z" fill="currentColor" style="fill-opacity:var(--ic-fill,.16)"/><path d="M5.5 4v16.5"/></g></svg>Ação</span> <span class="t" style="--tc:#9333ea"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0z" fill="currentColor" style="fill-opacity:var(--ic-fill,.16)"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .9-1 1.5v.5"/><path d="M12 16.8v.2"/></g></svg>Pergunta</span> <span class="t" style="--tc:#dc2626"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 4.4a2 2 0 0 1 3.4 0l7.4 12.8a2 2 0 0 1-1.7 3H4.6a2 2 0 0 1-1.7-3z" fill="currentColor" style="fill-opacity:var(--ic-fill,.16)"/><path d="M12 9.5v4"/><path d="M12 16.7v.2"/></g></svg>Risco</span> e as suas, com 20 ícones para escolher</li>
             <li>Atalhos: <kbd>Alt</kbd><kbd>Shift</kbd><kbd>H</kbd> destaca, <kbd>S</kbd> captura, <kbd>P</kbd> pausa</li>
             <li>Esconde as legendas nativas; a transcrição continua</li>
-            <li>Tema claro, escuro ou automático, acompanhando o sistema</li>
+            <li>Segue o seu tema: claro, Papel, escuro ou Editor, inclusive no automático</li>
           </ul>
         </div>
-        <div class="shot shot-browser"><img src="img/2-app-transcricao.png" alt="Transcrição no Escribanote com participantes, destaque de Ação, fala do chat e nota com horário" loading="lazy" width="1400" height="757"></div>
+        <div class="shot shot-browser"><img src="img/app-transcricao.webp" alt="Transcrição no Escribanote: capítulos no topo, participantes, destaque de Ação e fala do chat; na lista, uma reunião fixada e as pastas Clientes e Mercado financeiro" loading="lazy" width="1400" height="757"></div>
+      </article>
+
+      <article class="feat feat-wide feat-flip" id="ia" data-reveal>
+        <div class="feat-copy">
+          <span class="num">02</span>
+          <h3>Uma IA que lê o que foi mostrado, não só o que foi dito</h3>
+          <p>Entrou atrasado? "O que eu perdi?" Precisa intervir? "Sugira 3 perguntas." E quando a resposta depende do
+            que estava na tela ou fora da reunião, a IA usa isso também, sempre dizendo de onde veio cada informação.</p>
+          <ul class="ticks">
+            <li><b>Lê as capturas de tela:</b> gráficos, preços e slides, com o horário de cada uma</li>
+            <li><b>Captura automática</b> do conteúdo compartilhado a cada 1, 2, 5 ou 10 minutos, só quando a tela muda</li>
+            <li><b>Pesquisa na web</b> o contexto do dia da reunião (opcional), com as fontes no fim da resposta</li>
+            <li>Roteiros longos, de até 10 mil caracteres, executados do começo ao fim; o que faltar vira "não informado"</li>
+            <li>Modelos de pergunta salvos, fixados como atalho ou rodando sozinhos no fim da reunião</li>
+            <li>Copie a resposta, ou a resposta com a pergunta, já formatada para Docs e e-mail</li>
+          </ul>
+        </div>
+        <div class="shot shot-browser"><img src="img/app-ia.webp" alt="Aba IA: a pergunta compara o orçamento aprovado com a planilha e a proposta anexadas; a resposta cita o slide capturado, os anexos e lista as fontes da web" loading="lazy" width="1400" height="757"></div>
       </article>
 
       <div class="feat-pair">
         <article class="feat" data-reveal>
-          <span class="num">02</span>
-          <h3>Pergunte à IA no meio da conversa</h3>
-          <p>Entrou atrasado? "O que eu perdi?" Precisa intervir? "Sugira 3 perguntas." A IA também revisa a transcrição
-            com o seu glossário e escreve a ata: resumo, decisões, itens de ação com responsáveis e pendências.</p>
-          <div class="shot"><img src="img/5-app-ia.png" alt="Aba de IA com a resposta sobre o que foi decidido e sugestões de perguntas" loading="lazy" width="1400" height="757"></div>
+          <span class="num">03</span>
+          <h3>Material de apoio em cada reunião</h3>
+          <p>Anexe a planilha de cotações, o PDF da proposta, o calendário econômico ou prints de gráficos, ou cole um texto.
+            Vai junto em toda pergunta daquela reunião, e a IA separa o que veio do material do que foi falado. Os arquivos
+            ficam só no seu computador.</p>
+          <div class="shot"><img src="img/app-ia-material.webp" alt="Material de apoio com uma planilha CSV e um PDF anexados, e as opções de enviar as capturas de tela e pesquisar na web ligadas" loading="lazy" width="1400" height="757"></div>
         </article>
         <article class="feat" data-reveal>
-          <span class="num">03</span>
+          <span class="num">04</span>
           <h3>Quem falou, quanto e quando</h3>
           <p>Parcela de fala, palavras por minuto, perguntas feitas, maior monólogo e uma linha do tempo da conversa.
             Ótimo para 1:1, entrevistas e reuniões de vendas.</p>
-          <div class="shot"><img src="img/4-app-analise.png" alt="Análise com parcela de fala por participante e linha do tempo" loading="lazy" width="1400" height="757"></div>
+          <div class="shot"><img src="img/app-analise.webp" alt="Análise com parcela de fala por participante e linha do tempo" loading="lazy" width="1400" height="757"></div>
         </article>
       </div>
 
       <article class="feat feat-wide" data-reveal>
         <div class="feat-copy">
-          <span class="num">04</span>
+          <span class="num">05</span>
           <h3>A ata no formato da sua equipe, com histórico</h3>
           <p>Importe uma ata já feita, em PDF ou texto, e o Escribanote extrai o modelo: títulos, campos, lista de
             participantes, assinatura. As próximas atas saem nesse formato, prontas para colar no sistema da sua
@@ -172,15 +192,48 @@
             <li>Cada geração, edição ou restauração vira uma versão; comparador por palavras, em linha ou lado a lado</li>
             <li>Atas longas com sumário por seção, títulos recolhíveis e tamanho de texto</li>
             <li>Copiar para Docs e e-mail, para editores TinyMCE ou como código HTML; baixar em .txt, .md, .html e PDF</li>
+            <li>Enquanto a IA escreve, um cartão mostra a etapa, o tempo e as palavras; a prévia abre só se você quiser</li>
           </ul>
         </div>
-        <div class="shot shot-browser"><img src="img/6-app-ata.png" alt="Aba Ata com resumo, decisões e pendências, instruções extras para a IA e botões de copiar, baixar, editar e versões" loading="lazy" width="1400" height="757"></div>
+        <div class="shot shot-browser"><img src="img/app-ata.webp" alt="Aba Ata com resumo, decisões, itens de ação com responsáveis e pendências, com sumário por seção e botões de copiar, baixar, editar e versões" loading="lazy" width="1400" height="757"></div>
+      </article>
+
+      <article class="feat feat-wide feat-flip" data-reveal>
+        <div class="feat-copy">
+          <span class="num">06</span>
+          <h3>Cem reuniões depois, tudo ainda no lugar</h3>
+          <p>Fixe no topo a reunião que você consulta toda semana, crie pastas por cliente ou projeto e arraste os cartões
+            para dentro delas. O botão direito mostra só o que faz sentido onde você clicou.</p>
+          <ul class="ticks">
+            <li><b>Fixadas e pastas</b> recolhíveis, com contador, renomear e reordenar; tudo vai junto no backup</li>
+            <li><b>Botão direito</b> na reunião, na pasta, numa fala da transcrição ou numa resposta da IA; também pelo teclado</li>
+            <li><b>Capítulos</b> por assunto, gerados pela IA, para pular direto ao trecho</li>
+            <li><b>Revisão automática</b> da transcrição no fim da reunião, com o seu vocabulário</li>
+          </ul>
+        </div>
+        <div class="shot shot-browser"><img src="img/app-menu.webp" alt="Lista de reuniões com a seção Fixadas, as pastas Clientes e Mercado financeiro e o menu do botão direito aberto com Abrir, Renomear, Fixar no topo, Mover para pasta e Apagar" loading="lazy" width="1400" height="757"></div>
+      </article>
+
+      <article class="feat feat-wide" data-reveal>
+        <div class="feat-copy">
+          <span class="num">07</span>
+          <h3>Com a cara que você preferir</h3>
+          <p>Além do claro e do escuro, dois estilos: <b>Papel</b>, off-white com tons pastel, para ler por horas sem
+            cansar; e <b>Editor</b>, grafite como o VS Code e o Cursor, para quem vive na IDE. No automático, cada lado do
+            dia usa o seu estilo, e o widget da reunião acompanha.</p>
+          <div class="theme-switch" role="tablist" aria-label="Ver o Escribanote em cada estilo">
+            <button type="button" role="tab" aria-selected="true" data-theme-shot="img/app-transcricao.webp">Claro</button>
+            <button type="button" role="tab" aria-selected="false" data-theme-shot="img/app-tema-papel.webp">Papel</button>
+            <button type="button" role="tab" aria-selected="false" data-theme-shot="img/app-tema-editor.webp">Editor</button>
+          </div>
+        </div>
+        <div class="shot shot-browser"><img id="theme-shot" src="img/app-transcricao.webp" alt="O Escribanote no estilo escolhido" loading="lazy" width="1400" height="757"></div>
       </article>
 
       <ul class="feat-list" data-reveal-group>
-        <li data-reveal><span class="num">05</span><b>Memória entre reuniões.</b> Encontre qualquer frase em todas as transcrições e veja as reuniões anteriores com as mesmas pessoas, com um botão para recapitular o que ficou pendente.</li>
-        <li data-reveal><span class="num">06</span><b>Exporte do seu jeito.</b> Cópia formatada para colar no Google Docs, Notion ou e-mail, PDF com capturas, Markdown, texto, legendas SRT/WebVTT e JSON.</li>
-        <li data-reveal><span class="num">07</span><b>Você no controle.</b> Pergunte antes de transcrever, pause quando quiser e avise os participantes com uma mensagem pronta.</li>
+        <li data-reveal><span class="num">08</span><b>Memória entre reuniões.</b> Encontre qualquer frase em todas as transcrições e veja as reuniões anteriores com as mesmas pessoas, com um botão para recapitular o que ficou pendente.</li>
+        <li data-reveal><span class="num">09</span><b>Exporte do seu jeito.</b> Escolha o que vai junto: chat, notas, destaques, capítulos e as perguntas à IA. Cópia formatada para Docs, Notion ou e-mail, PDF com capturas, Markdown, texto, legendas SRT/WebVTT e JSON.</li>
+        <li data-reveal><span class="num">10</span><b>Você no controle.</b> Pergunte antes de transcrever, pause quando quiser e avise os participantes com uma mensagem pronta. Capture a janela inteira ou só o que está sendo compartilhado.</li>
       </ul>
     </section>
 
@@ -229,6 +282,26 @@
       </div>
     </section>
 
+    <!-- ============ NOVIDADES ============ -->
+    <section class="news" id="novidades" aria-labelledby="news-title">
+      <div class="section-head" data-reveal>
+        <p class="eyebrow">Novidades</p>
+        <h2 id="news-title">Uma versão nova quase todo dia. <em>Feita a partir do que você pede.</em></h2>
+        <p>O Escribanote evolui com quem usa. Estas são as mudanças das últimas semanas; o histórico completo está no
+          <a href="https://github.com/thiagommeneses/escribanote/blob/main/extension/CHANGELOG.md">changelog</a>.</p>
+      </div>
+      <ol class="news-list" data-reveal-group>
+        <li data-reveal><span class="news-v">0.9.66</span><b>Estilos Papel e Editor</b><p>Off-white com tons pastel e grafite estilo VS Code, escolhidos por miniaturas. O widget segue o tema.</p></li>
+        <li data-reveal><span class="news-v">0.9.65</span><b>Fixadas, pastas e botão direito</b><p>Organize a lista arrastando os cartões; cada lugar tem o seu menu, e as áreas vazias não abrem o do navegador.</p></li>
+        <li data-reveal><span class="news-v">0.9.64</span><b>Perguntas longas sem travar</b><p>A espera mostra a etapa real ("Pesquisando na web…") e, se a conexão cair, a pergunta volta para a caixa.</p></li>
+        <li data-reveal><span class="news-v">0.9.63</span><b>Espera da ata mais calma</b><p>Um cartão com etapa, tempo e palavras no lugar do texto pulando; a prévia abre só se você quiser.</p></li>
+        <li data-reveal><span class="news-v">0.9.60</span><b>A IA lê a tela e pesquisa o dia</b><p>Capturas enviadas à IA, captura automática do conteúdo compartilhado e pesquisa na web com fontes.</p></li>
+        <li data-reveal><span class="news-v">0.9.59</span><b>Material de apoio e roteiros longos</b><p>Anexe CSV, PDF e imagens; roteiros de até 10 mil caracteres executados por inteiro, com modelo mais forte.</p></li>
+        <li data-reveal><span class="news-v">0.9.58</span><b>Copiar e exportar escolhendo as partes</b><p>Copie respostas da IA e escolha o que entra na exportação, inclusive as perguntas à IA.</p></li>
+        <li data-reveal><span class="news-v">0.9.54</span><b>Só o que é compartilhado</b><p>A captura de tela pode pegar só a apresentação ou a tela compartilhada, sem o resto da janela.</p></li>
+      </ol>
+    </section>
+
     <!-- ============ DOIS JEITOS ============ -->
     <section class="ways" id="planos" aria-labelledby="ways-title">
       <div class="section-head" data-reveal>
@@ -244,7 +317,8 @@
             <li>Transcrição ao vivo no Meet, Teams, Zoom e Slack</li>
             <li>Alta precisão com o Whisper local</li>
             <li>Destaques, notas, capturas, análise de fala e exportações</li>
-            <li>IA com a sua própria chave da API, se quiser: ata por modelo, versões e revisão</li>
+            <li>IA com a sua própria chave da API, se quiser: ata por modelo, versões, revisão, material de apoio, leitura das capturas e pesquisa na web</li>
+            <li>Fixadas, pastas e os estilos Papel e Editor</li>
             <li>Backup automático em Downloads e, se quiser, numa pasta sua</li>
           </ul>
           <a class="btn btn-rec" href="#instalar">Baixar grátis</a>
@@ -289,6 +363,8 @@
             <tr><th scope="row">Plano pago com IA inclusa</th><td>Em geral US$ 8 ou mais por mês</td><td class="us">R$ 12,50 por mês no anual</td></tr>
             <tr><th scope="row">Análise de fala por pessoa</th><td>Básica</td><td class="us">Parcela, ritmo, perguntas e linha do tempo</td></tr>
             <tr><th scope="row">Ata no formato da sua instituição</th><td>Raro: resumo genérico</td><td class="us">Modelo extraído de um PDF seu, versões e comparador</td></tr>
+            <tr><th scope="row">IA com o que estava na tela</th><td>Só o áudio ou a legenda</td><td class="us">Lê as capturas dos slides, o material anexado e, se você quiser, a web, citando a fonte</td></tr>
+            <tr><th scope="row">Organizar muitas reuniões</th><td>Lista única por data</td><td class="us">Fixadas, pastas com arrastar e soltar e busca em todas as falas</td></tr>
           </tbody>
         </table>
       </div>
@@ -343,7 +419,18 @@
             computadores mais simples, escolha o modelo menor nos ajustes ou use só a captura de legendas e a revisão por IA.</p></details>
         <details><summary>Quanto custa a IA?</summary>
           <p>No plano grátis, a IA é opcional e usa a sua própria chave da API do Claude: você paga direto à Anthropic, pelo uso,
-            e escolhe entre os modelos Opus, Sonnet e Haiku. No Pro, a IA vem inclusa, com 15 créditos por mês que acumulam até 30.</p></details>
+            e escolhe entre os modelos Opus, Sonnet e Haiku. A pesquisa na web, se ligada, custa à parte (US$ 10 a cada 1.000
+            buscas, até 5 por pergunta). No Pro, a IA vem inclusa, com 15 créditos por mês que acumulam até 30: cada pergunta
+            usa 1 crédito, e as longas ou com material de apoio, capturas ou pesquisa na web usam 2.</p></details>
+        <details><summary>A IA pode usar informações de fora da reunião?</summary>
+          <p>Sim, quando você quiser. Na aba IA de cada reunião dá para anexar material de apoio (planilhas, PDFs, prints ou
+            texto colado), enviar as capturas de tela para a IA ler os slides e gráficos, e ligar a pesquisa na web sobre o dia
+            da reunião. A resposta diz o que veio da fala, do material, das capturas e da web, com as fontes no fim. O material
+            fica só no seu computador e só vai para a IA quando você pergunta.</p></details>
+        <details><summary>Como organizo muitas reuniões?</summary>
+          <p>Fixe no topo as que você consulta sempre e crie pastas (por cliente, projeto ou equipe) arrastando os cartões para
+            dentro delas. O botão direito tem atalhos para fixar, mover, renomear e apagar. A busca acha qualquer frase em
+            todas as transcrições, e as pastas vão junto no backup.</p></details>
         <details><summary>E se eu trocar de computador?</summary>
           <p>Cada reunião é salva sozinha em <code>Downloads\Escribanote\backup</code>, sem configurar nada. No computador novo,
             use "Restaurar de uma pasta de backup" apontando para essa pasta. Se preferir, escolha uma segunda pasta (OneDrive,

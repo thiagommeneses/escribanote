@@ -315,3 +315,16 @@
     }
   });
 })();
+
+// Recursos › estilos: troca a captura entre Claro, Papel e Editor.
+{
+  const img = document.getElementById("theme-shot");
+  const tabs = [...document.querySelectorAll("[data-theme-shot]")];
+  for (const src of tabs.map((b) => b.dataset.themeShot)) { const i = new Image(); i.src = src; } // sem piscar na troca
+  for (const b of tabs) b.addEventListener("click", () => {
+    if (!img || b.getAttribute("aria-selected") === "true") return;
+    for (const x of tabs) x.setAttribute("aria-selected", String(x === b));
+    img.classList.add("swap");
+    setTimeout(() => { img.src = b.dataset.themeShot; img.alt = "O Escribanote no estilo " + b.textContent; img.classList.remove("swap"); }, 180);
+  });
+}

@@ -531,3 +531,28 @@ thead th.us { color: var(--rec-deep); }
 .w-foot .ic { width: 15px; height: 15px; }
 .tags-li .t { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; font-weight: 600; color: var(--ink); }
 .tags-li .t .ic { color: var(--tc); --ic-fill: .2; }
+
+/* ---------- Recursos novos (0.9.5x–0.9.66) ---------- */
+.features > .feat-wide + .feat-wide, .features > .feat-pair + .feat-wide { margin-top: clamp(4rem, 8vw, 7rem); }
+.feat-flip { grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); }
+.feat-flip .shot-browser { order: -1; transform: rotate(-0.8deg) translateX(-3%); }
+.feat-copy .ticks b { color: var(--ink); font-weight: 600; }
+.theme-switch { display: inline-flex; gap: 0.3rem; margin-top: 1.4rem; padding: 0.3rem; border: 1px solid var(--rule); border-radius: 999px; background: var(--paper-2); }
+.theme-switch button { font: inherit; font-size: var(--step--1); font-weight: 600; color: var(--ink-2); background: none; border: 0; border-radius: 999px; padding: 0.4rem 1rem; cursor: pointer; transition: background .2s, color .2s; }
+.theme-switch button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.theme-switch button:focus-visible { outline: 2px solid var(--rec); outline-offset: 2px; }
+#theme-shot { transition: opacity .25s; }
+#theme-shot.swap { opacity: 0.2; }
+
+.news-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.6rem clamp(1.2rem, 2.5vw, 2.2rem); }
+.news-list li { border-top: 2px solid var(--ink); padding-top: 1rem; }
+.news-list b { display: block; font-size: var(--step-0); line-height: 1.25; margin-bottom: 0.4rem; }
+.news-list p { color: var(--ink-2); font-size: var(--step--1); }
+.news-v { display: inline-block; font-family: var(--serif); font-style: italic; color: var(--rec); font-size: var(--step-0); margin-bottom: 0.3rem; font-variation-settings: "opsz" 72, "SOFT" 100; }
+.section-head a { color: inherit; text-decoration-color: var(--rec); text-underline-offset: 3px; }
+@media (max-width: 960px) {
+  .feat-flip { grid-template-columns: 1fr; }
+  .feat-flip .shot-browser { order: 0; transform: none; }
+  .news-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) { .news-list { grid-template-columns: 1fr; } }
