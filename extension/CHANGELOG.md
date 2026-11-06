@@ -2,6 +2,12 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.55 beta — 2026-11-05
+- Modelos de perguntas (aba IA) revistos: o alfinete muda na hora ao fixar ou desafixar (antes só atualizava depois de clicar em outro lugar) e o desafixado fica visivelmente diferente (alfinete inclinado e apagado, cartão tracejado).
+- "+ Novo modelo" abre um rascunho no topo da lista, com nome e pergunta em branco; ele só é salvo (e vira atalho) com os dois preenchidos. Enter salva, Esc cancela. Os "Nova pergunta" que a versão anterior criava a cada clique somem sozinhos.
+- Setas ↑ ↓ ordenam os modelos e os atalhos; apagar um modelo ou restaurar os padrões pode ser desfeito pelo aviso; sem nenhum modelo fixado, um atalho leva à lista.
+- Editar um modelo e logo clicar no alfinete não desfaz mais a edição.
+
 ## 0.9.54 beta — 2026-11-05
 - Capturas de tela só do conteúdo compartilhado (Ajustes › Capturas de tela e atalhos › "O que capturar"): salva só a apresentação ou a tela em destaque, na resolução original do vídeo, sem a interface da reunião. Sem apresentação na tela, salva a aba inteira. Vale para o botão do widget e para Alt+Shift+S; o padrão continua a aba inteira.
 

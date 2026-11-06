@@ -624,6 +624,15 @@ body.usage-personal .inst { display: none !important; }
 .q-ic[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); right: 0; white-space: nowrap; font-size: 11.5px; padding: 3px 8px; border-radius: 6px; background: var(--text); color: var(--bg); opacity: 0; pointer-events: none; transform: translateY(2px); transition: opacity .12s, transform .12s; z-index: 5; }
 .q-ic:hover::after, .q-ic:focus-visible::after { opacity: 1; transform: none; }
 .q-ic.pin.on { color: var(--accent); --ic-fill: .55; }
+.q-ic.pin:not(.on) svg { transform: rotate(40deg); opacity: .55; --ic-fill: 0; }
+.q-ic:disabled { opacity: .3; cursor: default; background: none; border-color: transparent; color: var(--muted); }
+.q-ic:not(:has(svg)) { font-size: 15px; line-height: 1; }
+.q-row.unpinned { background: transparent; border-style: dashed; }
+.q-row.draft { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.q-row.draft .q-side { flex-direction: row; align-items: center; gap: 6px; }
+.chip.ghost { border-style: dashed; color: var(--muted); }
+.toast.has-action { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
+.toast button { font: inherit; font-weight: 600; background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; }
 
 /* Citações da IA (ata e chat) */
 .cites { display: inline-flex; gap: 3px; flex-wrap: wrap; vertical-align: 1px; margin-left: 2px; }

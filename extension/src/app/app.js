@@ -72,12 +72,24 @@ function avatar(id, name, size) {
   // A cor segue o nome, para ser a mesma na lista, na transcrição e no widget.
   return `<span class="av" style="${st}background:${colorFor(name)}" title="${esc(name)}">${esc(initials(name))}</span>`;
 }
-function toast(text) {
+// action opcional ({ label, run }): um botão no aviso (ex.: Desfazer), que fica mais tempo na tela.
+function toast(text, action) {
   const t = $("toast");
   t.textContent = text;
+  if (action) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = action.label;
+    b.addEventListener("click", () => {
+      t.classList.remove("show");
+      action.run();
+    }, { once: true });
+    t.append(" ", b);
+  }
+  t.classList.toggle("has-action", !!action);
   t.classList.add("show");
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => t.classList.remove("show"), 2400);
+  toast.timer = setTimeout(() => t.classList.remove("show"), action ? 6000 : 2400);
 }
 // Destaca as palavras que a revisão mudou (LCS por palavra).
 function diffHtml(original, fixed) {
@@ -1218,6 +1230,7 @@ async function renderAI() {
   if (!state.index.length) state.index = await send({ type: "list" });
   const prev = previousWithSame(s)[0];
   const quick = questions().filter((p) => p.pinned !== false).map((p) => `<button class="chip" data-q="${esc(p.text)}" title="${esc(p.text)}">${esc(p.label)}${p.auto ? '<span class="pill-auto" title="Feita sozinha quando a reunião termina">auto</span>' : ""}</button>`);
+  if (!quick.length && questions().length) quick.push(`<button class="chip ghost" data-open-models>Nenhum modelo fixado · escolher atalhos</button>`);
   if (prev) quick.push(`<button class="chip" data-prev="${esc(prev.id)}">${icon("anterior")}Reunião anterior com estes participantes</button>`);
   $("quick").innerHTML = quick.join("");
   renderScope();
@@ -1225,87 +1238,171 @@ async function renderAI() {
 }
 
 // ----- Modelos de perguntas (Ajustes "questions", valem para todas as reuniões) -----
+// Rascunho de um modelo novo: só entra na lista (e nos atalhos) quando tem nome e pergunta.
+let qDraft = null;
+const isPlaceholder = (q) => q.label === "Nova pergunta" && q.text === "Escreva aqui a pergunta"; // versões antigas salvavam isto ao clicar em "+ Novo modelo"
 function questions() {
-  return Array.isArray(state.settings.questions) ? state.settings.questions : DEFAULT_QUESTIONS;
+  const list = Array.isArray(state.settings.questions) ? state.settings.questions : DEFAULT_QUESTIONS;
+  return list.filter((q) => q && q.text && !isPlaceholder(q));
 }
 async function saveQuestions(list) {
   state.settings = await setSettings({ questions: list });
   renderAI();
+}
+// As mudanças na lista entram em fila: cada uma parte da lista já salva pela anterior
+// (editar o nome e logo clicar no alfinete não desfaz a edição).
+let qChain = Promise.resolve();
+function mutateQuestions(fn) {
+  qChain = qChain.catch(() => {}).then(() => saveQuestions(fn(questions())));
+  return qChain;
+}
+function updateQuestion(id, patch) {
+  return mutateQuestions((list) => list.map((q) => (q.id === id ? { ...q, ...patch } : q)));
 }
 function renderQuestionList() {
   const list = questions();
   const autos = list.filter((q) => q.auto).length;
   const pinned = list.filter((q) => q.pinned !== false).length;
   $("q-count").textContent = `${list.length} modelo${list.length === 1 ? "" : "s"} · ${pinned} fixado${pinned === 1 ? "" : "s"}${autos ? ` · ${autos} automático${autos === 1 ? "" : "s"}` : ""}`;
-  if ($("q-list").contains(document.activeElement)) return; // não apaga o que está sendo digitado
-  $("q-list").innerHTML = list.length
-    ? list
-        .map(
-          (q, i) => `<div class="q-row" data-i="${i}">
+  // Não apaga o que está sendo digitado; botões e interruptores podem ser redesenhados (o foco volta para o mesmo lugar).
+  const act = document.activeElement;
+  if ($("q-list").contains(act) && act.matches("input:not([type=checkbox]), textarea")) return;
+  const refocus = $("q-list").contains(act) && act.dataset.act ? `[data-act="${act.dataset.act}"][data-id="${act.dataset.id}"]` : null;
+  const draft = qDraft
+    ? `<div class="q-row draft" data-draft="1">
+      <div class="q-fields"><input data-k="label" value="${esc(qDraft.label)}" maxlength="60" aria-label="Nome do novo modelo" placeholder="Nome curto (vira o atalho). Ex.: Riscos levantados">
+        <textarea data-k="text" rows="2" maxlength="2000" aria-label="Pergunta do novo modelo" placeholder="A pergunta que a IA deve responder. Ex.: Quais riscos foram levantados e quem ficou de tratá-los?">${esc(qDraft.text)}</textarea></div>
+      <div class="q-side"><button type="button" class="btn sm primary" data-draft-save>Salvar</button><button type="button" class="btn sm ghost" data-draft-cancel>Cancelar</button></div>
+    </div>`
+    : "";
+  const rows = list
+    .map((q, i) => {
+      const on = q.pinned !== false;
+      const id = esc(q.id);
+      return `<div class="q-row${on ? "" : " unpinned"}" data-id="${id}">
       <div class="q-fields"><input data-k="label" value="${esc(q.label)}" maxlength="60" aria-label="Nome do modelo" placeholder="Nome curto">
         <textarea data-k="text" rows="2" maxlength="2000" aria-label="Pergunta" placeholder="A pergunta que a IA deve responder">${esc(q.text)}</textarea></div>
       <div class="q-side"><label class="switch sm" title="Fazer esta pergunta sozinha quando a reunião terminar"><input type="checkbox" data-k="auto"${q.auto ? " checked" : ""}><span></span>Automática</label>
-        <span class="q-acts"><button type="button" class="q-ic pin${q.pinned !== false ? " on" : ""}" data-q-pin="${i}" aria-pressed="${q.pinned !== false}" data-tip="${q.pinned !== false ? "Desafixar dos atalhos" : "Fixar nos atalhos"}" aria-label="${q.pinned !== false ? "Desafixar dos atalhos" : "Fixar nos atalhos"}">${icon("fixar")}</button>
-        <button type="button" class="q-ic" data-q-run="${i}" data-tip="Perguntar agora" aria-label="Perguntar agora nesta reunião">${icon("enviar")}</button>
-        <button type="button" class="q-ic danger" data-q-rm="${i}" data-tip="Apagar modelo" aria-label="Apagar o modelo">${icon("apagar")}</button></span></div>
-    </div>`,
-        )
-        .join("")
-    : '<p class="muted tiny">Nenhum modelo. Escreva uma pergunta e clique em “Salvar modelo”.</p>';
+        <span class="q-acts">
+        <button type="button" class="q-ic pin${on ? " on" : ""}" data-act="pin" data-id="${id}" aria-pressed="${on}" data-tip="${on ? "Fixado nos atalhos · clique para desafixar" : "Fora dos atalhos · clique para fixar"}" aria-label="${on ? "Desafixar dos atalhos" : "Fixar nos atalhos"}">${icon("fixar")}</button>
+        <button type="button" class="q-ic" data-act="up" data-id="${id}" data-tip="Subir" aria-label="Subir"${i === 0 ? " disabled" : ""}>↑</button>
+        <button type="button" class="q-ic" data-act="down" data-id="${id}" data-tip="Descer" aria-label="Descer"${i === list.length - 1 ? " disabled" : ""}>↓</button>
+        <button type="button" class="q-ic" data-act="run" data-id="${id}" data-tip="Perguntar agora" aria-label="Perguntar agora nesta reunião">${icon("enviar")}</button>
+        <button type="button" class="q-ic danger" data-act="rm" data-id="${id}" data-tip="Apagar modelo" aria-label="Apagar o modelo">${icon("apagar")}</button></span></div>
+    </div>`;
+    })
+    .join("");
+  $("q-list").innerHTML = draft + (rows || (qDraft ? "" : '<p class="muted tiny">Nenhum modelo. Clique em “+ Novo modelo” ou escreva uma pergunta acima e clique em “Salvar modelo”.</p>'));
+  $("q-add").disabled = !!qDraft;
+  if (refocus) $("q-list").querySelector(refocus)?.focus();
 }
+$("q-list").addEventListener("input", (e) => {
+  if (qDraft && e.target.closest("[data-draft]") && e.target.dataset.k) qDraft[e.target.dataset.k] = e.target.value;
+});
 $("q-list").addEventListener("change", (e) => {
   const row = e.target.closest(".q-row");
-  if (!row) return;
-  const list = questions().map((q) => ({ ...q }));
-  const q = list[+row.dataset.i];
   const k = e.target.dataset.k;
-  if (!q || !k) return;
-  if (k === "auto") q.auto = e.target.checked;
-  else {
-    const v = e.target.value.trim();
-    if (!v) return renderQuestionList();
-    q[k] = v;
+  if (!row || !k || row.dataset.draft) return;
+  const q = questions().find((x) => x.id === row.dataset.id);
+  if (!q) return;
+  if (k === "auto") return updateQuestion(q.id, { auto: e.target.checked }).then(() => toast(e.target.checked ? "Pergunta automática ligada" : "Pergunta automática desligada"));
+  const v = e.target.value.trim();
+  if (!v) {
+    e.target.value = q[k];
+    return toast(k === "label" ? "O modelo precisa de um nome" : "O modelo precisa de uma pergunta");
   }
-  saveQuestions(list).then(() => toast(k === "auto" ? (q.auto ? "Pergunta automática ligada" : "Pergunta automática desligada") : "Modelo salvo"));
+  if (v === q[k]) return;
+  updateQuestion(q.id, { [k]: v }).then(() => toast("Modelo salvo"));
 });
+$("q-list").addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && e.target.closest("[data-draft]")) cancelDraft();
+  else if (e.key === "Enter" && (e.ctrlKey || e.metaKey || e.target.tagName === "INPUT") && e.target.closest("[data-draft]")) {
+    e.preventDefault();
+    saveDraft();
+  }
+});
+function cancelDraft() {
+  qDraft = null;
+  renderQuestionList();
+}
+async function saveDraft() {
+  const label = (qDraft?.label || "").trim();
+  const text = (qDraft?.text || "").trim();
+  const row = $("q-list").querySelector("[data-draft]");
+  if (!label || !text) {
+    toast(!label ? "Dê um nome curto ao modelo" : "Escreva a pergunta");
+    row?.querySelector(`[data-k="${!label ? "label" : "text"}"]`)?.focus();
+    return;
+  }
+  if (questions().some((q) => q.text === text)) return toast("Essa pergunta já é um modelo");
+  qDraft = null;
+  document.activeElement?.blur();
+  await saveQuestions([{ id: Date.now().toString(36), label: label.slice(0, 60), text: text.slice(0, 2000), auto: false, pinned: true }, ...questions()]);
+  toast(`“${label}” salvo e fixado nos atalhos`);
+}
 $("q-list").addEventListener("click", (e) => {
-  const rm = e.target.closest("[data-q-rm]");
-  if (rm) {
-    const list = questions().filter((_, i) => i !== +rm.dataset.qRm);
-    return saveQuestions(list).then(() => toast("Modelo apagado"));
+  if (e.target.closest("[data-draft-save]")) return saveDraft();
+  if (e.target.closest("[data-draft-cancel]")) return cancelDraft();
+  const btn = e.target.closest("[data-act]");
+  if (!btn || btn.disabled) return;
+  const list = questions();
+  const i = list.findIndex((q) => q.id === btn.dataset.id);
+  const q = list[i];
+  if (!q) return;
+  switch (btn.dataset.act) {
+    case "pin": {
+      const on = q.pinned === false;
+      // Resposta imediata no botão; a lista e os atalhos são redesenhados ao salvar.
+      btn.classList.toggle("on", on);
+      btn.closest(".q-row").classList.toggle("unpinned", !on);
+      return updateQuestion(q.id, { pinned: on }).then(() => toast(on ? `“${q.label}” fixado nos atalhos` : `“${q.label}” saiu dos atalhos (continua aqui na lista)`));
+    }
+    case "up":
+    case "down": {
+      const up = btn.dataset.act === "up";
+      return mutateQuestions((cur) => {
+        const a = cur.findIndex((x) => x.id === q.id);
+        const b = up ? a - 1 : a + 1;
+        if (a < 0 || b < 0 || b >= cur.length) return cur;
+        const next = cur.slice();
+        [next[a], next[b]] = [next[b], next[a]];
+        return next;
+      });
+    }
+    case "run":
+      return ask(q.text);
+    case "rm": {
+      const before = list.slice();
+      return mutateQuestions((cur) => cur.filter((x) => x.id !== q.id)).then(() =>
+        toast(`Modelo “${q.label}” apagado`, { label: "Desfazer", run: () => saveQuestions(before).then(() => toast("Modelo restaurado")) }),
+      );
+    }
   }
-  const pin = e.target.closest("[data-q-pin]");
-  if (pin) {
-    const list = questions().map((q) => ({ ...q }));
-    const q = list[+pin.dataset.qPin];
-    if (!q) return;
-    q.pinned = q.pinned === false;
-    return saveQuestions(list).then(() => toast(q.pinned ? `“${q.label}” fixado nos atalhos` : `“${q.label}” desafixado: continua aqui na lista`));
-  }
-  const run = e.target.closest("[data-q-run]");
-  if (run) ask(questions()[+run.dataset.qRun]?.text);
 });
 $("q-add").addEventListener("click", () => {
-  saveQuestions([...questions(), { id: Date.now().toString(36), label: "Nova pergunta", text: "Escreva aqui a pergunta", auto: false }]).then(() => {
-    $("q-manage").open = true;
-    const inputs = $("q-list").querySelectorAll('.q-row:last-child [data-k="text"]');
-    inputs[0]?.focus();
-    inputs[0]?.select();
-  });
+  if (!qDraft) qDraft = { label: "", text: "" };
+  $("q-manage").open = true;
+  renderQuestionList();
+  const first = $("q-list").querySelector('[data-draft] [data-k="label"]');
+  first?.scrollIntoView({ block: "center", behavior: "smooth" });
+  first?.focus();
 });
 $("q-reset").addEventListener("click", () => {
   if (!confirm("Voltar aos modelos de perguntas padrão? Os seus modelos serão substituídos.")) return;
-  saveQuestions(DEFAULT_QUESTIONS.map((q) => ({ ...q }))).then(() => toast("Modelos padrão restaurados"));
+  qDraft = null;
+  const before = questions();
+  saveQuestions(DEFAULT_QUESTIONS.map((q) => ({ ...q }))).then(() =>
+    toast("Modelos padrão restaurados", { label: "Desfazer", run: () => saveQuestions(before).then(() => toast("Seus modelos voltaram")) }),
+  );
 });
 $("q-save").addEventListener("click", async () => {
   const text = $("chat-input").value.trim();
   if (!text) return toast("Escreva a pergunta primeiro");
   if (questions().some((q) => q.text === text)) return toast("Essa pergunta já é um modelo");
-  const label = await askInline($("q-save"), { label: "Nome do modelo", value: text.slice(0, 40), placeholder: "Ex.: Riscos levantados" });
+  const label = await askInline($("q-save"), { label: "Nome do modelo (vira o atalho)", value: text.slice(0, 40), placeholder: "Ex.: Riscos levantados" });
   if (!label) return;
-  await saveQuestions([...questions(), { id: Date.now().toString(36), label: label.slice(0, 60), text: text.slice(0, 2000), auto: false }]);
-  $("q-manage").open = true;
-  toast("Modelo salvo: aparece em todas as reuniões");
+  await saveQuestions([...questions(), { id: Date.now().toString(36), label: label.slice(0, 60), text: text.slice(0, 2000), auto: false, pinned: true }]);
+  toast("Modelo salvo e fixado: aparece em todas as reuniões");
 });
 
 function renderChatLog(streamText) {
@@ -1810,6 +1907,10 @@ $("chat-input").addEventListener("input", (e) => {
 $("quick").addEventListener("click", (e) => {
   const b = e.target.closest(".chip");
   if (!b) return;
+  if (b.hasAttribute("data-open-models")) {
+    $("q-manage").open = true;
+    return $("q-manage").scrollIntoView({ block: "start", behavior: "smooth" });
+  }
   if (b.dataset.prev) ask("Resuma a reunião anterior com estes participantes e diga o que ficou pendente dela que pode ser retomado agora.", b.dataset.prev);
   else ask(b.dataset.q);
 });

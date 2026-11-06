@@ -9,6 +9,18 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Modelos de perguntas revistos (0.9.55)
+
+- **Alfinete com resposta imediata:** a lista de modelos não era redesenhada enquanto o foco estava dentro
+  dela (para não apagar o que se digita), e o botão clicado guardava o foco: o alfinete só mudava depois de
+  clicar fora. Agora só campos de texto em edição seguram o redesenho, e o foco volta ao mesmo botão.
+- **"+ Novo modelo" vira rascunho** (`qDraft`): nome e pergunta em branco no topo, salvo só com os dois
+  preenchidos (Enter salva, Esc cancela). Os "Nova pergunta / Escreva aqui a pergunta" salvos pela versão
+  anterior são ignorados por `questions()`.
+- Linhas identificadas pelo `id` do modelo (não pela posição), ↑ ↓ para ordenar, apagar e restaurar com
+  **Desfazer** no aviso (`toast(text, { label, run })`), e mudanças em fila (`mutateQuestions`) para uma edição
+  seguida de clique no alfinete não se perder. Teste: `CHROME=... node test/e2e-questions.mjs`.
+
 ## A mesma voz não vira dois falantes (0.9.46)
 
 - **Agrupamento de vozes novo** (`src/asr/voicebook.js`, ideias do diart e do pyannote): o centroide de cada
