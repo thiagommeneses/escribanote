@@ -2,6 +2,12 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.65 beta — 2026-11-06
+- Fixar no topo: reuniões fixadas ficam numa seção "Fixadas" no alto da lista (botão direito › Fixar no topo, ou arraste o cartão para lá).
+- Pastas: "Nova pasta" na lista; o nome é editado no próprio lugar. Arraste os cartões para uma pasta, para "Fixadas" ou de volta para a lista. As pastas recolhem e abrem com um clique, mostram quantas reuniões têm e podem ser renomeadas, reordenadas e apagadas (apagar uma pasta não apaga as reuniões). Elas acompanham os ajustes sincronizados e o backup exportado.
+- Menu do botão direito conforme o lugar: no cartão da reunião (abrir, abrir em nova aba, renomear, fixar, mover para pasta, tirar da pasta, apagar); na pasta (recolher, renomear, mover para cima/baixo, nova pasta, apagar); na área da lista (nova pasta, recolher/abrir todas); numa fala da transcrição (copiar, marcar, nota, corrigir, dividir, mover para outro falante, apagar); nas mensagens da IA (copiar resposta, copiar com a pergunta). Funciona também pelo teclado (tecla de menu ou Shift+F10) e navega com as setas.
+- Em áreas vazias o menu do navegador não aparece mais. Ele continua onde serve: campos de texto, texto selecionado, links, imagens e sobre o próprio texto.
+
 ## 0.9.64 beta — 2026-11-06
 - Corrigido "Pensando…" que nunca terminava em perguntas longas (roteiros grandes com capturas de tela e pesquisa na web): enquanto a IA raciocinava ou pesquisava sem mandar texto, o Chrome encerrava o processo da extensão em segundo plano e a tela não percebia. Agora a extensão manda um sinal de vida a cada 15 segundos e a resposta continua normalmente.
 - Se a conexão ainda assim cair, ou a IA ficar 1 minuto sem dar sinal, a espera termina com uma mensagem clara e a pergunta volta para a caixa, para tentar de novo sem redigitar. Vale para perguntas, ata, revisão e o widget da reunião.
