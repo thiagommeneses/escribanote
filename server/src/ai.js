@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { refund, reserve } from "./credits.js";
 import { fail } from "./http.js";
-import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, isHeavyQuestion, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
+import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, isHeavyQuestion, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, SHOTS_MAX, withSources, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
 import { cleanDoc, loadDoc, requirePro, saveMeeting } from "./meetings.js";
 
 // US$ por milhão de tokens (entrada, saída, leitura de cache, escrita de cache de 5 min).
@@ -22,7 +22,8 @@ export function costUsd(model, u = {}) {
       (u.output_tokens || 0) * p.out +
       (u.cache_read_input_tokens || 0) * p.cacheRead +
       (u.cache_creation_input_tokens || 0) * p.cacheWrite) /
-    1e6
+      1e6 +
+    (u.web_search_requests || 0) * 0.01 // pesquisa na web: US$ 10 por 1.000 buscas
   );
 }
 
@@ -58,6 +59,20 @@ function supportFrom(body) {
     if (it.kind === "pdf") return { kind: "pdf", name, data };
     if (it.kind === "image" && SUPPORT_IMAGE_TYPES.includes(it.mime)) return { kind: "image", name, mime: it.mime, data };
     fail(400, "bad_request", "Tipo de material de apoio não aceito.");
+  });
+}
+
+// Capturas de tela da reunião (JPEG/PNG em base64, com o horário), até SHOTS_MAX e 12 MB no total.
+function shotsFrom(body) {
+  const list = Array.isArray(body?.shots) ? body.shots.slice(0, SHOTS_MAX) : [];
+  let total = 0;
+  return list.map((it) => {
+    const data = typeof it?.data === "string" ? it.data : "";
+    const mime = it?.mime === "image/png" ? "image/png" : "image/jpeg";
+    if (!data || !/^[A-Za-z0-9+/=]+$/.test(data.slice(0, 4000))) fail(400, "bad_request", "Captura de tela inválida.");
+    total += Math.floor((data.length * 3) / 4);
+    if (total > 12 * 1024 * 1024) fail(413, "too_large", "Capturas de tela grandes demais (até 12 MB no total).");
+    return { kind: "shot", at: String(it.at || "").slice(0, 12), mime, data };
   });
 }
 
@@ -110,7 +125,7 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
   }
 
   // Resposta em streaming (SSE): "delta" com o texto parcial, "done" no fim, "error" se falhar.
-  async function streamAnswer(req, reply, { kind, model, credits, meetingId, system, messages, effort, cache, maxTokens = 8000, onDone }) {
+  async function streamAnswer(req, reply, { kind, model, credits, meetingId, system, messages, effort, cache, maxTokens = 8000, tools, onDone }) {
     const call = { ...(await start(req, kind, model, credits, meetingId)), model };
     reply.hijack();
     const res = reply.raw;
@@ -128,24 +143,42 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
       system: [{ type: "text", text: system, ...(cache ? { cache_control: { type: "ephemeral" } } : {}) }],
       messages,
       output_config: { effort },
+      ...(tools && tools.length ? { tools } : {}),
     };
     let stream;
     let text = "";
+    let closed = false;
     req.raw.on("close", () => {
-      if (!res.writableEnded) stream?.abort();
+      if (!res.writableEnded) (closed = true), stream?.abort();
     });
     try {
-      stream = anthropic.messages.stream(params);
-      for await (const ev of stream) {
-        if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") {
-          text += ev.delta.text;
-          send("delta", { text: ev.delta.text });
+      // Com a pesquisa na web, a resposta pode pausar (pause_turn): continua com o que já veio, até 4 vezes.
+      const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, web_search_requests: 0 };
+      const sources = [];
+      let final;
+      let convo = messages;
+      for (let turn = 0; turn < 4 && !closed; turn++) {
+        stream = anthropic.messages.stream({ ...params, messages: convo });
+        for await (const ev of stream) {
+          if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") {
+            text += ev.delta.text;
+            send("delta", { text: ev.delta.text });
+          }
         }
+        final = await stream.finalMessage();
+        for (const k of Object.keys(usage)) usage[k] += (k === "web_search_requests" ? final.usage?.server_tool_use?.web_search_requests : final.usage?.[k]) || 0;
+        for (const b of final.content || []) for (const c of b.citations || []) if (c.url) sources.push({ url: c.url, title: c.title });
+        if (final.stop_reason !== "pause_turn") break;
+        convo = [...convo, { role: "assistant", content: final.content }];
       }
-      const final = await stream.finalMessage();
-      if (final.stop_reason === "refusal") throw new Error("O modelo recusou esta solicitação.");
+      if (final?.stop_reason === "refusal") throw new Error("O modelo recusou esta solicitação.");
       if (!text.trim()) throw new Error("A resposta veio vazia.");
-      await finish(call.id, model, final.usage || {});
+      if (sources.length) {
+        const withSrc = withSources(text, sources);
+        send("delta", { text: withSrc.slice(text.length) });
+        text = withSrc;
+      }
+      await finish(call.id, model, usage);
       const extra = onDone ? await onDone(text).catch((err) => (req.log.error({ err }, "salvar resultado da IA"), {})) : {};
       send("done", { text, model, balance: call.balance, credits, ...extra });
     } catch (err) {
@@ -192,18 +225,22 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
     await guard(req);
     const doc = await meetingFrom(req);
     const history = historyFrom(req.body);
-    const support = supportFrom(req.body);
-    const r = chatRequest(doc, history, { tags: tagsFrom(req.body), glossary: glossaryFrom(req.body), support });
-    // Pergunta longa (roteiro detalhado) ou com material de apoio: modelo forte, mais raciocínio e 2 créditos.
-    const heavy = isHeavyQuestion(history.at(-1).text, { support: support.length > 0 });
+    const support = [...supportFrom(req.body), ...shotsFrom(req.body)];
+    const web = req.body?.web === true;
+    // Pergunta longa (roteiro detalhado), com material de apoio, capturas ou pesquisa na web: modelo forte, mais raciocínio e 2 créditos.
+    const extra = support.length > 0 || web;
+    const heavy = isHeavyQuestion(history.at(-1).text, { support: extra });
+    const model = heavy ? config.models.strong : config.models.fast;
+    const r = chatRequest(doc, history, { tags: tagsFrom(req.body), glossary: glossaryFrom(req.body), support, web, model });
     await streamAnswer(req, reply, {
       kind: "ask",
-      model: heavy ? config.models.strong : config.models.fast,
-      credits: questionCredits(history.at(-1).text, { support: support.length > 0 }),
+      model,
+      credits: questionCredits(history.at(-1).text, { support: extra }),
       meetingId: doc.id,
       system: r.system,
       messages: r.messages,
       effort: r.effort,
+      tools: r.tools,
       cache: true, // a transcrição fica no prompt de sistema: perguntas seguidas leem do cache
       maxTokens: ANSWER_MAX_TOKENS,
     });

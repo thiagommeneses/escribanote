@@ -87,7 +87,8 @@ export const DEFAULTS = {
   backupAuto: "downloads",
   folderExport: false, // além do JSON de backup, uma pasta legível por reunião em <pasta de backup>/Reuniões // backup automático sem escolher pasta: "downloads" (Downloads\Escribanote\backup) | "opfs" (área interna do Chrome) | "off"
   tags: DEFAULT_TAGS,
-  shotArea: "tab", // capturas de tela: "tab" (a aba inteira) | "shared" (só o vídeo em destaque: apresentação ou tela compartilhada)
+  shotArea: "tab",
+  autoShotMin: 0, // captura automática do conteúdo compartilhado durante a reunião, a cada N minutos (0 = desligada); só quando a tela muda // capturas de tela: "tab" (a aba inteira) | "shared" (só o vídeo em destaque: apresentação ou tela compartilhada)
   cleanSpeech: false, // leitura limpa: tela e exportações sem "ahn", "hum" e repetições coladas (o texto guardado não muda)
   exportInclude: null, // partes da exportação ({ chat, notes, highlights, chapters, ai }); null = padrão (tudo, menos a IA)
   exportAta: false, // ligado: exportações da reunião levam a ata (modelo institucional, assinatura) e o rodapé; padrão = só a reunião

@@ -701,3 +701,9 @@ body.usage-personal .inst { display: none !important; }
 .support-item .x .ic { width: 12px; height: 12px; color: inherit; }
 .support-item .x:hover { color: var(--danger); }
 #support-hint { margin: 4px 0 0; }
+.ai-opts { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 2px; }
+.ai-opts .opt-text { display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; min-width: 0; }
+.ai-opts .opt-text em { font-style: normal; }
+.ai-opts small { font-size: 11px; }
+.review-tip { margin: 6px 0 0; padding: 6px 8px; border-radius: 8px; background: var(--accent-soft); }
+.tl-shot.auto img { max-width: min(100%, 220px); opacity: .95; }

@@ -151,7 +151,8 @@
     bus.dispatchEvent(new CustomEvent("message", { detail: msg }));
   });
 
-  function sharedShot() {
+  // Vídeo maior visível nesta moldura (apresentação ou tela em destaque); miniaturas não contam.
+  function sharedVideo() {
     let best = null;
     let bestArea = 0;
     for (const v of document.querySelectorAll("video")) {
@@ -166,7 +167,11 @@
       }
     }
     // Miniaturas (a própria câmera, a grade pequena) não contam como conteúdo compartilhado.
-    if (!best || bestArea < innerWidth * innerHeight * 0.12) return null;
+    return best && bestArea >= innerWidth * innerHeight * 0.12 ? best : null;
+  }
+  function sharedShot() {
+    const best = sharedVideo();
+    if (!best) return null;
     try {
       const c = document.createElement("canvas");
       c.width = best.videoWidth;
@@ -179,6 +184,44 @@
       return { rect: { x: Math.max(b.left, 0), y: Math.max(b.top, 0), w: Math.min(b.right, innerWidth) - Math.max(b.left, 0), h: Math.min(b.bottom, innerHeight) - Math.max(b.top, 0) }, vw: innerWidth };
     }
   }
+
+  // Captura automática (Ajustes "autoShotMin"): a cada N minutos, o quadro do conteúdo compartilhado,
+  // só se a tela mudou desde a última (miniatura 32×18 em tons de cinza, diferença média).
+  let lastThumb = null;
+  let lastAuto = 0;
+  function thumbOf(video) {
+    const c = document.createElement("canvas");
+    c.width = 32;
+    c.height = 18;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(video, 0, 0, 32, 18);
+    const d = g.getImageData(0, 0, 32, 18).data;
+    const out = new Uint8Array(32 * 18);
+    for (let i = 0; i < out.length; i++) out[i] = (d[i * 4] * 3 + d[i * 4 + 1] * 6 + d[i * 4 + 2]) / 10;
+    return out;
+  }
+  function autoShotTick() {
+    const min = Number(state.settings.autoShotMin) || 0;
+    if (!min || Date.now() - lastAuto < min * 60_000 - 2000) return;
+    if (!(state.stage === "meeting" || (bus.inCall && bus.inCall())) || !state.consent || state.paused || state.ended) return;
+    const video = sharedVideo();
+    if (!video) return;
+    try {
+      const thumb = thumbOf(video);
+      if (thumb.reduce((n, v) => n + v, 0) / thumb.length < 8) return; // quadro preto (vídeo parado ou aba em segundo plano)
+      if (lastThumb) {
+        let diff = 0;
+        for (let i = 0; i < thumb.length; i++) diff += Math.abs(thumb[i] - lastThumb[i]);
+        if (diff / thumb.length < 4) return void (lastAuto = Date.now()); // mesma tela: espera o próximo intervalo
+      }
+      const r = sharedShot();
+      if (!r?.dataUrl) return;
+      lastThumb = thumb;
+      lastAuto = Date.now();
+      toWorker({ type: "auto-shot", dataUrl: r.dataUrl }).catch(() => {});
+    } catch {}
+  }
+  setInterval(autoShotTick, 20_000);
 
   // ---------- Fila de eventos ----------
   // Antes do consentimento os eventos ficam retidos em memória (até 5000) e só

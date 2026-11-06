@@ -7,12 +7,12 @@ import { mergeSpeakers, dedupeSpeakers, mergeVoices, keepApart, replaceAll,
 } from "./lib/transcript.js";
 import { getSettings, DEFAULTS, HQ_MODELS, pushSyncedSettings, pullSyncedSettings } from "./lib/settings.js";
 import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, writeSettingsFile, internalBackupDir, backupFileName, sessionFileText, settingsFileText, SETTINGS_FILE, readBackupFolder, writeMeetingFolder, removeMeetingFolder, meetingManifest } from "./lib/backup.js";
-import { toMarkdown } from "./lib/format.js";
+import { toMarkdown, clock } from "./lib/format.js";
 import { learnProfiles, loadProfiles, saveProfiles } from "./lib/voiceprofiles.js";
 import { readTrack } from "./lib/audiovault.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
-import { streamClaude, ataRequest, chatRequest, previousContext, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS, ANSWER_MAX_TOKENS, chatModel, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES } from "./lib/ai.js";
+import { streamClaude, ataRequest, chatRequest, previousContext, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS, ANSWER_MAX_TOKENS, chatModel, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, sampleShots, withSources } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
 import { compileGlossary, applyGlossary, glossaryForPrompt, fuzzyTargets, applyFuzzy } from "./lib/glossary.js";
 import { deleteAudio, audioInfo, vaultUsage, listAudio, enforceQuota } from "./lib/audiovault.js";
@@ -738,13 +738,17 @@ function withPrevious(messages, previous, tags) {
 }
 async function runChat(ai, s, messages, settings, { previous, onDelta, signal } = {}) {
   const support = await supportItems(s);
+  const shots = await shotItems(s);
+  const web = !!s.aiOptions?.web;
   if (ai.kind === "key") {
-    const { heavy, ...reqBody } = chatRequest(s, messages, { tags: settings.tags, previous, glossary: promptGlossary(settings), support });
-    return streamClaude({ apiKey: ai.apiKey, model: chatModel(settings, heavy), ...reqBody, maxTokens: ANSWER_MAX_TOKENS, onDelta, signal });
+    const heavyModel = chatModel(settings, true);
+    const { heavy, ...reqBody } = chatRequest(s, messages, { tags: settings.tags, previous, glossary: promptGlossary(settings), support: [...support, ...shots], web, model: heavyModel });
+    const r = await streamClaude({ apiKey: ai.apiKey, model: chatModel(settings, heavy), ...reqBody, maxTokens: ANSWER_MAX_TOKENS, onDelta, signal });
+    return { ...r, text: withSources(r.text, r.sources) };
   }
   const done = await accountCall(() =>
     // A conta recebe a reunião atual; as anteriores vão como material de consulta junto da última pergunta.
-    accountStream("/ai/ask", { meeting: forAccount(s), history: withPrevious(messages, previous, settings.tags), tags: settings.tags, glossary: promptGlossary(settings), ...(support.length ? { support } : {}) }, { onDelta, signal }),
+    accountStream("/ai/ask", { meeting: forAccount(s), history: withPrevious(messages, previous, settings.tags), tags: settings.tags, glossary: promptGlossary(settings), ...(support.length ? { support } : {}), ...(shots.length ? { shots } : {}), ...(web ? { web: true } : {}) }, { onDelta, signal }),
   );
   return { text: done.text, model: done.model };
 }
@@ -1013,6 +1017,30 @@ async function supportItems(s) {
       return x.kind === "text" ? { kind: "text", name: x.name, text: v } : { kind: x.kind, name: x.name, mime: x.mime, data: v };
     })
     .filter(Boolean);
+}
+
+// Capturas para a IA: até 20, espaçadas ao longo da reunião, com o horário de cada uma.
+async function shotItems(s) {
+  if (!s.aiOptions?.shots || !s.shots.length) return [];
+  const pick = sampleShots(s.shots);
+  const got = await chrome.storage.local.get(pick.map((x) => `shot:${s.id}:${x.id}`));
+  return pick
+    .map((x) => {
+      const url = got[`shot:${s.id}:${x.id}`];
+      const m = /^data:(image\/[a-z]+);base64,(.*)$/.exec(url || "");
+      return m ? { kind: "shot", at: clock(x.at - s.startedAt), mime: m[1], data: m[2] } : null;
+    })
+    .filter(Boolean);
+}
+
+// Captura automática do conteúdo compartilhado (o widget só manda quando a tela mudou).
+async function autoShot(s, dataUrl) {
+  if (!/^data:image\/jpeg;base64,/.test(dataUrl || "") || s.paused || s.endedAt) return null;
+  const id = Date.now().toString(36);
+  await chrome.storage.local.set({ [`shot:${s.id}:${id}`]: dataUrl });
+  s.shots.push({ id, at: Date.now(), auto: true });
+  await changed(s);
+  return id;
 }
 
 async function getShots(s) {
@@ -1461,6 +1489,14 @@ async function handle(msg, sender) {
       await changed(s, { now: true });
       return s;
     }
+    case "ai-options": {
+      if (!s) return null;
+      s.aiOptions = { ...(s.aiOptions || {}), ...(typeof msg.shots === "boolean" ? { shots: msg.shots } : {}), ...(typeof msg.web === "boolean" ? { web: msg.web } : {}) };
+      await changed(s, { now: true });
+      return s;
+    }
+    case "auto-shot":
+      return s ? autoShot(s, msg.dataUrl) : null;
     case "support-add":
       if (!s) throw new Error("Reunião não encontrada.");
       return addSupport(s, msg.item || {});

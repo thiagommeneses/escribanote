@@ -114,6 +114,34 @@ test("material de apoio: vai antes da primeira pergunta, usa o modelo forte e cu
   await ctx.db.query("UPDATE credit_balances SET balance = $2 WHERE user_id = $1", [u.me.id, before]);
 });
 
+test("pesquisa na web e capturas: ferramenta, continuação após pause_turn, fontes no fim e 2 créditos", async () => {
+  const before = await balance();
+  ctx.anthropic.calls.length = 0;
+  const cite = { type: "web_search_result_location", url: "https://exemplo.com/ipca", title: "IPCA de outubro" };
+  ctx.anthropic.finals = [
+    { text: "Buscando… ", stop_reason: "pause_turn", content: [{ type: "server_tool_use", id: "s1", name: "web_search", input: { query: "IPCA" } }], usage: { input_tokens: 10, output_tokens: 5, server_tool_use: { web_search_requests: 1 } } },
+    { text: "O IPCA veio acima.", stop_reason: "end_turn", content: [{ type: "text", text: "O IPCA veio acima.", citations: [cite] }] },
+  ];
+  const shot = Buffer.from([255, 216, 255]).toString("base64");
+  const r = await u.post("/api/v1/ai/ask", { meeting: sampleMeeting("mt-web"), history: [{ role: "user", text: "Como estava o IPCA?" }], web: true, shots: [{ at: "00:12:31", mime: "image/jpeg", data: shot }] });
+  const events = parseSse(r.body);
+  const done = events.find((e) => e.event === "done");
+  assert.ok(done, JSON.stringify(events.at(-1)));
+  assert.equal(ctx.anthropic.calls.length, 2, "continua depois do pause_turn");
+  const p = ctx.anthropic.calls[0].params;
+  assert.equal(p.model, ctx.config.models.strong);
+  assert.equal(p.tools[0].type, "web_search_20260209");
+  assert.match(p.system[0].text, /pesquisar na web/);
+  assert.match(p.system[0].text, /captura_de_tela/);
+  assert.match(p.messages[0].content[0].text, /<captura_de_tela horario="00:12:31">/);
+  assert.equal(p.messages[0].content[1].type, "image");
+  assert.equal(ctx.anthropic.calls[1].params.messages.at(-1).role, "assistant");
+  assert.match(done.data.text, /O IPCA veio acima\.\n\n\*\*Fontes da web:\*\*\n- IPCA de outubro — https:\/\/exemplo\.com\/ipca/);
+  assert.equal(await balance(), before - 2);
+  ctx.anthropic.finals = null;
+  await ctx.db.query("UPDATE credit_balances SET balance = $2 WHERE user_id = $1", [u.me.id, before]);
+});
+
 test("revisão: 1 crédito por reunião a cada 24 h", async () => {
   ctx.anthropic.reviewText = JSON.stringify({ fixes: [{ id: "1", text: "Bom dia, vamos revisar o orçamento do Q4." }] });
   const items = [{ id: "1", speaker: "Ana", text: "Bom dia, vamos revisar o orçamento do quiu quatro." }];

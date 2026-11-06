@@ -210,6 +210,11 @@
                   <span class="support-btns"><button type="button" class="btn sm ghost" id="support-file">+ Arquivo</button><button type="button" class="btn sm ghost" id="support-paste">+ Colar texto</button></span>
                   <input type="file" id="support-input" multiple hidden accept=".txt,.md,.csv,.tsv,.json,.pdf,image/png,image/jpeg,image/webp,image/gif,text/plain,text/csv,text/markdown,application/json,application/pdf"></div>
                 <div class="support-list" id="support-list"></div>
+                <div class="ai-opts">
+                  <label class="switch sm"><input type="checkbox" id="opt-shots"><span></span><div class="opt-text">Enviar as capturas de tela <em class="muted" id="opt-shots-n"></em><small class="muted">a IA lê gráficos, preços e slides (até 20, com o horário)</small></div></label>
+                  <label class="switch sm"><input type="checkbox" id="opt-web"><span></span><div class="opt-text">Pesquisar na web o contexto do dia <small class="muted">notícias, indicadores e agenda; as fontes vêm no fim da resposta</small></div></label>
+                </div>
+                <p class="review-tip tiny" id="review-tip" hidden></p>
                 <p class="muted tiny" id="support-hint">Cotações, notícias, calendário econômico, PDFs ou prints de gráficos: a IA usa como fonte externa à reunião e diz o que veio deles. Arraste arquivos para cá.</p>
               </div>
               <label class="chat-scope tiny"><span>Perguntar sobre</span><select id="chat-scope" class="sm" aria-label="Quais reuniões a IA consulta">
@@ -220,7 +225,7 @@
             </div>
             <details class="card q-manage" id="q-manage">
               <summary><b>Modelos de perguntas</b> <span class="muted tiny" id="q-count"></span></summary>
-              <p class="muted tiny">Valem para todas as reuniões. Os <b>fixados</b> (alfinete) aparecem como atalhos acima da caixa de pergunta, nesta ordem; desafixe os que usa pouco e use ↑ ↓ para ordenar. Com <b>Automática</b> ligada, a pergunta é feita sozinha quando a reunião termina e a resposta fica salva aqui, como uma conversa (sua chave de API ou 1 crédito do Pro por pergunta; 2 para perguntas com mais de 2.000 caracteres ou com material de apoio).</p>
+              <p class="muted tiny">Valem para todas as reuniões. Os <b>fixados</b> (alfinete) aparecem como atalhos acima da caixa de pergunta, nesta ordem; desafixe os que usa pouco e use ↑ ↓ para ordenar. Com <b>Automática</b> ligada, a pergunta é feita sozinha quando a reunião termina e a resposta fica salva aqui, como uma conversa (sua chave de API ou 1 crédito do Pro por pergunta; 2 para perguntas com mais de 2.000 caracteres, com material de apoio, capturas ou pesquisa na web).</p>
               <div id="q-list" class="q-list"></div>
               <div class="row"><button type="button" class="btn sm ghost" id="q-add">+ Novo modelo</button><button type="button" class="btn sm ghost" id="q-reset">Restaurar os modelos padrão</button></div>
             </details>
@@ -285,7 +290,7 @@
               <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (recomendado para roteiros de análise)</option>
               <option value="claude-opus-5-5">Claude Opus 5.5 (melhor qualidade)</option>
               <option value="same">O mesmo modelo acima</option></select></label>
-            <p class="muted tiny">Com a sua chave: perguntas com mais de 2.000 caracteres ou com material de apoio usam este modelo (nunca um mais fraco que o de cima) e raciocinam mais. No Pro, elas usam o modelo forte e custam 2 créditos.</p>
+            <p class="muted tiny">Com a sua chave: perguntas com mais de 2.000 caracteres ou com material de apoio usam este modelo (nunca um mais fraco que o de cima) e raciocinam mais. O mesmo vale quando a reunião envia capturas de tela ou pesquisa na web. No Pro, elas usam o modelo forte e custam 2 créditos.</p>
             <label class="switch"><input type="checkbox" name="autoAta"><span></span>Gerar a ata automaticamente quando a reunião terminar (sem chave, usa 1 crédito do Pro)</label>
             <label class="switch"><input type="checkbox" name="chaptersAuto"><span></span>Dividir em capítulos automaticamente quando a reunião terminar (a partir de 3 min; sem chave, usa 1 crédito do Pro)</label>
             <p class="muted tiny">Perguntas que você faz sempre? Salve-as como <b>modelos de perguntas</b> na aba IA de qualquer reunião e ligue <b>Automática</b> para recebê-las respondidas ao fim de cada reunião.</p>
@@ -350,6 +355,7 @@
 
             <label class="field"><span>Vocabulário da equipe: nomes, siglas, termos jurídicos, de tecnologia e em inglês (um por linha)</span>
               <textarea name="glossary" data-count="focus" rows="6" placeholder="Q4&#10;OKR&#10;Thiago Meneses&#10;Agno = argum, agnum&#10;front-end = front end, fronte&#10;data venia = data vênia, dá tá vênia"></textarea></label>
+            <div class="row"><button type="button" class="btn sm ghost" id="gloss-market">+ Termos do mercado financeiro</button><span class="muted tiny">WIN, WDO, BOVA11, VWAP, Payroll, Copom, travas…</span></div>
             <p class="muted tiny">Escreva <b>Termo = forma errada, outra forma</b> para corrigir na hora o que as legendas costumam errar, em toda fala que chegar. Os termos também vão para a revisão por IA, a ata e o chat, que passam a grafá-los certo mesmo em variações novas.</p>
             <label class="switch"><input type="checkbox" name="glossaryFuzzy"><span></span>Corrigir também grafias parecidas com os termos e com os nomes dos participantes (“Quitérria” → “Quitéria”, “Andre” → “André”), no computador, sem IA</label>
             <label class="field"><span>Sobre as reuniões (área, assuntos, vocabulário comum)</span>
@@ -398,6 +404,15 @@
                 <option value="shared">Só o conteúdo compartilhado (apresentação ou tela em destaque)</option>
               </select></label>
             <p class="muted tiny">No modo "só o compartilhado", a captura pega o vídeo maior da reunião na resolução original; sem apresentação na tela, salva a aba inteira.</p>
+            <label class="field"><span>Capturar o conteúdo compartilhado automaticamente</span>
+              <select name="autoShotMin">
+                <option value="0">Desligado</option>
+                <option value="1">A cada 1 minuto</option>
+                <option value="2">A cada 2 minutos</option>
+                <option value="5">A cada 5 minutos</option>
+                <option value="10">A cada 10 minutos</option>
+              </select></label>
+            <p class="muted tiny">Durante a reunião, guarda o quadro da apresentação ou tela compartilhada, só quando ele muda. Bom para salas de mercado e aulas: na aba IA, ligue “Enviar as capturas de tela” e a IA lê os gráficos e preços junto com a fala.</p>
             <div class="row"><button type="button" class="btn sm" id="grant-shots">Autorizar capturas pelo widget</button><span id="shots-status" class="muted tiny"></span></div>
             <ul class="kbd-list" id="kbd-list"></ul>
             <button type="button" class="btn sm ghost" id="edit-shortcuts">Alterar atalhos</button>

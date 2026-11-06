@@ -1209,3 +1209,68 @@ test("chat: material de apoio entra antes da primeira pergunta; pergunta pesada 
   assert.equal(chatModel({ aiModel: "claude-opus-5-5", aiModelLong: "claude-sonnet-5-5" }, true), "claude-opus-5-5");
   assert.equal(chatModel({ aiModel: "claude-haiku-5-5", aiModelLong: "same" }, true), "claude-haiku-5-5");
 });
+
+// ---------------- Capturas para a IA, pesquisa na web e continuação após pause_turn ----------------
+import { streamClaude, sampleShots, withSources, webSearchTool } from "../src/lib/ai.js";
+test("chat: capturas espaçadas, pesquisa na web e fontes", () => {
+  const shots = Array.from({ length: 50 }, (_, i) => ({ id: String(i), at: i }));
+  const pick = sampleShots(shots, 20);
+  assert.equal(pick.length, 20);
+  assert.equal(pick[0].id, "0");
+  assert.equal(pick.at(-1).id, "49");
+  assert.equal(webSearchTool("claude-sonnet-5-5").type, "web_search_20260209");
+  assert.equal(webSearchTool("claude-haiku-5-5").type, "web_search_20250305");
+  assert.equal(withSources("Resposta.", []), "Resposta.");
+  assert.equal(withSources("Resposta.", [{ url: "https://a.com", title: "A" }, { url: "https://a.com", title: "A" }]), "Resposta.\n\n**Fontes da web:**\n- A — https://a.com");
+  const s = session();
+  applyEvent(s, { kind: "caption", id: "1/a", speakerId: "a", text: "oi" }, 1_001_000);
+  const r = chatReq(s, [{ role: "user", text: "Como estava o mercado?" }], { web: true, model: "claude-sonnet-5-5", support: [{ kind: "shot", at: "00:01:00", mime: "image/jpeg", data: "/9j/" }] });
+  assert.equal(r.heavy, true);
+  assert.equal(r.tools[0].name, "web_search");
+  assert.match(r.system, /pesquisar na web/);
+  assert.match(r.system, /captura_de_tela/);
+  assert.doesNotMatch(r.system, /material de apoio \(dentro/, "capturas não contam como material de apoio");
+  assert.match(r.messages[0].content[0].text, /<captura_de_tela horario="00:01:00">/);
+});
+
+test("streamClaude: continua após pause_turn, devolve blocos de pensamento intactos e junta as fontes", async () => {
+  const sse = (events) => new Response(new ReadableStream({ start(c) { for (const e of events) c.enqueue(new TextEncoder().encode(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)); c.close(); } }), { status: 200 });
+  const bodies = [];
+  const responses = [
+    sse([
+      { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } },
+      { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "vou buscar" } },
+      { type: "content_block_delta", index: 0, delta: { type: "signature_delta", signature: "sig1" } },
+      { type: "content_block_stop", index: 0 },
+      { type: "content_block_start", index: 1, content_block: { type: "server_tool_use", id: "s1", name: "web_search", input: {} } },
+      { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"query":' } },
+      { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '"IPCA outubro"}' } },
+      { type: "content_block_stop", index: 1 },
+      { type: "message_delta", delta: { stop_reason: "pause_turn" } },
+    ]),
+    sse([
+      { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+      { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "IPCA acima." } },
+      { type: "content_block_delta", index: 0, delta: { type: "citations_delta", citation: { type: "web_search_result_location", url: "https://ibge.gov.br/ipca", title: "IBGE" } } },
+      { type: "content_block_stop", index: 0 },
+      { type: "message_delta", delta: { stop_reason: "end_turn" } },
+    ]),
+  ];
+  const real = globalThis.fetch;
+  globalThis.fetch = async (_url, init) => (bodies.push(JSON.parse(init.body)), responses.shift());
+  try {
+    const seen = [];
+    const r = await streamClaude({ apiKey: "k", model: "claude-sonnet-5-5", system: "s", messages: [{ role: "user", content: "IPCA?" }], tools: [webSearchTool("claude-sonnet-5-5")], onDelta: (t) => seen.push(t) });
+    assert.equal(r.text, "IPCA acima.");
+    assert.deepEqual(r.sources, [{ url: "https://ibge.gov.br/ipca", title: "IBGE" }]);
+    assert.equal(bodies.length, 2);
+    assert.equal(bodies[0].tools[0].type, "web_search_20260209");
+    const replay = bodies[1].messages.at(-1);
+    assert.equal(replay.role, "assistant");
+    assert.deepEqual(replay.content[0], { type: "thinking", thinking: "vou buscar", signature: "sig1" });
+    assert.deepEqual(replay.content[1].input, { query: "IPCA outubro" });
+    assert.equal(seen.at(-1), "IPCA acima.");
+  } finally {
+    globalThis.fetch = real;
+  }
+});

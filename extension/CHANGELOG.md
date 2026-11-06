@@ -2,6 +2,14 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.60 beta — 2026-11-06
+- A IA lê as capturas de tela: na aba IA, "Enviar as capturas de tela" manda até 20 capturas da reunião (espaçadas, cada uma com o horário) junto com a pergunta, para ler gráficos, preços e slides que a fala não diz. A IA cita o horário da captura e separa o que viu na tela do que foi dito.
+- Captura automática do conteúdo compartilhado (Ajustes › Capturas de tela e atalhos): a cada 1, 2, 5 ou 10 minutos durante a reunião, guarda o quadro da apresentação ou tela compartilhada, só quando ele muda (funciona com a aba da reunião em segundo plano). Aparecem menores na linha do tempo, marcadas como "automática".
+- Pesquisa na web opcional (aba IA › "Pesquisar na web o contexto do dia"): a IA busca notícias, indicadores e agenda da data da reunião quando a pergunta pede algo que não foi dito, e lista as fontes no fim da resposta. Com a sua chave, a pesquisa precisa estar liberada na organização da Anthropic (US$ 10 a cada 1.000 buscas, até 5 por pergunta).
+- Capturas e pesquisa na web valem para toda pergunta da reunião, inclusive as automáticas e as do widget, e contam como pergunta pesada (modelo mais forte; 2 créditos no Pro).
+- Ajustes › Vocabulário: botão "+ Termos do mercado financeiro" (WIN, WDO, BOVA11, VWAP, Payroll, Copom, travas…), sem duplicar os que já existem.
+- Aba IA: quando a transcrição longa ainda não foi revisada, um aviso sugere revisar antes de análises longas, com o botão "Revisar agora".
+
 ## 0.9.59 beta — 2026-11-06
 - A IA não para mais no meio de um roteiro: quando parte do pedido não está na transcrição, ela faz todo o resto, marca "não informado" no que falta e deixa as limitações num bloco curto no fim (antes podia responder só com a lista do que faltava e pedir permissão para continuar).
 - Perguntas longas (mais de 2.000 caracteres) ou com material de apoio usam um modelo mais forte e raciocinam mais: com a sua chave, o Sonnet 5.5 por padrão (Ajustes › IA › "Perguntas longas ou com material de apoio"; nunca um modelo mais fraco que o escolhido); no Pro, o modelo forte, por 2 créditos.
