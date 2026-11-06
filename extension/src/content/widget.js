@@ -81,6 +81,11 @@
     .ib.due { color: #fbbc04; position: relative; }
     .ib.due::after { content: ""; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #fbbc04; animation: due 1.6s ease-in-out infinite; }
     @keyframes due { 50% { opacity: .25; } }
+    .thinking { opacity: .75; }
+    .thinking i { font-style: normal; animation: dots 1.2s infinite; }
+    .thinking i:nth-child(2) { animation-delay: .2s; }
+    .thinking i:nth-child(3) { animation-delay: .4s; }
+    @keyframes dots { 0%, 60%, 100% { opacity: .2; } 30% { opacity: 1; } }
     @media (prefers-reduced-motion: reduce) { .ib.due::after { animation: none; } }
     .ib.active { color: #8ab4f8; }
     .ib:disabled { opacity: .35; cursor: default; background: none; }
@@ -624,7 +629,7 @@
     if (!question || !session) return;
     if (aiPort) aiPort.disconnect();
     $("ai-input").value = "";
-    $("ai-answer").textContent = "Pensando…";
+    $("ai-answer").innerHTML = '<span class="thinking" role="status">Pensando<i>.</i><i>.</i><i>.</i></span>';
     aiPort = chrome.runtime.connect({ name: "ai" });
     aiPort.onMessage.addListener((m) => {
       if (m.type === "chat") chatId = m.chatId;

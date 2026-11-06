@@ -340,3 +340,21 @@ p { margin: 0; }
 .badge .ic { width: 11px; height: 11px; color: #d97706; --ic-fill: .6; }
 .chatline .ic { width: 14px; height: 14px; vertical-align: -0.15em; }
 .top .nav[hidden], .kbd-hint[hidden] { display: none; }
+
+/* Espera da IA: indicador, tempo decorrido, esqueleto e prévia opcional */
+.spin { display: inline-block; flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--rule); border-top-color: var(--rec); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.wait-inline { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-3); }
+.wait-time, .wait-meta { color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.wait { border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; background: var(--card); }
+.wait-head { display: flex; align-items: center; gap: 10px; }
+.wait-head b { font-weight: 600; font-size: 14px; }
+.wait-meta { margin-left: auto; white-space: nowrap; }
+.skel { display: grid; gap: 8px; margin: 14px 0 2px; }
+.skel i { display: block; width: 100%; height: 9px; border-radius: 5px; background: var(--rule); animation: skel 1.4s ease-in-out infinite; }
+.skel i.gap { margin-top: 8px; }
+@keyframes skel { 50% { opacity: .4; } }
+.wait-prev { margin-top: 12px; }
+.wait-prev summary { cursor: pointer; color: var(--ink-2); font-size: 13px; width: max-content; text-decoration: underline; text-underline-offset: 3px; }
+.wait-text { max-height: 280px; overflow: auto; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--rule); opacity: .8; }
+@media (prefers-reduced-motion: reduce) { .spin, .skel i { animation: none; } }

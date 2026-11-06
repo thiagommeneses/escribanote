@@ -1267,7 +1267,7 @@ async function renderAta() {
       ? `<div class="ata-empty"><div class="ico">${icon("nota")}</div><b>Nenhuma ata ainda</b><p>Gere uma ata com resumo, decisões, itens de ação e pendências. Escolha um modelo acima se a sua equipe tem um formato próprio.</p></div>`
       : `<div class="ata-empty"><div class="ico">${icon("mic")}</div><b>A ata nasce da transcrição</b><p>Quando a reunião tiver falas registradas, gere a ata por aqui.</p></div>`;
   }
-  $("ata-doc").classList.toggle("empty", !s.summary && !viewing);
+  $("ata-doc").classList.toggle("empty", !s.summary && !viewing && state.busy !== "ata");
   if (!s.summary && !viewing) $("ata-tools").hidden = true;
   // faixa com o estado da ata atual
   const meta = $("ata-meta");
@@ -1598,7 +1598,7 @@ function renderChatLog(streamText) {
   const msgs = chat ? chat.messages.slice() : [];
   if (streamText !== undefined) {
     if (state.pendingQuestion && (!msgs.length || msgs.at(-1).role !== "user")) msgs.push({ role: "user", text: state.pendingQuestion });
-    msgs.push({ role: "assistant", text: streamText || "Pensando…" });
+    msgs.push({ role: "assistant", text: streamText, waiting: !streamText });
   }
   const streaming = streamText !== undefined;
   const answers = msgs.filter((m) => m.role === "assistant").length;
@@ -1606,6 +1606,7 @@ function renderChatLog(streamText) {
     ? msgs
         .map((m, i) => {
           if (m.role !== "assistant") return `<div class="msg user">${userMsgHtml(m.text)}</div>`;
+          if (m.waiting) return `<div class="msg assistant">${spinHtml("Pensando…", state.chatT0 || Date.now())}</div>`;
           const done = !streaming || i < msgs.length - 1;
           const acts = done
             ? `<div class="msg-acts"><button type="button" class="linkish" data-copy="a" data-i="${i}">${icon("copiar")}Copiar resposta</button>${msgs[i - 1]?.role === "user" ? `<button type="button" class="linkish" data-copy="qa" data-i="${i}">${icon("copiar")}Copiar com a pergunta</button>` : ""}</div>`
@@ -1664,6 +1665,48 @@ $("chat-select").addEventListener("change", (e) => {
   renderChatLog();
 });
 
+// ----- Espera da IA: indicador animado, tempo decorrido e prévia opcional do texto -----
+const since = (t0) => {
+  const sec = Math.max(0, Math.floor((Date.now() - t0) / 1000));
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+};
+setInterval(() => document.querySelectorAll("[data-since]").forEach((el) => (el.textContent = since(Number(el.dataset.since)))), 1000);
+const spinHtml = (label, t0 = Date.now()) =>
+  `<span class="wait-inline" role="status"><span class="spin" aria-hidden="true"></span><span class="wait-label">${esc(label)}</span><time class="wait-time" data-since="${t0}">${since(t0)}</time></span>`;
+// Cartão no lugar do texto ao vivo: esqueleto da ata, etapa, tempo e palavras; "Mostrar prévia" abre o texto parcial.
+function waitCard(el, { label, writing }) {
+  const t0 = Date.now();
+  el.innerHTML = `<div class="wait" role="status" aria-live="polite">
+    <div class="wait-head"><span class="spin" aria-hidden="true"></span><b class="wait-label">${esc(label)}</b><span class="wait-meta"><time data-since="${t0}">0:00</time><span class="wait-words"></span></span></div>
+    <div class="skel" aria-hidden="true"><i style="width:42%"></i><i></i><i style="width:93%"></i><i style="width:68%"></i><i class="gap" style="width:30%"></i><i></i><i style="width:58%"></i></div>
+    <details class="wait-prev" hidden><summary>Mostrar prévia</summary><div class="md wait-text"></div></details>
+  </div>`;
+  const q = (sel) => el.querySelector(sel);
+  let text = "";
+  const paint = () => {
+    const box = q(".wait-text");
+    if (!box || !q(".wait-prev").open) return;
+    const end = box.scrollHeight - box.scrollTop - box.clientHeight < 24; // só acompanha o fim se o usuário não rolou para cima
+    box.innerHTML = withCites(mdToHtml(text));
+    if (end) box.scrollTop = box.scrollHeight;
+  };
+  q(".wait-prev").addEventListener("toggle", () => {
+    q(".wait-prev summary").textContent = q(".wait-prev").open ? "Esconder prévia" : "Mostrar prévia";
+    paint();
+  });
+  return {
+    update(t) {
+      if (!q(".wait")) return;
+      text = t;
+      q(".wait-label").textContent = writing;
+      q(".wait-prev").hidden = false;
+      const n = (t.match(/\S+/g) || []).length;
+      q(".wait-words").textContent = ` · ${n} ${n === 1 ? "palavra" : "palavras"}`;
+      paint();
+    },
+  };
+}
+
 function runAI(payload, onDelta, onDone) {
   if (state.aiPort) state.aiPort.disconnect();
   const port = chrome.runtime.connect({ name: "ai" });
@@ -1694,10 +1737,11 @@ $("ata-gen").addEventListener("click", async () => {
   $("ata-editor").hidden = true;
   $("ata-body").hidden = false;
   $("ata-gen").textContent = "Cancelar";
-  $("ata-body").innerHTML = '<p class="muted">Gerando a ata…</p>';
+  $("ata-doc").classList.remove("empty");
+  const card = waitCard($("ata-body"), { label: "Lendo a transcrição…", writing: "Escrevendo a ata…" });
   runAI(
     { action: "ata", id: state.session.id },
-    (t) => ($("ata-body").innerHTML = withCites(mdToHtml(t))),
+    (t) => card.update(t),
     async (m) => {
       state.busy = null;
       if (m.type === "error") {
@@ -1720,11 +1764,12 @@ $("review-run").addEventListener("click", async () => {
   if (!(await ensureApiPermission())) return toast("Permissão para a API negada");
   state.busy = "review";
   $("review-run").textContent = "Cancelar";
-  $("review-info").textContent = "Revisando…";
+  const reviewT0 = Date.now();
+  $("review-info").innerHTML = spinHtml("Revisando…", reviewT0);
   const port = chrome.runtime.connect({ name: "ai" });
   state.aiPort = port;
   port.onMessage.addListener(async (m) => {
-    if (m.type === "progress") $("review-info").textContent = `Revisando… ${m.done} de ${m.total} falas · ${m.changed} correções`;
+    if (m.type === "progress") $("review-info").innerHTML = spinHtml(`Revisando… ${m.done} de ${m.total} falas · ${m.changed} correções`, reviewT0);
     if (m.type === "done" || m.type === "error") {
       port.disconnect();
       state.aiPort = null;
@@ -2079,7 +2124,7 @@ $("tpl-file").addEventListener("change", async () => {
   if (file.size > 8 * 1024 * 1024) return toast("Arquivo grande demais (máximo 8 MB).");
   if (!(await ensureApiPermission())) return toast("Permissão para a API negada");
   const status = $("tpl-status");
-  status.textContent = "Lendo a ata e extraindo o modelo…";
+  status.innerHTML = spinHtml("Lendo a ata e extraindo o modelo…");
   try {
     const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
     const payload = isPdf
@@ -2117,6 +2162,7 @@ async function ask(question, previousId) {
   if (!question || !state.session || state.busy) return;
   if (!(await ensureApiPermission())) return toast("Permissão para a API negada");
   state.busy = "chat";
+  state.chatT0 = Date.now();
   state.pendingQuestion = question;
   $("chat-input").value = "";
   if (document.activeElement === $("chat-input")) paintCount($("chat-input"));

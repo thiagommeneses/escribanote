@@ -9,6 +9,13 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Cartão de espera da IA (0.9.63)
+
+- `app.js`: `waitCard(el, { label, writing })` troca o texto ao vivo da ata por esqueleto, etapa, tempo (`data-since`,
+  atualizado por um único `setInterval` global) e contagem de palavras; `<details class="wait-prev">` mostra o texto
+  parcial só quando aberto. `spinHtml(label, t0)` é a versão em linha (chat, revisão, importação de modelo).
+- O mesmo em `site/app/app.js` (ata e perguntas); o widget usa reticências animadas.
+
 ## Texto das chamadas sem streaming visível (0.9.62)
 
 - `streamClaude` acumulava o texto dentro de `onDelta?.((text += t))`: sem `onDelta`, a chamada opcional não avalia o

@@ -219,6 +219,52 @@ try {
   console.log("✓ termos do mercado financeiro no vocabulário, sem duplicar");
   await ev("document.querySelector('[data-goto-view=\"meeting\"], #nav-meeting, [data-view=\"meeting\"]')?.click()");
 
+  // Geração da ata: cartão de espera (etapa, tempo, palavras) no lugar do texto ao vivo; prévia só quando pedida.
+  {
+    const { targetInfos } = await send("Target.getTargets");
+    const sw = targetInfos.find((t) => t.type === "service_worker" && t.url.endsWith("/src/background.js"));
+    const { sessionId: swSid } = await send("Target.attachToTarget", { targetId: sw.targetId, flatten: true });
+    await evIn(swSid)(`(() => {
+      globalThis.__realFetch ||= globalThis.fetch;
+      chrome.permissions.contains = async () => true;
+      globalThis.fetch = async (url, init) => {
+        if (!String(url).startsWith("https://api.anthropic.com/")) return globalThis.__realFetch(url, init);
+        const ev = (e) => "data: " + JSON.stringify(e) + "\\n\\n";
+        const parts = ["# Ata\\n\\n", "Decisões da reunião ", "sobre o pregão. ", "Próximos passos definidos."];
+        const enc = new TextEncoder();
+        return new Response(new ReadableStream({ async start(c) {
+          await new Promise((r) => setTimeout(r, 1200));
+          c.enqueue(enc.encode(ev({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })));
+          for (const t of parts) { c.enqueue(enc.encode(ev({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: t } }))); await new Promise((r) => setTimeout(r, 900)); }
+          c.enqueue(enc.encode(ev({ type: "message_delta", delta: { stop_reason: "end_turn" } })));
+          c.close();
+        } }), { status: 200 });
+      };
+    })()`);
+    await ev(`(async () => { await chrome.storage.local.set({ apiKey: "sk-ant-teste" }); chrome.permissions.contains = async () => true; })()`);
+    await ev("document.querySelector('[data-tab=\"ata\"]').click()");
+    await waitFor(() => ev("!!document.querySelector('#ata-gen') && !document.querySelector('#ata-gen').disabled"), "botão da ata");
+    await ev("document.querySelector('#ata-gen').click()");
+    await waitFor(() => ev("document.querySelector('#ata-body .wait .wait-label')?.textContent === 'Lendo a transcrição…'"), "cartão de espera");
+    assert.equal(await ev("document.querySelector('#ata-body .wait-prev').hidden"), true, "sem prévia antes do texto");
+    assert.equal(await ev("document.querySelector('#ata-gen').textContent"), "Cancelar");
+    await waitFor(() => ev("document.querySelector('#ata-body .wait-label')?.textContent === 'Escrevendo a ata…'"), "etapa de escrita");
+    assert.equal(await ev("document.querySelector('#ata-body .wait-prev').hidden || document.querySelector('#ata-body .wait-prev').open"), false, "prévia disponível, fechada");
+    assert.equal(await ev("document.querySelector('#ata-body .wait-text').textContent"), "", "texto parcial não aparece sem pedir");
+    assert.match(await ev("document.querySelector('#ata-body .wait-words').textContent"), /palavra/);
+    await ev("document.querySelector('#ata-body .wait-prev summary').click()");
+    await waitFor(() => ev("document.querySelector('#ata-body .wait-text')?.textContent.includes('Decisões')"), "prévia mostra o texto parcial");
+    if (process.env.SHOT_ATA) {
+      await send("Emulation.setDeviceMetricsOverride", { width: 900, height: 700, deviceScaleFactor: 1, mobile: false }, sessionId);
+      await ev("document.documentElement.dataset.theme = 'dark'; document.querySelector('#ata-body').scrollIntoView()");
+      const { data } = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+      (await import("node:fs")).writeFileSync(process.env.SHOT_ATA, Buffer.from(data, "base64"));
+    }
+    await waitFor(() => ev("!document.querySelector('#ata-body .wait') && document.querySelector('#ata-body').textContent.includes('Próximos passos definidos')"), "ata pronta", 15000);
+    console.log("✓ ata: cartão de espera com etapa, tempo e palavras; prévia só ao pedir; ata aparece formatada no fim");
+    await ev(`chrome.storage.local.remove("apiKey")`);
+  }
+
   if (process.env.SHOT) {
     // Captura da seção para conferência visual: um modelo desafixado e o rascunho aberto.
     await send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 1400, deviceScaleFactor: 1, mobile: false }, sessionId);
