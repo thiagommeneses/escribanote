@@ -382,6 +382,7 @@ export async function streamClaude({ apiKey, model, system, messages, effort = "
     for (const b of r.blocks) for (const c of b.citations || []) if (c.url) sources.push({ url: c.url, title: c.title });
     if (r.stopReason === "refusal") throw new Error("O modelo recusou esta solicitação.");
     if (r.stopReason !== "pause_turn") {
+      if (!text.trim() && r.stopReason === "max_tokens") throw new Error("A resposta veio vazia: o modelo usou todo o limite de tokens raciocinando. Tente de novo ou escolha um modelo mais rápido em Ajustes › IA.");
       if (!text.trim()) throw new Error("A resposta veio vazia.");
       return { text, sources, model, stopReason: r.stopReason, createdAt: Date.now() };
     }
