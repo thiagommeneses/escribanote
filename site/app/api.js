@@ -34,7 +34,7 @@ export const api = {
 };
 
 // IA em streaming (SSE via fetch): onDelta(textoAcumulado), devolve o evento "done".
-export async function stream(path, body, { onStart, onDelta, signal } = {}) {
+export async function stream(path, body, { onStart, onDelta, onPhase, signal } = {}) {
   const res = await fetch(`/api/v1${path}`, {
     method: "POST",
     credentials: "same-origin",
@@ -58,6 +58,7 @@ export async function stream(path, body, { onStart, onDelta, signal } = {}) {
       const data = JSON.parse(/^data: (.+)$/m.exec(chunk)?.[1] || "null");
       if (event === "start") onStart?.(data);
       else if (event === "delta") { text += data.text; onDelta?.(text); }
+      else if (event === "phase") onPhase?.(data.text);
       else if (event === "done") return data;
       else if (event === "error") throw new ApiError(502, { error: "ai_failed", message: data.message, balance: data.balance });
     }

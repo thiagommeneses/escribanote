@@ -51,7 +51,7 @@ export async function accountFetch(path, { method = "GET", body, signal } = {}) 
 }
 
 // IA da conta em streaming (SSE). onDelta recebe o texto acumulado; devolve o evento "done".
-export async function accountStream(path, body, { onDelta, signal } = {}) {
+export async function accountStream(path, body, { onDelta, onPhase, signal } = {}) {
   const acct = await getAccount();
   if (!acct) throw new AccountError(401, { error: "unauthenticated", message: "Conecte a sua conta Escribanote em Ajustes." });
   const res = await fetch(`${await accountBase()}/api/v1${path}`, {
@@ -75,6 +75,7 @@ export async function accountStream(path, body, { onDelta, signal } = {}) {
       const event = /^event: (.+)$/m.exec(chunk)?.[1];
       const data = JSON.parse(/^data: (.+)$/m.exec(chunk)?.[1] || "null");
       if (event === "delta") { text += data.text; onDelta?.(text); }
+      else if (event === "phase") onPhase?.(data.text);
       else if (event === "done") return data;
       else if (event === "error") throw new AccountError(502, { error: "ai_failed", message: data.message, balance: data.balance });
     }

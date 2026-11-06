@@ -1606,7 +1606,7 @@ function renderChatLog(streamText) {
     ? msgs
         .map((m, i) => {
           if (m.role !== "assistant") return `<div class="msg user">${userMsgHtml(m.text)}</div>`;
-          if (m.waiting) return `<div class="msg assistant">${spinHtml("Pensando…", state.chatT0 || Date.now())}</div>`;
+          if (m.waiting) return `<div class="msg assistant">${spinHtml(state.chatPhase || "Pensando…", state.chatT0 || Date.now())}</div>`;
           const done = !streaming || i < msgs.length - 1;
           const acts = done
             ? `<div class="msg-acts"><button type="button" class="linkish" data-copy="a" data-i="${i}">${icon("copiar")}Copiar resposta</button>${msgs[i - 1]?.role === "user" ? `<button type="button" class="linkish" data-copy="qa" data-i="${i}">${icon("copiar")}Copiar com a pergunta</button>` : ""}</div>`
@@ -1695,6 +1695,11 @@ function waitCard(el, { label, writing }) {
     paint();
   });
   return {
+    // Etapa antes do texto (analisando, pesquisando na web); depois que o texto chega, vale "writing".
+    phase(label) {
+      if (!q(".wait") || text) return;
+      q(".wait-label").textContent = label;
+    },
     update(t) {
       if (!q(".wait")) return;
       text = t;
@@ -1707,25 +1712,62 @@ function waitCard(el, { label, writing }) {
   };
 }
 
-function runAI(payload, onDelta, onDone) {
-  if (state.aiPort) state.aiPort.disconnect();
+// Conexão com a IA no service worker. Ele manda "beat" a cada 15 s; se a conexão cai (o Chrome encerrou o
+// processo) ou fica 60 s sem sinal, a espera termina com erro em vez de ficar "Pensando…" para sempre.
+const AI_SILENCE_MS = 60_000;
+const AI_DROPPED = "A conexão com a IA caiu antes da resposta (o Chrome encerrou o processo em segundo plano). Tente de novo.";
+function watchPort(port, onMessage, onDone) {
+  let finished = false;
+  let watchdog;
+  const end = (m) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(watchdog);
+    try {
+      port.disconnect();
+    } catch {}
+    if (state.aiPort === port) state.aiPort = null;
+    onDone(m);
+  };
+  const arm = () => {
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => end({ type: "error", message: "A IA ficou mais de 1 minuto sem dar sinal. Tente de novo." }), AI_SILENCE_MS);
+  };
+  arm();
+  port.onMessage.addListener((m) => {
+    arm();
+    onMessage(m);
+    if (m.type === "done" || m.type === "error") end(m);
+  });
+  port.onDisconnect.addListener(() => end({ type: "error", message: AI_DROPPED }));
+  // Cancelar pelo usuário: encerra sem mostrar erro.
+  return () => {
+    finished = true;
+    clearTimeout(watchdog);
+    try {
+      port.disconnect();
+    } catch {}
+  };
+}
+function runAI(payload, onDelta, onDone, onPhase) {
+  state.aiStop?.();
   const port = chrome.runtime.connect({ name: "ai" });
   state.aiPort = port;
-  port.onMessage.addListener((m) => {
-    if (m.type === "chat") state.chatId = m.chatId;
-    if (m.type === "delta") onDelta(m.text);
-    if (m.type === "done" || m.type === "error") {
-      port.disconnect();
-      state.aiPort = null;
-      onDone(m);
-    }
-  });
+  state.aiStop = watchPort(
+    port,
+    (m) => {
+      if (m.type === "chat") state.chatId = m.chatId;
+      if (m.type === "delta") onDelta(m.text);
+      if (m.type === "phase") onPhase?.(m.text);
+    },
+    onDone,
+  );
   port.postMessage(payload);
 }
 
 $("ata-gen").addEventListener("click", async () => {
   if (state.busy === "ata") {
-    state.aiPort?.disconnect();
+    state.aiStop?.();
     state.aiPort = null;
     state.busy = null;
     return renderAta();
@@ -1752,11 +1794,12 @@ $("ata-gen").addEventListener("click", async () => {
       await reloadSession();
       toast("Ata gerada");
     },
+    (p) => card.phase(p === "Escrevendo…" ? "Escrevendo a ata…" : p),
   );
 });
 $("review-run").addEventListener("click", async () => {
   if (state.busy === "review") {
-    state.aiPort?.disconnect();
+    state.aiStop?.();
     state.aiPort = null;
     state.busy = null;
     return renderAI();
@@ -1768,11 +1811,10 @@ $("review-run").addEventListener("click", async () => {
   $("review-info").innerHTML = spinHtml("Revisando…", reviewT0);
   const port = chrome.runtime.connect({ name: "ai" });
   state.aiPort = port;
-  port.onMessage.addListener(async (m) => {
+  state.aiStop = watchPort(port, (m) => {
     if (m.type === "progress") $("review-info").innerHTML = spinHtml(`Revisando… ${m.done} de ${m.total} falas · ${m.changed} correções`, reviewT0);
-    if (m.type === "done" || m.type === "error") {
-      port.disconnect();
-      state.aiPort = null;
+  }, async (m) => {
+    {
       state.busy = null;
       if (m.type === "error") {
         $("review-info").innerHTML = `<span style="color:var(--danger)">${esc(m.message)}</span>`;
@@ -2163,6 +2205,7 @@ async function ask(question, previousId) {
   if (!(await ensureApiPermission())) return toast("Permissão para a API negada");
   state.busy = "chat";
   state.chatT0 = Date.now();
+  state.chatPhase = null;
   state.pendingQuestion = question;
   $("chat-input").value = "";
   if (document.activeElement === $("chat-input")) paintCount($("chat-input"));
@@ -2174,10 +2217,21 @@ async function ask(question, previousId) {
       state.busy = null;
       state.pendingQuestion = null;
       if (m.type === "error") {
+        // Troca o indicador de espera pelo erro e devolve a pergunta à caixa, para tentar de novo sem redigitar.
+        $("chat-log").querySelector(".msg.assistant:last-child .wait-inline")?.closest(".msg")?.remove();
         $("chat-log").insertAdjacentHTML("beforeend", `<div class="msg assistant" style="color:var(--danger)">${esc(m.message)}</div>`);
+        if (!$("chat-input").value.trim()) {
+          $("chat-input").value = question;
+          paintCount($("chat-input"));
+        }
         return;
       }
       await reloadSession();
+    },
+    (p) => {
+      state.chatPhase = p;
+      const label = $("chat-log").querySelector(".msg.assistant:last-child .wait-label");
+      if (label) label.textContent = p;
     },
   );
 }

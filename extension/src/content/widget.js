@@ -630,14 +630,28 @@
     if (aiPort) aiPort.disconnect();
     $("ai-input").value = "";
     $("ai-answer").innerHTML = '<span class="thinking" role="status">Pensando<i>.</i><i>.</i><i>.</i></span>';
-    aiPort = chrome.runtime.connect({ name: "ai" });
+    const port = (aiPort = chrome.runtime.connect({ name: "ai" }));
+    // Sem sinal por 60 s (o service worker manda um a cada 15 s) ou com a conexão caída, mostra o erro.
+    let quiet;
+    const fail = (msg) => {
+      clearTimeout(quiet);
+      if (aiPort !== port) return;
+      $("ai-answer").textContent = msg;
+      try { port.disconnect(); } catch {}
+      aiPort = null;
+    };
+    const arm = () => { clearTimeout(quiet); quiet = setTimeout(() => fail("A IA ficou mais de 1 minuto sem dar sinal. Tente de novo."), 60_000); };
+    arm();
+    port.onDisconnect.addListener(() => fail("A conexão com a IA caiu antes da resposta. Tente de novo."));
     aiPort.onMessage.addListener((m) => {
+      arm();
       if (m.type === "chat") chatId = m.chatId;
       if (m.type === "delta" || m.type === "done") $("ai-answer").textContent = m.text;
       if (m.type === "error") $("ai-answer").textContent = m.message;
       if (m.type === "done" || m.type === "error") {
-        aiPort.disconnect();
-        aiPort = null;
+        clearTimeout(quiet);
+        port.disconnect();
+        if (aiPort === port) aiPort = null;
       }
     });
     aiPort.postMessage({ action: "chat", id: session.id, chatId, question });

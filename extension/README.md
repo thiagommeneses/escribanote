@@ -9,6 +9,15 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Esperas longas da IA sem travar (0.9.64)
+
+- Porta "ai" do service worker: `beat` a cada 15 s (`port.postMessage` + `chrome.runtime.getPlatformInfo`) mantém o
+  worker vivo enquanto a IA raciocina/pesquisa sem texto. No app, `watchPort()` encerra com erro em `onDisconnect`
+  ou após 60 s sem mensagem; o widget faz o mesmo.
+- `streamClaude`/`streamOnce`: `onPhase` com `phaseOf(content_block)` e tempo máximo sem bytes (`STREAM_IDLE_MS`,
+  120 s; `idleMs` ajustável). O servidor manda `event: phase` e um comentário `: ping` a cada 15 s em `streamAnswer`;
+  `accountStream` e `site/app/api.js` repassam `onPhase`.
+
 ## Cartão de espera da IA (0.9.63)
 
 - `app.js`: `waitCard(el, { label, writing })` troca o texto ao vivo da ata por esqueleto, etapa, tempo (`data-since`,

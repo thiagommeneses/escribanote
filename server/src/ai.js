@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { refund, reserve } from "./credits.js";
 import { fail } from "./http.js";
-import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, isHeavyQuestion, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, SHOTS_MAX, withSources, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
+import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, isHeavyQuestion, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, SHOTS_MAX, withSources, phaseOf, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
 import { cleanDoc, loadDoc, requirePro, saveMeeting } from "./meetings.js";
 
 // US$ por milhão de tokens (entrada, saída, leitura de cache, escrita de cache de 5 min).
@@ -137,6 +137,8 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
     });
     const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     send("start", { balance: call.balance, credits });
+    // Comentário SSE a cada 15 s: mantém proxies e o service worker da extensão vivos enquanto a IA raciocina.
+    const ping = setInterval(() => !res.writableEnded && !res.destroyed && res.write(": ping\n\n"), 15_000);
     const params = {
       model,
       max_tokens: maxTokens,
@@ -163,6 +165,9 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
           if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") {
             text += ev.delta.text;
             send("delta", { text: ev.delta.text });
+          } else if (ev.type === "content_block_start") {
+            const ph = phaseOf(ev.content_block);
+            if (ph) send("phase", { text: ph });
           }
         }
         final = await stream.finalMessage();
@@ -186,6 +191,7 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
       const balance = await failed(req, call, credits, err).catch(() => call.balance + credits);
       send("error", { message: friendly(err), balance });
     }
+    clearInterval(ping);
     res.end();
   }
 

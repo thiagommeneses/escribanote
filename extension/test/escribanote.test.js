@@ -1324,3 +1324,27 @@ test("streamClaude: sem onDelta (capítulos, revisão) o texto ainda é montado"
     globalThis.fetch = real;
   }
 });
+
+test("streamClaude: avisa as etapas (analisando, pesquisando, escrevendo) e desiste após o tempo sem dados", async () => {
+  const { phaseOf } = await import("../src/lib/ai.js");
+  assert.equal(phaseOf({ type: "thinking" }), "Analisando…");
+  assert.equal(phaseOf({ type: "server_tool_use", name: "web_search" }), "Pesquisando na web…");
+  assert.equal(phaseOf({ type: "tool_use" }), null);
+  const real = globalThis.fetch;
+  const ev = (e) => `data: ${JSON.stringify(e)}\n\n`;
+  try {
+    globalThis.fetch = async () => new Response(new ReadableStream({ start(c) {
+      c.enqueue(new TextEncoder().encode(ev({ type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } }) + ev({ type: "content_block_start", index: 1, content_block: { type: "server_tool_use", id: "s", name: "web_search", input: {} } }) + ev({ type: "content_block_start", index: 2, content_block: { type: "text", text: "" } }) + ev({ type: "content_block_delta", index: 2, delta: { type: "text_delta", text: "ok" } }) + ev({ type: "message_delta", delta: { stop_reason: "end_turn" } })));
+      c.close();
+    } }), { status: 200 });
+    const phases = [];
+    const r = await streamClaude({ apiKey: "k", model: "claude-sonnet-5-5", system: "s", messages: [{ role: "user", content: "x" }], onPhase: (p) => phases.push(p) });
+    assert.equal(r.text, "ok");
+    assert.deepEqual(phases, ["Analisando…", "Pesquisando na web…", "Escrevendo…"]);
+    // Conexão que para de mandar dados: erro claro em vez de esperar para sempre.
+    globalThis.fetch = async () => new Response(new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(ev({ type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } }))); } }), { status: 200 });
+    await assert.rejects(streamClaude({ apiKey: "k", model: "claude-sonnet-5-5", system: "s", messages: [{ role: "user", content: "x" }], idleMs: 150 }), /parou de responder/);
+  } finally {
+    globalThis.fetch = real;
+  }
+});

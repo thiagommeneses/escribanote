@@ -2,6 +2,12 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.64 beta — 2026-11-06
+- Corrigido "Pensando…" que nunca terminava em perguntas longas (roteiros grandes com capturas de tela e pesquisa na web): enquanto a IA raciocinava ou pesquisava sem mandar texto, o Chrome encerrava o processo da extensão em segundo plano e a tela não percebia. Agora a extensão manda um sinal de vida a cada 15 segundos e a resposta continua normalmente.
+- Se a conexão ainda assim cair, ou a IA ficar 1 minuto sem dar sinal, a espera termina com uma mensagem clara e a pergunta volta para a caixa, para tentar de novo sem redigitar. Vale para perguntas, ata, revisão e o widget da reunião.
+- A espera mostra a etapa real: "Analisando…", "Pesquisando na web…", "Lendo os resultados da pesquisa…" (extensão, ata e app web).
+- Uma resposta da API que fica 2 minutos sem enviar nada é dada como perdida, com aviso, em vez de esperar para sempre.
+
 ## 0.9.63 beta — 2026-11-06
 - Ata: em vez do texto aparecendo aos pedaços, um cartão de espera mostra a etapa ("Lendo a transcrição…", depois "Escrevendo a ata…"), o tempo decorrido e quantas palavras já foram escritas, sobre um esqueleto animado da ata. "Mostrar prévia" abre o texto parcial para quem quiser acompanhar; no fim a ata aparece de uma vez, já formatada. Vale na extensão e no app web.
 - Pergunte à IA: o "Pensando…" ganhou indicador animado e tempo decorrido (extensão e app web); no widget da reunião, reticências animadas. Quando a resposta começa, ela segue aparecendo ao vivo, como num chat.
