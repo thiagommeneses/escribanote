@@ -727,14 +727,14 @@ async function commitAta(s, settings) {
 // Instruções extras em vigor para a ata: as da reunião, senão as padrão dos Ajustes.
 const ataInstructions = (s, settings) => (s.ataPrompt || "").trim() || (settings.ataInstructions || "").trim();
 
-async function runAta(ai, s, settings, { onDelta, signal } = {}) {
+async function runAta(ai, s, settings, { onDelta, onPhase, signal } = {}) {
   const template = await templateFor(s, settings);
   const instructions = ataInstructions(s, settings);
   if (ai.kind === "key") {
-    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...ataRequest(s, settings.tags, promptGlossary(settings), template, instructions), onDelta, signal });
+    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...ataRequest(s, settings.tags, promptGlossary(settings), template, instructions), onDelta, onPhase, signal });
   }
   const done = await accountCall(() =>
-    accountStream("/ai/summary", { meeting: forAccount(s), tags: settings.tags, glossary: promptGlossary(settings), template, instructions }, { onDelta, signal }),
+    accountStream("/ai/summary", { meeting: forAccount(s), tags: settings.tags, glossary: promptGlossary(settings), template, instructions }, { onDelta, onPhase, signal }),
   );
   return { text: done.text, model: done.model, stopReason: "end_turn", createdAt: Date.now(), via: "account" };
 }
@@ -745,19 +745,19 @@ function withPrevious(messages, previous, tags) {
   if (ctx && out.length) out[out.length - 1] = { ...out.at(-1), text: `${ctx}\n\n${out.at(-1).text}` };
   return out;
 }
-async function runChat(ai, s, messages, settings, { previous, onDelta, signal } = {}) {
+async function runChat(ai, s, messages, settings, { previous, onDelta, onPhase, signal } = {}) {
   const support = await supportItems(s);
   const shots = await shotItems(s);
   const web = !!s.aiOptions?.web;
   if (ai.kind === "key") {
     const heavyModel = chatModel(settings, true);
     const { heavy, ...reqBody } = chatRequest(s, messages, { tags: settings.tags, previous, glossary: promptGlossary(settings), support: [...support, ...shots], web, model: heavyModel });
-    const r = await streamClaude({ apiKey: ai.apiKey, model: chatModel(settings, heavy), ...reqBody, maxTokens: ANSWER_MAX_TOKENS, onDelta, signal });
+    const r = await streamClaude({ apiKey: ai.apiKey, model: chatModel(settings, heavy), ...reqBody, maxTokens: ANSWER_MAX_TOKENS, onDelta, onPhase, signal });
     return { ...r, text: withSources(r.text, r.sources) };
   }
   const done = await accountCall(() =>
     // A conta recebe a reunião atual; as anteriores vão como material de consulta junto da última pergunta.
-    accountStream("/ai/ask", { meeting: forAccount(s), history: withPrevious(messages, previous, settings.tags), tags: settings.tags, glossary: promptGlossary(settings), ...(support.length ? { support } : {}), ...(shots.length ? { shots } : {}), ...(web ? { web: true } : {}) }, { onDelta, signal }),
+    accountStream("/ai/ask", { meeting: forAccount(s), history: withPrevious(messages, previous, settings.tags), tags: settings.tags, glossary: promptGlossary(settings), ...(support.length ? { support } : {}), ...(shots.length ? { shots } : {}), ...(web ? { web: true } : {}) }, { onDelta, onPhase, signal }),
   );
   return { text: done.text, model: done.model };
 }
@@ -1854,6 +1854,14 @@ chrome.runtime.onConnect.addListener((port) => {
         port.postMessage(m);
       } catch {}
     };
+    // Sinal de vida a cada 15 s: sem ele, o Chrome encerra o service worker após ~30 s sem eventos da extensão
+    // enquanto a IA raciocina ou pesquisa sem mandar texto, e a pergunta fica "Pensando…" para sempre.
+    const beat = setInterval(() => {
+      post({ type: "beat" });
+      chrome.runtime.getPlatformInfo(() => {});
+    }, 15_000);
+    port.onDisconnect.addListener(() => clearInterval(beat));
+    const onPhase = (text) => post({ type: "phase", text });
     try {
       const s = await getSession(req.id);
       if (!s) throw new Error("Reunião não encontrada.");
@@ -1871,7 +1879,7 @@ chrome.runtime.onConnect.addListener((port) => {
       if (req.action === "ata") {
         // A ata atual entra no histórico antes de ser substituída (se ainda não estiver lá).
         if (s.summary?.text) commitSummary(s, s.summary, { source: s.summary.model === "manual" ? "edit" : "ai" });
-        s.summary = await runAta(ai, s, settings, { onDelta, signal: abort.signal });
+        s.summary = await runAta(ai, s, settings, { onDelta, onPhase, signal: abort.signal });
         await commitAta(s, settings);
         await changed(s, { now: true });
         post({ type: "done", text: s.summary.text });
@@ -1888,7 +1896,7 @@ chrome.runtime.onConnect.addListener((port) => {
       post({ type: "chat", chatId: chat.id });
       const prevIds = [...new Set([...(Array.isArray(req.previousIds) ? req.previousIds : []), ...(req.previousId ? [req.previousId] : [])])].slice(0, 8);
       const previous = (await Promise.all(prevIds.map((pid) => getSession(pid)))).filter(Boolean);
-      const result = await runChat(ai, s, chat.messages, settings, { previous, onDelta, signal: abort.signal });
+      const result = await runChat(ai, s, chat.messages, settings, { previous, onDelta, onPhase, signal: abort.signal });
       chat.messages.push({ role: "assistant", text: result.text, at: Date.now() });
       await changed(s, { now: true });
       post({ type: "done", text: result.text, chatId: chat.id });
@@ -1902,6 +1910,8 @@ chrome.runtime.onConnect.addListener((port) => {
         await changed(s, { now: true });
       }
       post({ type: "error", message: err.name === "AbortError" ? "Cancelado." : err.message });
+    } finally {
+      clearInterval(beat);
     }
   });
 });

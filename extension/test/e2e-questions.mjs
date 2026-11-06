@@ -262,6 +262,36 @@ try {
     }
     await waitFor(() => ev("!document.querySelector('#ata-body .wait') && document.querySelector('#ata-body').textContent.includes('Próximos passos definidos')"), "ata pronta", 15000);
     console.log("✓ ata: cartão de espera com etapa, tempo e palavras; prévia só ao pedir; ata aparece formatada no fim");
+
+    // Pergunta: a etapa ("Pesquisando na web…") aparece no lugar de "Pensando…" antes do texto.
+    await evIn(swSid)(`(() => {
+      globalThis.fetch = async (url, init) => {
+        if (!String(url).startsWith("https://api.anthropic.com/")) return globalThis.__realFetch(url, init);
+        const ev = (e) => "data: " + JSON.stringify(e) + "\\n\\n";
+        const enc = new TextEncoder();
+        return new Response(new ReadableStream({ async start(c) {
+          c.enqueue(enc.encode(ev({ type: "content_block_start", index: 0, content_block: { type: "server_tool_use", id: "s1", name: "web_search", input: {} } })));
+          await new Promise((r) => setTimeout(r, 2500));
+          c.enqueue(enc.encode(ev({ type: "content_block_start", index: 1, content_block: { type: "text", text: "" } }) + ev({ type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "Resposta com contexto." } }) + ev({ type: "message_delta", delta: { stop_reason: "end_turn" } })));
+          c.close();
+        } }), { status: 200 });
+      };
+    })()`);
+    await ev("document.querySelector('[data-tab=\"ai\"]').click()");
+    await ev(`(() => { const i = document.querySelector('#chat-input'); i.value = 'Qual o contexto do dia?'; document.querySelector('#chat-send').click(); })()`);
+    await waitFor(() => ev("document.querySelector('#chat-log .msg.assistant:last-child .wait-label')?.textContent === 'Pesquisando na web…'"), "etapa no chat");
+    await waitFor(() => ev("document.querySelector('#chat-log').textContent.includes('Resposta com contexto.')"), "resposta no chat", 10000);
+    console.log("✓ pergunta: etapa 'Pesquisando na web…' no lugar de 'Pensando…' até o texto chegar");
+
+    // Conexão que cai no meio (o Chrome encerrou o service worker): erro claro e a pergunta volta para a caixa.
+    await evIn(swSid)(`(() => { globalThis.fetch = async (url, init) => String(url).startsWith("https://api.anthropic.com/") ? new Response(new ReadableStream({ start() {} }), { status: 200 }) : globalThis.__realFetch(url, init); })()`);
+    await ev(`(() => { const i = document.querySelector('#chat-input'); i.value = 'Pergunta que vai cair'; document.querySelector('#chat-send').click(); })()`);
+    await waitFor(() => ev("!!document.querySelector('#chat-log .msg.assistant:last-child .wait-inline')"), "esperando a IA");
+    await send("Target.closeTarget", { targetId: sw.targetId }).catch(() => {});
+    await waitFor(() => ev("document.querySelector('#chat-log').textContent.includes('A conexão com a IA caiu')"), "erro de conexão caída", 10000);
+    assert.equal(await ev("!!document.querySelector('#chat-log .wait-inline')"), false, "o indicador de espera some");
+    assert.equal(await ev("document.querySelector('#chat-input').value"), "Pergunta que vai cair");
+    console.log("✓ conexão caída: erro no lugar do 'Pensando…' e a pergunta volta para a caixa");
     await ev(`chrome.storage.local.remove("apiKey")`);
   }
 

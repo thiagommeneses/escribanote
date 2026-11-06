@@ -380,13 +380,13 @@ export class EmptyAnswer extends Error {
 }
 
 // Chamada em streaming à Messages API; repassa o texto parcial para onDelta.
-export async function streamClaude({ apiKey, model, system, messages, effort = "medium", maxTokens = 16000, format, tools, onDelta, signal }) {
+export async function streamClaude({ apiKey, model, system, messages, effort = "medium", maxTokens = 16000, format, tools, onDelta, onPhase, signal, idleMs }) {
   // Com ferramentas do servidor (pesquisa na web), a resposta pode pausar (pause_turn): reenvia com o que já veio.
   let convo = messages;
   let text = "";
   const sources = [];
   for (let turn = 0; turn < 4; turn++) {
-    const r = await streamOnce({ apiKey, model, system, messages: convo, effort, maxTokens, format, tools, signal, onText: (t) => { text += t; onDelta?.(text); } });
+    const r = await streamOnce({ apiKey, model, system, messages: convo, effort, maxTokens, format, tools, signal, onPhase, idleMs, onText: (t) => { text += t; onDelta?.(text); } });
     for (const b of r.blocks) for (const c of b.citations || []) if (c.url) sources.push({ url: c.url, title: c.title });
     if (r.stopReason === "refusal") throw new Error("O modelo recusou esta solicitação.");
     // Se o texto não veio em text_delta (ex.: bloco inteiro no content_block_start), usa os blocos completos.
@@ -406,7 +406,19 @@ export async function streamClaude({ apiKey, model, system, messages, effort = "
 }
 
 // Um pedido em streaming; devolve os blocos completos (texto, pesquisa e resultados) para continuar depois de pause_turn.
-async function streamOnce({ apiKey, model, system, messages, effort, maxTokens, format, tools, signal, onText }) {
+// Sem nenhum byte por este tempo (a API manda "ping" durante o raciocínio), a conexão é dada como perdida.
+export const STREAM_IDLE_MS = 120_000;
+// Etapa mostrada enquanto ainda não há texto (o raciocínio não aparece: display "omitted").
+export function phaseOf(block) {
+  if (!block) return null;
+  if (block.type === "thinking" || block.type === "redacted_thinking") return "Analisando…";
+  if (block.type === "server_tool_use") return "Pesquisando na web…";
+  if (block.type === "web_search_tool_result") return "Lendo os resultados da pesquisa…";
+  if (block.type === "text") return "Escrevendo…";
+  return null;
+}
+async function streamOnce({ apiKey, model, system, messages, effort, maxTokens, format, tools, signal, onText, onPhase, idleMs }) {
+  idleMs ||= STREAM_IDLE_MS;
   const body = {
     model,
     max_tokens: maxTokens,
@@ -443,7 +455,18 @@ async function streamOnce({ apiKey, model, system, messages, effort, maxTokens, 
   const blocks = [];
   const json = new Map(); // índice -> partial_json de blocos de ferramenta
   for (;;) {
-    const { value, done } = await reader.read();
+    let timer;
+    const idle = new Promise((_, fail) => (timer = setTimeout(() => fail(new Error(`A IA parou de responder (${Math.round(idleMs / 60000)} min sem dados). Tente de novo.`)), idleMs)));
+    let chunk;
+    try {
+      chunk = await Promise.race([reader.read(), idle]);
+    } catch (err) {
+      reader.cancel().catch(() => {});
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+    const { value, done } = chunk;
     if (done) break;
     buffer += value.replace(/\r\n?/g, "\n");
     let sep;
@@ -461,6 +484,8 @@ async function streamOnce({ apiKey, model, system, messages, effort, maxTokens, 
       events++;
       if (ev.type === "content_block_start") {
         blocks[ev.index] = { ...ev.content_block };
+        const ph = phaseOf(ev.content_block);
+        if (ph) onPhase?.(ph);
         if (ev.content_block.type === "text") blocks[ev.index].text = ev.content_block.text || "";
       } else if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") {
         const b = blocks[ev.index] || (blocks[ev.index] = { type: "text", text: "" });

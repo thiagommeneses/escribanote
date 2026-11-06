@@ -990,7 +990,7 @@ const since = (t0) => {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 };
 setInterval(() => document.querySelectorAll("[data-since]").forEach((el) => (el.textContent = since(Number(el.dataset.since)))), 1000);
-const thinkingHtml = (t0 = Date.now()) => `<span class="wait-inline" role="status"><span class="spin" aria-hidden="true"></span>Pensando…<time class="wait-time" data-since="${t0}">${since(t0)}</time></span>`;
+const thinkingHtml = (t0 = Date.now()) => `<span class="wait-inline" role="status"><span class="spin" aria-hidden="true"></span><span class="wait-label">Pensando…</span><time class="wait-time" data-since="${t0}">${since(t0)}</time></span>`;
 function waitCard(el, { label, writing }) {
   const t0 = Date.now();
   el.innerHTML = `<div class="wait" role="status" aria-live="polite">
@@ -1012,6 +1012,9 @@ function waitCard(el, { label, writing }) {
     paint();
   });
   return {
+    phase(label) {
+      if (q(".wait") && !text) q(".wait-label").textContent = label;
+    },
     update(t) {
       if (!q(".wait")) return;
       text = t;
@@ -1038,6 +1041,7 @@ async function generateAta() {
     const done = await stream("/ai/summary", { meetingId: state.meeting.id, ...(template ? { template } : {}), ...(instructions ? { instructions } : {}) }, {
       onStart: (d) => setCredits(d.balance),
       onDelta: (text) => card.update(text),
+      onPhase: (p) => card.phase(p === "Escrevendo…" ? "Escrevendo a ata…" : p),
     });
     setCredits(done.balance);
     const r = await api.get(`/meetings/${encodeURIComponent(state.meeting.id)}`);
@@ -1073,6 +1077,10 @@ async function askMeeting(question) {
       onDelta: (text) => {
         item.a = text;
         answerEl().innerHTML = mdToHtml(text);
+      },
+      onPhase: (p) => {
+        const l = answerEl()?.querySelector(".wait-label");
+        if (l) l.textContent = p;
       },
     });
     item.a = done.text;
