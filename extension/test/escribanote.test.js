@@ -1211,7 +1211,7 @@ test("chat: material de apoio entra antes da primeira pergunta; pergunta pesada 
 });
 
 // ---------------- Capturas para a IA, pesquisa na web e continuação após pause_turn ----------------
-import { streamClaude, sampleShots, withSources, webSearchTool } from "../src/lib/ai.js";
+import { streamClaude, EmptyAnswer, sampleShots, withSources, webSearchTool } from "../src/lib/ai.js";
 test("chat: capturas espaçadas, pesquisa na web e fontes", () => {
   const shots = Array.from({ length: 50 }, (_, i) => ({ id: String(i), at: i }));
   const pick = sampleShots(shots, 20);
@@ -1286,6 +1286,40 @@ test("streamClaude: só raciocínio até o limite de tokens vira erro claro, nã
   ]);
   try {
     await assert.rejects(streamClaude({ apiKey: "k", model: "claude-opus-5-5", system: "s", messages: [{ role: "user", content: "x" }] }), /limite de tokens raciocinando/);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test("streamClaude: aproveita texto que vem inteiro no content_block_start, SSE com \\r\\n e resposta JSON comum", async () => {
+  const real = globalThis.fetch;
+  const body = (txt) => new Response(new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(txt)); c.close(); } }), { status: 200 });
+  const ev = (e, nl = "\n") => `event: ${e.type}${nl}data: ${JSON.stringify(e)}${nl}${nl}`;
+  const cases = [
+    [ev({ type: "content_block_start", index: 0, content_block: { type: "text", text: '{"chapters":[]}' } }) + ev({ type: "content_block_stop", index: 0 }) + ev({ type: "message_delta", delta: { stop_reason: "end_turn" } }), '{"chapters":[]}'],
+    [ev({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }, "\r\n") + ev({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "oi" } }, "\r\n") + ev({ type: "message_delta", delta: { stop_reason: "end_turn" } }, "\r\n"), "oi"],
+    [JSON.stringify({ content: [{ type: "text", text: "json comum" }], stop_reason: "end_turn" }), "json comum"],
+  ];
+  try {
+    for (const [raw, want] of cases) {
+      globalThis.fetch = async () => body(raw);
+      const r = await streamClaude({ apiKey: "k", model: "claude-opus-5-5", system: "s", messages: [{ role: "user", content: "x" }] });
+      assert.equal(r.text, want);
+    }
+    globalThis.fetch = async () => body(ev({ type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } }) + ev({ type: "message_delta", delta: { stop_reason: "end_turn" } }));
+    await assert.rejects(streamClaude({ apiKey: "k", model: "claude-opus-5-5", system: "s", messages: [{ role: "user", content: "x" }] }), (e) => e instanceof EmptyAnswer && /motivo: end_turn; blocos: thinking; eventos: 2/.test(e.message));
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test("streamClaude: sem onDelta (capítulos, revisão) o texto ainda é montado", async () => {
+  const real = globalThis.fetch;
+  const ev = (e) => `data: ${JSON.stringify(e)}\n\n`;
+  globalThis.fetch = async () => new Response(new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(ev({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }) + ev({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: '{"chapters":' } }) + ev({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "[]}" } }) + ev({ type: "message_delta", delta: { stop_reason: "end_turn" } }))); c.close(); } }), { status: 200 });
+  try {
+    const r = await streamClaude({ apiKey: "k", model: "claude-opus-5-5", system: "s", messages: [{ role: "user", content: "x" }] });
+    assert.equal(r.text, '{"chapters":[]}');
   } finally {
     globalThis.fetch = real;
   }

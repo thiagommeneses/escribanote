@@ -9,6 +9,15 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Texto das chamadas sem streaming visível (0.9.62)
+
+- `streamClaude` acumulava o texto dentro de `onDelta?.((text += t))`: sem `onDelta`, a chamada opcional não avalia o
+  argumento e o texto ficava vazio (capítulos, revisão, modelo a partir de PDF). Agora acumula antes de chamar; o mesmo
+  em `accountStream` (`lib/account.js`) e em `site/app/api.js`.
+- `streamOnce` normaliza `\r\n`, conta os eventos, aceita resposta JSON não-SSE e `streamClaude` usa o texto dos blocos
+  completos quando não houve `text_delta`. Resposta sem texto lança `EmptyAnswer` com motivo, blocos e eventos;
+  `runChapters` tenta de novo sem `format` nesse caso.
+
 ## Capítulos sem resposta vazia (0.9.61)
 
 - `runChapters`, o modelo a partir de PDF e a revisão chamam `streamClaude` com `maxTokens` 16000 (antes 4000/8000):
