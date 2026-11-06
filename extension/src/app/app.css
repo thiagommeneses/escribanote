@@ -657,3 +657,14 @@ body.usage-personal .inst { display: none !important; }
 .switch .badge::after { content: none; }
 .chat-scope { display: flex; align-items: center; gap: 6px; margin: -2px 0 8px; color: var(--text-2); }
 .chat-scope select { width: auto; max-width: 100%; padding: 3px 8px; font-size: 12.5px; }
+
+/* Contagem de caracteres */
+.count { font-size: 10.5px; line-height: 1.4; color: var(--muted); font-variant-numeric: tabular-nums; pointer-events: none; white-space: nowrap; }
+.count.warn { color: #d97706; }
+.count.full { color: var(--danger); font-weight: 600; }
+.cw { position: relative; }
+.cw > .count { position: absolute; right: 8px; bottom: 6px; }
+.cw > input { padding-right: 64px !important; }
+.cw > textarea { padding-bottom: 18px !important; }
+#count-float { position: fixed; z-index: 70; padding: 1px 7px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+#count-float[hidden] { display: none; }

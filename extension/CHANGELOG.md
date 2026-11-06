@@ -2,6 +2,10 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.56 beta — 2026-11-06
+- Contagem de caracteres (ex.: 17/60) nos modelos de perguntas — nome curto e pergunta, também no rascunho de modelo novo —, sempre visível no canto do campo; fica laranja perto do limite e vermelha no limite.
+- Nos outros campos com limite (título da reunião, nova nota, instruções e rótulo da versão da ata; em Ajustes, contexto da equipe, instruções padrão da ata, nome do modelo de ata e nome da tag), a contagem aparece num selo sob o campo enquanto ele é editado.
+
 ## 0.9.55 beta — 2026-11-05
 - Modelos de perguntas (aba IA) revistos: o alfinete muda na hora ao fixar ou desafixar (antes só atualizava depois de clicar em outro lugar) e o desafixado fica visivelmente diferente (alfinete inclinado e apagado, cartão tracejado).
 - "+ Novo modelo" abre um rascunho no topo da lista, com nome e pergunta em branco; ele só é salvo (e vira atalho) com os dois preenchidos. Enter salva, Esc cancela. Os "Nova pergunta" que a versão anterior criava a cada clique somem sozinhos.

@@ -99,10 +99,22 @@ try {
   await ev("document.querySelector('#toast button').click()");
   await waitFor(() => ev("!!document.querySelector('.q-row[data-id=\"pontos\"]')"), "desfazer restaura");
   console.log("✓ apagar e desfazer");
+  // Contagem de caracteres: fixa nos modelos, flutuante no título da reunião.
+  assert.equal(await ev("document.querySelector('.q-row[data-id=\"pontos\"] [data-k=\"label\"] + .count').textContent"), "17/60");
+  await ev(`(() => { const el = document.querySelector('.q-row[data-id="pontos"] [data-k="text"]'); el.focus(); el.value = 'x'.repeat(2000); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  assert.deepEqual(await ev("(() => { const c = document.querySelector('.q-row[data-id=\"pontos\"] [data-k=\"text\"] + .count'); return [c.textContent, c.classList.contains('full')]; })()"), ["2.000/2.000", true]);
+  await ev(`(() => { const el = document.querySelector('.q-row[data-id="pontos"] [data-k="text"]'); el.value = 'Quais são os pontos principais?'; el.dispatchEvent(new Event('input', { bubbles: true })); el.blur(); })()`);
+  await ev("document.querySelector('#m-title').focus()");
+  assert.deepEqual(await ev("(() => { const f = document.querySelector('#count-float'); return [f.hidden, f.textContent]; })()"), [false, `${sample.title.length}/200`]);
+  await ev("document.querySelector('#m-title').blur()");
+  assert.equal(await ev("document.querySelector('#count-float').hidden"), true);
+  console.log("✓ contagem de caracteres nos modelos e no título");
+
   if (process.env.SHOT) {
     // Captura da seção para conferência visual: um modelo desafixado e o rascunho aberto.
     await send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 1400, deviceScaleFactor: 1, mobile: false }, sessionId);
     await ev("document.documentElement.dataset.theme = 'dark'; document.querySelector('#q-add').click()");
+    await ev(`(() => { const el = document.querySelector('[data-draft] [data-k="label"]'); el.value = 'Um nome de modelo bem comprido para ver a contagem ficar laranja'.slice(0, 56); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await sleep(500);
     await ev("document.querySelector('.chat').scrollIntoView()");
     await sleep(300);
