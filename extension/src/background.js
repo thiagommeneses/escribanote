@@ -512,7 +512,7 @@ async function openAfterCall(s, settings) {
 async function runChapters(ai, s, settings) {
   let chapters;
   if (ai.kind === "key") {
-    const r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...chaptersRequest(s), maxTokens: 4000 });
+    const r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...chaptersRequest(s), maxTokens: 16000 }); // o raciocínio do modelo também gasta tokens: 4000 esgotava antes do JSON
     chapters = parseChapters(r.text, s);
   } else {
     // Conta Pro: endpoint próprio, com esquema JSON e a resposta já validada no servidor (1 crédito).
@@ -698,7 +698,7 @@ async function importTemplate(ai, { pdfBase64, text }) {
   const req = pdfBase64 ? templateFromPdfRequest(pdfBase64) : templateFromTextRequest(text || "");
   if (ai.kind === "key") {
     const settings = await getSettings();
-    const r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...req, maxTokens: 8000 });
+    const r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...req, maxTokens: 16000 });
     return r.text.trim();
   }
   const r = await accountCall(() => accountFetch("/ai/template", { method: "POST", body: pdfBase64 ? { pdfBase64 } : { text } }));
@@ -755,7 +755,7 @@ async function runChat(ai, s, messages, settings, { previous, onDelta, signal } 
 
 async function runReview(ai, s, items, context, settings) {
   if (ai.kind === "key") {
-    const res = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...reviewRequest(items, { glossary: promptGlossary(settings), context }), maxTokens: 8000 });
+    const res = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...reviewRequest(items, { glossary: promptGlossary(settings), context }), maxTokens: 16000 });
     return parseReview(res.text, items);
   }
   const r = await accountCall(() => accountFetch("/ai/review", { method: "POST", body: { meetingId: s.id, items, context, glossary: promptGlossary(settings) } }));

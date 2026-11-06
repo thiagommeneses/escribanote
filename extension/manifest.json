@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Escribanote — Transcrição de Reuniões",
   "short_name": "Escribanote",
-  "version": "0.9.60",
+  "version": "0.9.61",
   "version_name": "0.9.60 beta",
   "description": "Transcrição local e privada do Google Meet, Teams, Zoom e huddles do Slack: reconhecimento de alta precisão (Whisper local), revisão por IA com glossário, widget na reunião, destaques, notas e análise de fala.",
   "minimum_chrome_version": "116",

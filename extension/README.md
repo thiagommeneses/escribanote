@@ -9,6 +9,12 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Capítulos sem resposta vazia (0.9.61)
+
+- `runChapters`, o modelo a partir de PDF e a revisão chamam `streamClaude` com `maxTokens` 16000 (antes 4000/8000):
+  o raciocínio adaptativo conta no `max_tokens` e podia consumir tudo antes do JSON. No servidor, `/ai/chapters` usa 16000.
+- `streamClaude`: texto vazio com `stop_reason: max_tokens` gera um erro específico em vez de "A resposta veio vazia.".
+
 ## Capturas para a IA, captura automática e pesquisa na web (0.9.60)
 
 - `session.aiOptions` (`shots`, `web`) vale para toda pergunta da reunião. `shotItems()` escolhe até `SHOTS_MAX`

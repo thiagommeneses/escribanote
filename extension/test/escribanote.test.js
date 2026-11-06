@@ -1274,3 +1274,19 @@ test("streamClaude: continua após pause_turn, devolve blocos de pensamento inta
     globalThis.fetch = real;
   }
 });
+
+test("streamClaude: só raciocínio até o limite de tokens vira erro claro, não 'vazia' genérico", async () => {
+  const sse = (events) => new Response(new ReadableStream({ start(c) { for (const e of events) c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(e)}\n\n`)); c.close(); } }), { status: 200 });
+  const real = globalThis.fetch;
+  globalThis.fetch = async () => sse([
+    { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } },
+    { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "pensando muito" } },
+    { type: "content_block_stop", index: 0 },
+    { type: "message_delta", delta: { stop_reason: "max_tokens" } },
+  ]);
+  try {
+    await assert.rejects(streamClaude({ apiKey: "k", model: "claude-opus-5-5", system: "s", messages: [{ role: "user", content: "x" }] }), /limite de tokens raciocinando/);
+  } finally {
+    globalThis.fetch = real;
+  }
+});

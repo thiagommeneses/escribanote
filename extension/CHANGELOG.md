@@ -2,6 +2,10 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.61 beta — 2026-11-06
+- Corrigido "Dividir em capítulos" respondendo "A resposta veio vazia" com a sua chave: o modelo (Opus 5.5 por padrão) raciocina antes de responder e gastava todo o limite de 4.000 tokens nisso, sem sobrar o texto. O limite subiu para 16.000 nos capítulos, no modelo a partir de PDF e na revisão (também no servidor Pro).
+- Quando a resposta ainda assim vier vazia por falta de tokens, o erro diz isso e sugere tentar de novo ou escolher um modelo mais rápido.
+
 ## 0.9.60 beta — 2026-11-06
 - A IA lê as capturas de tela: na aba IA, "Enviar as capturas de tela" manda até 20 capturas da reunião (espaçadas, cada uma com o horário) junto com a pergunta, para ler gráficos, preços e slides que a fala não diz. A IA cita o horário da captura e separa o que viu na tela do que foi dito.
 - Captura automática do conteúdo compartilhado (Ajustes › Capturas de tela e atalhos): a cada 1, 2, 5 ou 10 minutos durante a reunião, guarda o quadro da apresentação ou tela compartilhada, só quando ele muda (funciona com a aba da reunião em segundo plano). Aparecem menores na linha do tempo, marcadas como "automática".
