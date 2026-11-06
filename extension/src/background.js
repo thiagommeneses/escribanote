@@ -953,12 +953,32 @@ async function widgetView(s) {
 async function screenshot(s, tabId) {
   const tab = await chrome.tabs.get(tabId);
   if (!tab.active) throw new Error("Deixe a aba da reunião visível para capturar a tela.");
-  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 75 });
+  const shared = (await getSettings()).shotArea === "shared" ? await chrome.tabs.sendMessage(tabId, { type: "shared-shot" }).catch(() => null) : null;
+  let dataUrl = shared && shared.dataUrl;
+  if (!dataUrl) {
+    dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 75 });
+    if (shared && shared.rect) dataUrl = await cropShot(dataUrl, shared.rect, shared.vw).catch(() => dataUrl);
+  }
   const id = Date.now().toString(36);
   await chrome.storage.local.set({ [`shot:${s.id}:${id}`]: dataUrl });
   s.shots.push({ id, at: Date.now() });
   await changed(s, { now: true });
   return id;
+}
+
+// Recorta a captura da aba no retângulo do vídeo compartilhado (coordenadas da página, em CSS px).
+async function cropShot(dataUrl, rect, vw) {
+  const bmp = await createImageBitmap(await (await fetch(dataUrl)).blob());
+  const k = bmp.width / vw;
+  const x = Math.round(rect.x * k), y = Math.round(rect.y * k);
+  const w = Math.min(Math.round(rect.w * k), bmp.width - x), h = Math.min(Math.round(rect.h * k), bmp.height - y);
+  if (w < 16 || h < 16) return dataUrl;
+  const c = new OffscreenCanvas(w, h);
+  c.getContext("2d").drawImage(bmp, x, y, w, h, 0, 0, w, h);
+  const bytes = new Uint8Array(await (await c.convertToBlob({ type: "image/jpeg", quality: 0.8 })).arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return `data:image/jpeg;base64,${btoa(bin)}`;
 }
 
 async function getShots(s) {

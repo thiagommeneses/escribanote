@@ -129,6 +129,14 @@
       sendResponse(true);
       return;
     }
+    // Captura "só o compartilhado": o vídeo maior visível nesta moldura (apresentação ou tela em destaque).
+    // Responde com o quadro na resolução original; se o vídeo não puder ser lido, a moldura principal
+    // devolve o retângulo para o service worker recortar a captura da aba. Sem vídeo, fica em silêncio.
+    if (msg.type === "shared-shot") {
+      const r = sharedShot();
+      if (r) sendResponse(r);
+      return;
+    }
     if (msg.type === "update-pending") {
       state.update = msg.version;
       emitState();
@@ -142,6 +150,35 @@
     if (msg.type === "resume-session") bus.resumeSession();
     bus.dispatchEvent(new CustomEvent("message", { detail: msg }));
   });
+
+  function sharedShot() {
+    let best = null;
+    let bestArea = 0;
+    for (const v of document.querySelectorAll("video")) {
+      if (!v.videoWidth || !v.videoHeight || v.readyState < 2) continue;
+      const b = v.getBoundingClientRect();
+      const w = Math.min(b.right, innerWidth) - Math.max(b.left, 0);
+      const h = Math.min(b.bottom, innerHeight) - Math.max(b.top, 0);
+      if (w <= 0 || h <= 0 || getComputedStyle(v).visibility === "hidden") continue;
+      if (w * h > bestArea) {
+        bestArea = w * h;
+        best = v;
+      }
+    }
+    // Miniaturas (a própria câmera, a grade pequena) não contam como conteúdo compartilhado.
+    if (!best || bestArea < innerWidth * innerHeight * 0.12) return null;
+    try {
+      const c = document.createElement("canvas");
+      c.width = best.videoWidth;
+      c.height = best.videoHeight;
+      c.getContext("2d").drawImage(best, 0, 0);
+      return { dataUrl: c.toDataURL("image/jpeg", 0.85) };
+    } catch {
+      if (window !== window.top) return null;
+      const b = best.getBoundingClientRect();
+      return { rect: { x: Math.max(b.left, 0), y: Math.max(b.top, 0), w: Math.min(b.right, innerWidth) - Math.max(b.left, 0), h: Math.min(b.bottom, innerHeight) - Math.max(b.top, 0) }, vw: innerWidth };
+    }
+  }
 
   // ---------- Fila de eventos ----------
   // Antes do consentimento os eventos ficam retidos em memória (até 5000) e só
