@@ -53,6 +53,9 @@ export const DEFAULTS = {
   questions: DEFAULT_QUESTIONS,
   mode: "always", // "always" | "ask" | "off"
   theme: "auto", // "auto" (segue o sistema) | "light" | "dark"
+  themeLight: "default", // variante do claro: "default" | "paper" (off-white e pastel)
+  themeDark: "default", // variante do escuro: "default" | "editor" (grafite, estilo VS Code / Cursor)
+  widgetTheme: "follow", // widget na reunião: "follow" (segue o tema) | "dark" (sempre escuro, como antes)
   widget: true,
   hideCaptions: true,
   autoCaptions: true,

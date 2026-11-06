@@ -248,7 +248,20 @@
               <label><input type="radio" name="theme" value="light"><span>Claro</span></label>
               <label><input type="radio" name="theme" value="dark"><span>Escuro</span></label>
             </div>
-            <p class="muted tiny">O automático acompanha o tema do sistema. Vale para o painel, a aba do Escribanote e o gravador; o widget dentro da reunião continua escuro.</p>
+            <div class="theme-rows">
+              <div class="theme-row"><span class="theme-k">Estilo do claro</span>
+                <div class="swatches" role="radiogroup" aria-label="Estilo do tema claro">
+                  <label class="sw"><input type="radio" name="themeLight" value="default"><span class="sw-prev pv-light" aria-hidden="true"><i class="sw-side"><u></u><u></u><u></u></i><i class="sw-main"><u class="sw-title"></u><u></u><u class="short"></u><u class="sw-pill"></u></i></span><b>Padrão</b><small>branco e azul</small></label>
+                  <label class="sw"><input type="radio" name="themeLight" value="paper"><span class="sw-prev pv-paper" aria-hidden="true"><i class="sw-side"><u></u><u></u><u></u></i><i class="sw-main"><u class="sw-title"></u><u></u><u class="short"></u><u class="sw-pill"></u></i></span><b>Papel</b><small>off-white e tons pastel</small></label>
+                </div></div>
+              <div class="theme-row"><span class="theme-k">Estilo do escuro</span>
+                <div class="swatches" role="radiogroup" aria-label="Estilo do tema escuro">
+                  <label class="sw"><input type="radio" name="themeDark" value="default"><span class="sw-prev pv-dark" aria-hidden="true"><i class="sw-side"><u></u><u></u><u></u></i><i class="sw-main"><u class="sw-title"></u><u></u><u class="short"></u><u class="sw-pill"></u></i></span><b>Padrão</b><small>azul-noite</small></label>
+                  <label class="sw"><input type="radio" name="themeDark" value="editor"><span class="sw-prev pv-editor" aria-hidden="true"><i class="sw-side"><u></u><u></u><u></u></i><i class="sw-main"><u class="sw-title"></u><u></u><u class="short"></u><u class="sw-pill"></u></i></span><b>Editor</b><small>grafite, como o VS Code e o Cursor</small></label>
+                </div></div>
+            </div>
+            <label class="row-check"><input type="checkbox" name="widgetFollow" id="widget-follow"> <span>O widget dentro da reunião segue o tema (desligado: sempre escuro)</span></label>
+            <p class="muted tiny">O automático acompanha o tema do sistema e usa o estilo escolhido para cada lado (por exemplo, Papel de dia e Editor à noite). Vale para o painel, a aba do Escribanote, o gravador e o widget da reunião.</p>
           </div>
 
           <div class="card">

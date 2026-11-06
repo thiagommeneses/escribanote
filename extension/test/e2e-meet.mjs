@@ -284,6 +284,24 @@ try {
   await waitFor(async () => Object.values((await sw({ type: "get", id })).highlights).flat().includes("importante"), "destaque salvo");
   step("botão ⭐ do widget destaca o último bloco");
 
+  // Tema do widget: segue Ajustes › Aparência (Papel no claro, Editor no escuro) ou fica sempre escuro.
+  const setTheme = (patch) => evaluate(app, `(async () => { const { settings = {} } = await chrome.storage.local.get("settings"); await chrome.storage.local.set({ settings: { ...settings, ...${JSON.stringify(patch)} } }); return true })()`);
+  const hostAttr = (n) => evaluate(meet, `document.querySelector("escribanote-widget").getAttribute(${JSON.stringify(n)})`);
+  const cardBg = () => widgetCall(meet, ".card", "function(){ return getComputedStyle(this).backgroundColor }");
+  await setTheme({ theme: "light", themeLight: "paper", widgetTheme: "follow" });
+  await waitFor(async () => (await hostAttr("data-pal")) === "paper" && (await hostAttr("data-theme")) === "light", "widget no tema Papel");
+  assert.match(await cardBg(), /251, 248, 242/);
+  await screenshot(meet, "widget-papel.png");
+  await setTheme({ theme: "dark", themeDark: "editor" });
+  await waitFor(async () => (await hostAttr("data-pal")) === "editor" && (await hostAttr("data-theme")) === null, "widget no tema Editor");
+  assert.match(await cardBg(), /37, 37, 38/);
+  await screenshot(meet, "widget-editor.png");
+  await setTheme({ theme: "light", widgetTheme: "dark" });
+  await waitFor(async () => (await hostAttr("data-pal")) === null && (await hostAttr("data-theme")) === null, "widget sempre escuro");
+  assert.match(await cardBg(), /24, 25, 29/);
+  await setTheme({ theme: "auto", themeLight: "default", themeDark: "default", widgetTheme: "follow" });
+  step("widget segue o tema (Papel, Editor) ou fica sempre escuro");
+
   await click(meet, "#note");
   // Atalhos de uma letra do Meet ("c" = legendas) não podem receber o que é digitado no widget.
   await evaluate(meet, `window.__atalhos = []; for (const t of ["keydown", "keyup", "keypress"]) document.addEventListener(t, (e) => __atalhos.push(t + ":" + e.key)); true`);
