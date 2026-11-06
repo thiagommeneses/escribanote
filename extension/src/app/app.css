@@ -685,3 +685,19 @@ body.usage-personal .inst { display: none !important; }
 .menu .menu-head { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
 .menu .menu-opt.none { opacity: .55; }
 .menu .menu-note { margin: 2px 10px 4px; font-size: 11px; color: var(--muted); white-space: normal; max-width: 260px; }
+
+/* Material de apoio (aba IA) */
+.support { border: 1px dashed var(--border-strong); border-radius: 10px; padding: 8px 10px; margin: 8px 0; transition: border-color .12s, background .12s; }
+.support.drop { border-color: var(--accent); background: var(--accent-soft); }
+.support-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 13px; }
+.support-btns { margin-left: auto; display: flex; gap: 6px; }
+.support-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.support-list:empty { display: none; }
+.support-item { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-soft); font-size: 12px; }
+.support-item .ic { width: 14px; height: 14px; flex: none; color: var(--accent); }
+.support-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+.support-item small { color: var(--muted); }
+.support-item .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px; display: inline-grid; place-items: center; }
+.support-item .x .ic { width: 12px; height: 12px; color: inherit; }
+.support-item .x:hover { color: var(--danger); }
+#support-hint { margin: 4px 0 0; }

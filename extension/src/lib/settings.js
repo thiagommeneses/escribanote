@@ -60,6 +60,7 @@ export const DEFAULTS = {
   autoAta: false,
   chaptersAuto: false, // capítulos por IA ao terminar a reunião (chave própria ou 1 crédito do Pro)
   aiModel: "claude-opus-5-5",
+  aiModelLong: "claude-sonnet-5-5", // chave própria: perguntas longas ou com material de apoio ("same" = o mesmo modelo); nunca desce de um modelo mais forte
   talkTarget: 30, // % de fala desejada para "você"
   captionLang: "pt-BR",
   glossaryFuzzy: true, // corrige grafias parecidas com os termos do glossário e os nomes dos participantes (lib/glossary.js)

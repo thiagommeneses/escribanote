@@ -91,6 +91,29 @@ test("pergunta longa (roteiro detalhado) chega inteira, custa 2 créditos e tem 
   await ctx.db.query("UPDATE credit_balances SET balance = $2 WHERE user_id = $1", [u.me.id, before]);
 });
 
+test("material de apoio: vai antes da primeira pergunta, usa o modelo forte e custa 2 créditos", async () => {
+  const before = await balance();
+  ctx.anthropic.calls.length = 0;
+  const pdf = Buffer.from("%PDF-1.4 teste").toString("base64");
+  const support = [{ kind: "text", name: "cotacoes.csv", text: "hora,WIN\n09:00,130000" }, { kind: "pdf", name: "noticias.pdf", data: pdf }];
+  const r = await u.post("/api/v1/ai/ask", { meeting: sampleMeeting("mt-apoio"), history: [{ role: "user", text: "Como abriu o WIN?" }], support });
+  assert.ok(parseSse(r.body).some((e) => e.event === "done"));
+  const p = ctx.anthropic.calls[0].params;
+  assert.equal(p.model, ctx.config.models.strong);
+  assert.equal(p.output_config.effort, "medium");
+  const content = p.messages[0].content;
+  assert.match(content[0].text, /<material_de_apoio nome="cotacoes.csv">\nhora,WIN/);
+  assert.equal(content[1].type, "document");
+  assert.equal(content.at(-1).text, "Como abriu o WIN?");
+  assert.match(p.system[0].text, /material de apoio/);
+  assert.match(p.system[0].text, /nunca peça permissão para continuar/);
+  assert.equal(await balance(), before - 2);
+  // tipo não aceito
+  const bad = await u.post("/api/v1/ai/ask", { meeting: sampleMeeting("mt-apoio"), history: [{ role: "user", text: "Oi" }], support: [{ kind: "exe", name: "x", data: "AAAA" }] });
+  assert.equal(bad.statusCode, 400);
+  await ctx.db.query("UPDATE credit_balances SET balance = $2 WHERE user_id = $1", [u.me.id, before]);
+});
+
 test("revisão: 1 crédito por reunião a cada 24 h", async () => {
   ctx.anthropic.reviewText = JSON.stringify({ fixes: [{ id: "1", text: "Bom dia, vamos revisar o orçamento do Q4." }] });
   const items = [{ id: "1", speaker: "Ana", text: "Bom dia, vamos revisar o orçamento do quiu quatro." }];

@@ -205,6 +205,13 @@
                 <select id="chat-select" aria-label="Conversas"></select></div>
               <div class="chat-log" id="chat-log"></div>
               <div class="chips" id="quick"></div>
+              <div class="support" id="support">
+                <div class="support-head"><b>Material de apoio</b><span class="muted tiny" id="support-count"></span>
+                  <span class="support-btns"><button type="button" class="btn sm ghost" id="support-file">+ Arquivo</button><button type="button" class="btn sm ghost" id="support-paste">+ Colar texto</button></span>
+                  <input type="file" id="support-input" multiple hidden accept=".txt,.md,.csv,.tsv,.json,.pdf,image/png,image/jpeg,image/webp,image/gif,text/plain,text/csv,text/markdown,application/json,application/pdf"></div>
+                <div class="support-list" id="support-list"></div>
+                <p class="muted tiny" id="support-hint">Cotações, notícias, calendário econômico, PDFs ou prints de gráficos: a IA usa como fonte externa à reunião e diz o que veio deles. Arraste arquivos para cá.</p>
+              </div>
               <label class="chat-scope tiny"><span>Perguntar sobre</span><select id="chat-scope" class="sm" aria-label="Quais reuniões a IA consulta">
                 <option value="this">esta reunião</option><option value="same">esta + as anteriores com estes participantes</option><option value="recent">esta + as 5 últimas reuniões</option></select></label>
               <div class="chat-input"><textarea id="chat-input" rows="1" maxlength="10000" data-count="focus" placeholder="Pergunte qualquer coisa sobre esta reunião…"></textarea>
@@ -213,7 +220,7 @@
             </div>
             <details class="card q-manage" id="q-manage">
               <summary><b>Modelos de perguntas</b> <span class="muted tiny" id="q-count"></span></summary>
-              <p class="muted tiny">Valem para todas as reuniões. Os <b>fixados</b> (alfinete) aparecem como atalhos acima da caixa de pergunta, nesta ordem; desafixe os que usa pouco e use ↑ ↓ para ordenar. Com <b>Automática</b> ligada, a pergunta é feita sozinha quando a reunião termina e a resposta fica salva aqui, como uma conversa (sua chave de API ou 1 crédito do Pro por pergunta; 2 para perguntas com mais de 2.000 caracteres).</p>
+              <p class="muted tiny">Valem para todas as reuniões. Os <b>fixados</b> (alfinete) aparecem como atalhos acima da caixa de pergunta, nesta ordem; desafixe os que usa pouco e use ↑ ↓ para ordenar. Com <b>Automática</b> ligada, a pergunta é feita sozinha quando a reunião termina e a resposta fica salva aqui, como uma conversa (sua chave de API ou 1 crédito do Pro por pergunta; 2 para perguntas com mais de 2.000 caracteres ou com material de apoio).</p>
               <div id="q-list" class="q-list"></div>
               <div class="row"><button type="button" class="btn sm ghost" id="q-add">+ Novo modelo</button><button type="button" class="btn sm ghost" id="q-reset">Restaurar os modelos padrão</button></div>
             </details>
@@ -274,6 +281,11 @@
               <div class="row"><input name="apiKey" type="password" placeholder="sk-ant-…" class="grow"><button type="button" class="btn sm primary" id="save-key">Salvar</button></div></label>
             <span id="key-status" class="muted tiny"></span>
             <label class="field"><span>Modelo</span><select name="aiModel" id="model-select"></select></label>
+            <label class="field"><span>Perguntas longas ou com material de apoio</span><select name="aiModelLong">
+              <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (recomendado para roteiros de análise)</option>
+              <option value="claude-opus-5-5">Claude Opus 5.5 (melhor qualidade)</option>
+              <option value="same">O mesmo modelo acima</option></select></label>
+            <p class="muted tiny">Com a sua chave: perguntas com mais de 2.000 caracteres ou com material de apoio usam este modelo (nunca um mais fraco que o de cima) e raciocinam mais. No Pro, elas usam o modelo forte e custam 2 créditos.</p>
             <label class="switch"><input type="checkbox" name="autoAta"><span></span>Gerar a ata automaticamente quando a reunião terminar (sem chave, usa 1 crédito do Pro)</label>
             <label class="switch"><input type="checkbox" name="chaptersAuto"><span></span>Dividir em capítulos automaticamente quando a reunião terminar (a partir de 3 min; sem chave, usa 1 crédito do Pro)</label>
             <p class="muted tiny">Perguntas que você faz sempre? Salve-as como <b>modelos de perguntas</b> na aba IA de qualquer reunião e ligue <b>Automática</b> para recebê-las respondidas ao fim de cada reunião.</p>
