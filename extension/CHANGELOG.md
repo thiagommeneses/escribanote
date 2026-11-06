@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.62 beta — 2026-11-06
+- Corrigida a causa real de "Dividir em capítulos" voltar vazio com a sua chave (a 0.9.61 não resolvia): desde a 0.9.60, as chamadas sem texto ao vivo (capítulos, revisão da transcrição e modelo a partir de PDF) descartavam o texto recebido. Perguntas e ata não eram afetadas.
+- Se os capítulos ainda vierem sem texto, a extensão tenta uma vez sem o formato JSON rígido; e o erro de resposta vazia agora mostra o motivo, para facilitar o diagnóstico.
+- O mesmo descuido, mais antigo e raro, foi corrigido no streaming da conta Pro e no app web.
+
 ## 0.9.61 beta — 2026-11-06
 - Corrigido "Dividir em capítulos" respondendo "A resposta veio vazia" com a sua chave: o modelo (Opus 5.5 por padrão) raciocina antes de responder e gastava todo o limite de 4.000 tokens nisso, sem sobrar o texto. O limite subiu para 16.000 nos capítulos, no modelo a partir de PDF e na revisão (também no servidor Pro).
 - Quando a resposta ainda assim vier vazia por falta de tokens, o erro diz isso e sugere tentar de novo ou escolher um modelo mais rápido.

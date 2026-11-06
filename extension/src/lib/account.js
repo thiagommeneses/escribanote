@@ -74,7 +74,7 @@ export async function accountStream(path, body, { onDelta, signal } = {}) {
       buf = buf.slice(i + 2);
       const event = /^event: (.+)$/m.exec(chunk)?.[1];
       const data = JSON.parse(/^data: (.+)$/m.exec(chunk)?.[1] || "null");
-      if (event === "delta") onDelta?.((text += data.text));
+      if (event === "delta") { text += data.text; onDelta?.(text); }
       else if (event === "done") return data;
       else if (event === "error") throw new AccountError(502, { error: "ai_failed", message: data.message, balance: data.balance });
     }

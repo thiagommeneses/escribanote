@@ -57,7 +57,7 @@ export async function stream(path, body, { onStart, onDelta, signal } = {}) {
       const event = /^event: (.+)$/m.exec(chunk)?.[1];
       const data = JSON.parse(/^data: (.+)$/m.exec(chunk)?.[1] || "null");
       if (event === "start") onStart?.(data);
-      else if (event === "delta") onDelta?.((text += data.text));
+      else if (event === "delta") { text += data.text; onDelta?.(text); }
       else if (event === "done") return data;
       else if (event === "error") throw new ApiError(502, { error: "ai_failed", message: data.message, balance: data.balance });
     }

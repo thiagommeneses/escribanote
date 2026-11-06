@@ -12,7 +12,7 @@ import { learnProfiles, loadProfiles, saveProfiles } from "./lib/voiceprofiles.j
 import { readTrack } from "./lib/audiovault.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
-import { streamClaude, ataRequest, chatRequest, previousContext, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS, ANSWER_MAX_TOKENS, chatModel, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, sampleShots, withSources } from "./lib/ai.js";
+import { streamClaude, ataRequest, chatRequest, previousContext, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS, ANSWER_MAX_TOKENS, chatModel, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, sampleShots, withSources, EmptyAnswer } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
 import { compileGlossary, applyGlossary, glossaryForPrompt, fuzzyTargets, applyFuzzy } from "./lib/glossary.js";
 import { deleteAudio, audioInfo, vaultUsage, listAudio, enforceQuota } from "./lib/audiovault.js";
@@ -512,7 +512,16 @@ async function openAfterCall(s, settings) {
 async function runChapters(ai, s, settings) {
   let chapters;
   if (ai.kind === "key") {
-    const r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...chaptersRequest(s), maxTokens: 16000 }); // o raciocínio do modelo também gasta tokens: 4000 esgotava antes do JSON
+    // o raciocínio do modelo também gasta tokens: 4000 esgotava antes do JSON
+    let r;
+    try {
+      r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...chaptersRequest(s), maxTokens: 16000 });
+    } catch (err) {
+      if (!(err instanceof EmptyAnswer)) throw err;
+      // Sem texto com o esquema JSON: tenta uma vez sem ele, pedindo o JSON na instrução (parseChapters extrai do texto).
+      const { format, ...plain } = chaptersRequest(s);
+      r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...plain, system: `${plain.system}\nResponda só com o JSON, sem texto antes ou depois.`, maxTokens: 16000 });
+    }
     chapters = parseChapters(r.text, s);
   } else {
     // Conta Pro: endpoint próprio, com esquema JSON e a resposta já validada no servidor (1 crédito).

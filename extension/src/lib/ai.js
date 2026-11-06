@@ -371,6 +371,14 @@ function friendlyError(status, detail) {
   return `Erro ${status}${hint ? ` (${hint})` : ""}${detail ? `: ${detail}` : ""}`;
 }
 
+// Resposta sem texto: carrega o motivo para quem chamou decidir se tenta de outro jeito.
+export class EmptyAnswer extends Error {
+  constructor(message, r) {
+    super(message);
+    this.stopReason = r?.stopReason || null;
+  }
+}
+
 // Chamada em streaming à Messages API; repassa o texto parcial para onDelta.
 export async function streamClaude({ apiKey, model, system, messages, effort = "medium", maxTokens = 16000, format, tools, onDelta, signal }) {
   // Com ferramentas do servidor (pesquisa na web), a resposta pode pausar (pause_turn): reenvia com o que já veio.
@@ -378,17 +386,22 @@ export async function streamClaude({ apiKey, model, system, messages, effort = "
   let text = "";
   const sources = [];
   for (let turn = 0; turn < 4; turn++) {
-    const r = await streamOnce({ apiKey, model, system, messages: convo, effort, maxTokens, format, tools, signal, onText: (t) => onDelta?.((text += t)) });
+    const r = await streamOnce({ apiKey, model, system, messages: convo, effort, maxTokens, format, tools, signal, onText: (t) => { text += t; onDelta?.(text); } });
     for (const b of r.blocks) for (const c of b.citations || []) if (c.url) sources.push({ url: c.url, title: c.title });
     if (r.stopReason === "refusal") throw new Error("O modelo recusou esta solicitação.");
+    // Se o texto não veio em text_delta (ex.: bloco inteiro no content_block_start), usa os blocos completos.
+    if (!text.trim()) {
+      const whole = r.blocks.filter((b) => b.type === "text").map((b) => b.text || "").join("");
+      if (whole.trim()) { text = whole; onDelta?.(text); }
+    }
     if (r.stopReason !== "pause_turn") {
-      if (!text.trim() && r.stopReason === "max_tokens") throw new Error("A resposta veio vazia: o modelo usou todo o limite de tokens raciocinando. Tente de novo ou escolha um modelo mais rápido em Ajustes › IA.");
-      if (!text.trim()) throw new Error("A resposta veio vazia.");
+      if (!text.trim() && r.stopReason === "max_tokens") throw new EmptyAnswer("A resposta veio vazia: o modelo usou todo o limite de tokens raciocinando. Tente de novo ou escolha um modelo mais rápido em Ajustes › IA.", r);
+      if (!text.trim()) throw new EmptyAnswer(`A resposta veio vazia (motivo: ${r.stopReason || "sem stop_reason"}; blocos: ${r.blocks.map((b) => b.type).join(", ") || "nenhum"}; eventos: ${r.events}).`, r);
       return { text, sources, model, stopReason: r.stopReason, createdAt: Date.now() };
     }
     convo = [...convo, { role: "assistant", content: r.blocks }];
   }
-  if (!text.trim()) throw new Error("A resposta veio vazia.");
+  if (!text.trim()) throw new EmptyAnswer("A resposta veio vazia (a pesquisa não terminou).", {});
   return { text, sources, model, stopReason: "pause_turn", createdAt: Date.now() };
 }
 
@@ -426,12 +439,13 @@ async function streamOnce({ apiKey, model, system, messages, effort, maxTokens, 
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
   let stopReason = null;
+  let events = 0;
   const blocks = [];
   const json = new Map(); // índice -> partial_json de blocos de ferramenta
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
-    buffer += value;
+    buffer += value.replace(/\r\n?/g, "\n");
     let sep;
     while ((sep = buffer.indexOf("\n\n")) >= 0) {
       const raw = buffer.slice(0, sep);
@@ -444,6 +458,7 @@ async function streamOnce({ apiKey, model, system, messages, effort, maxTokens, 
       } catch {
         continue;
       }
+      events++;
       if (ev.type === "content_block_start") {
         blocks[ev.index] = { ...ev.content_block };
         if (ev.content_block.type === "text") blocks[ev.index].text = ev.content_block.text || "";
@@ -476,5 +491,14 @@ async function streamOnce({ apiKey, model, system, messages, effort, maxTokens, 
     }
   }
 
-  return { blocks: blocks.filter(Boolean), stopReason };
+  // Resposta que não veio como SSE (JSON comum): aproveita o conteúdo dela.
+  if (!events && buffer.trim().startsWith("{")) {
+    try {
+      const m = JSON.parse(buffer);
+      for (const b of m.content || []) blocks.push(b);
+      stopReason = m.stop_reason || stopReason;
+      events = 1;
+    } catch {}
+  }
+  return { blocks: blocks.filter(Boolean), stopReason, events };
 }
