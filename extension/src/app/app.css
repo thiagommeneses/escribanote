@@ -707,3 +707,22 @@ body.usage-personal .inst { display: none !important; }
 .ai-opts small { font-size: 11px; }
 .review-tip { margin: 6px 0 0; padding: 6px 8px; border-radius: 8px; background: var(--accent-soft); }
 .tl-shot.auto img { max-width: min(100%, 220px); opacity: .95; }
+
+/* Espera da IA: indicador, tempo decorrido, esqueleto e prévia opcional */
+.spin { display: inline-block; flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.wait-inline { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+.wait-time, .wait-meta { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.wait { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: var(--surface); }
+.ata-doc .wait { border: 0; padding: 0; background: none; text-align: left; }
+.wait-head { display: flex; align-items: center; gap: 10px; }
+.wait-head b { font-weight: 600; font-size: 14px; margin: 0; }
+.wait-meta { margin-left: auto; white-space: nowrap; }
+.skel { display: grid; gap: 8px; margin: 14px 0 2px; }
+.skel i { display: block; width: 100%; height: 9px; border-radius: 5px; background: var(--border); animation: skel 1.4s ease-in-out infinite; }
+.skel i.gap { margin-top: 8px; }
+@keyframes skel { 50% { opacity: .4; } }
+.wait-prev { margin-top: 12px; }
+.wait-prev summary { cursor: pointer; color: var(--accent); font-size: 13px; width: max-content; }
+.wait-text { max-height: 280px; overflow: auto; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); opacity: .8; }
+@media (prefers-reduced-motion: reduce) { .spin, .skel i { animation: none; } }

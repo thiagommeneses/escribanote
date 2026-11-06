@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.63 beta — 2026-11-06
+- Ata: em vez do texto aparecendo aos pedaços, um cartão de espera mostra a etapa ("Lendo a transcrição…", depois "Escrevendo a ata…"), o tempo decorrido e quantas palavras já foram escritas, sobre um esqueleto animado da ata. "Mostrar prévia" abre o texto parcial para quem quiser acompanhar; no fim a ata aparece de uma vez, já formatada. Vale na extensão e no app web.
+- Pergunte à IA: o "Pensando…" ganhou indicador animado e tempo decorrido (extensão e app web); no widget da reunião, reticências animadas. Quando a resposta começa, ela segue aparecendo ao vivo, como num chat.
+- Revisão da transcrição e importação de modelo de ata: indicador animado com o tempo decorrido junto do progresso.
+
 ## 0.9.62 beta — 2026-11-06
 - Corrigida a causa real de "Dividir em capítulos" voltar vazio com a sua chave (a 0.9.61 não resolvia): desde a 0.9.60, as chamadas sem texto ao vivo (capítulos, revisão da transcrição e modelo a partir de PDF) descartavam o texto recebido. Perguntas e ata não eram afetadas.
 - Se os capítulos ainda vierem sem texto, a extensão tenta uma vez sem o formato JSON rígido; e o erro de resposta vazia agora mostra o motivo, para facilitar o diagnóstico.

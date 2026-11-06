@@ -796,7 +796,7 @@ function iaPane() {
   if (!isPro()) return upsell("A IA inclusa");
   const qa = state.qa.get(state.meeting.id) || [];
   const quick = QUICK_PROMPTS.filter((p) => ["email", "acoes", "decisoes", "pontos"].includes(p.id));
-  return `<div class="qa" id="qa">${qa.map((x) => `<div class="q">${esc(x.q)}</div><div class="a">${x.a ? mdToHtml(x.a) : '<span class="typing"></span>'}</div>`).join("")}</div>
+  return `<div class="qa" id="qa">${qa.map((x) => `<div class="q">${esc(x.q)}</div><div class="a">${x.a ? mdToHtml(x.a) : thinkingHtml(x.t0)}</div>`).join("")}</div>
     <div class="quick">${quick.map((p) => `<button class="chip" data-act="quick" data-q="${esc(p.text)}">${esc(p.label)}</button>`).join("")}</div>
     <div class="ask-box"><textarea class="input" id="ask-input" maxlength="${QUESTION_MAX}" placeholder="Pergunte qualquer coisa sobre esta reunião…" aria-label="Pergunta"></textarea>
       <div class="row"><button class="btn dark" data-act="ask">Perguntar <span class="cost" id="ask-cost">1 crédito</span></button><span class="small muted"><span id="ask-count">0/${QUESTION_MAX.toLocaleString("pt-BR")}</span> · Ctrl+Enter envia</span></div></div>`;
@@ -984,19 +984,60 @@ document.addEventListener("change", async (e) => {
   toast(sel.value ? "Modelo escolhido. Gere a ata para aplicar." : "Formato padrão na próxima ata.");
 });
 
+// Espera da IA: indicador animado, tempo decorrido e prévia opcional do texto (como na extensão).
+const since = (t0) => {
+  const sec = Math.max(0, Math.floor((Date.now() - t0) / 1000));
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+};
+setInterval(() => document.querySelectorAll("[data-since]").forEach((el) => (el.textContent = since(Number(el.dataset.since)))), 1000);
+const thinkingHtml = (t0 = Date.now()) => `<span class="wait-inline" role="status"><span class="spin" aria-hidden="true"></span>Pensando…<time class="wait-time" data-since="${t0}">${since(t0)}</time></span>`;
+function waitCard(el, { label, writing }) {
+  const t0 = Date.now();
+  el.innerHTML = `<div class="wait" role="status" aria-live="polite">
+    <div class="wait-head"><span class="spin" aria-hidden="true"></span><b class="wait-label">${esc(label)}</b><span class="wait-meta"><time data-since="${t0}">0:00</time><span class="wait-words"></span></span></div>
+    <div class="skel" aria-hidden="true"><i style="width:42%"></i><i></i><i style="width:93%"></i><i style="width:68%"></i><i class="gap" style="width:30%"></i><i></i><i style="width:58%"></i></div>
+    <details class="wait-prev" hidden><summary>Mostrar prévia</summary><div class="ata wait-text"></div></details>
+  </div>`;
+  const q = (sel) => el.querySelector(sel);
+  let text = "";
+  const paint = () => {
+    const box = q(".wait-text");
+    if (!box || !q(".wait-prev").open) return;
+    const end = box.scrollHeight - box.scrollTop - box.clientHeight < 24;
+    box.innerHTML = mdToHtml(text);
+    if (end) box.scrollTop = box.scrollHeight;
+  };
+  q(".wait-prev").addEventListener("toggle", () => {
+    q(".wait-prev summary").textContent = q(".wait-prev").open ? "Esconder prévia" : "Mostrar prévia";
+    paint();
+  });
+  return {
+    update(t) {
+      if (!q(".wait")) return;
+      text = t;
+      q(".wait-label").textContent = writing;
+      q(".wait-prev").hidden = false;
+      const n = (t.match(/\S+/g) || []).length;
+      q(".wait-words").textContent = ` · ${n} ${n === 1 ? "palavra" : "palavras"}`;
+      paint();
+    },
+  };
+}
+
 async function generateAta() {
   if (state.busy) return;
   state.busy = true;
   state.tab = "ata";
   renderPane();
   const pane = $("pane");
-  pane.innerHTML = `<div class="ata typing" id="ata-live"></div><p class="small muted">Escrevendo a ata…</p>`;
+  pane.innerHTML = `<div id="ata-live"></div>`;
+  const card = waitCard($("ata-live"), { label: "Lendo a transcrição…", writing: "Escrevendo a ata…" });
   try {
     const template = templateText(state.meeting.doc);
     const instructions = (state.meeting.doc.ataPrompt || "").trim();
     const done = await stream("/ai/summary", { meetingId: state.meeting.id, ...(template ? { template } : {}), ...(instructions ? { instructions } : {}) }, {
       onStart: (d) => setCredits(d.balance),
-      onDelta: (text) => ($("ata-live").innerHTML = mdToHtml(text)),
+      onDelta: (text) => card.update(text),
     });
     setCredits(done.balance);
     const r = await api.get(`/meetings/${encodeURIComponent(state.meeting.id)}`);
@@ -1021,7 +1062,7 @@ async function askMeeting(question) {
   const qa = state.qa.get(id) || [];
   state.qa.set(id, qa);
   const history = qa.flatMap((x) => [{ role: "user", text: x.q }, ...(x.a ? [{ role: "assistant", text: x.a }] : [])]).slice(-10);
-  const item = { q: question, a: "" };
+  const item = { q: question, a: "", t0: Date.now() };
   qa.push(item);
   state.tab = "ia";
   renderPane();
@@ -1141,7 +1182,7 @@ function renderAskAll() {
     <h1>Pergunte às suas <em>reuniões</em></h1>
     <p class="lead">Uma pergunta, todas as reuniões do período: o Escribanote lê as atas e transcrições e responde citando de onde veio cada informação.</p>
     ${isPro() ? "" : `<div class="notice">Este recurso faz parte do Escribanote Pro. <a href="#/conta">Conhecer o Pro</a></div>`}
-    <div class="qa" id="qa">${state.askAll.map((x) => `<div class="q">${esc(x.q)}</div><div class="a">${x.a ? mdToHtml(x.a) : '<span class="typing"></span>'}</div>`).join("")}</div>
+    <div class="qa" id="qa">${state.askAll.map((x) => `<div class="q">${esc(x.q)}</div><div class="a">${x.a ? mdToHtml(x.a) : thinkingHtml(x.t0)}</div>`).join("")}</div>
     <div class="panel ask-box">
       <textarea class="input" id="askall-input" placeholder="Ex.: O que decidimos sobre o orçamento de mídia este mês?" ${isPro() ? "" : "disabled"}></textarea>
       <div class="row"><label class="row small">Período <select class="input" id="askall-days" style="width:auto"><option value="7">7 dias</option><option value="30" selected>30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option></select></label>
@@ -1153,7 +1194,7 @@ async function askAll() {
   const question = $("askall-input").value.trim();
   if (!question || state.busy) return;
   state.busy = true;
-  const item = { q: question, a: "" };
+  const item = { q: question, a: "", t0: Date.now() };
   state.askAll.push(item);
   const history = state.askAll.slice(-6).flatMap((x) => [{ role: "user", text: x.q }, ...(x.a ? [{ role: "assistant", text: x.a }] : [])]);
   renderAskAll();
