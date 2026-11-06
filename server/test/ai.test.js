@@ -74,6 +74,23 @@ test("pergunta usa o modelo rápido e o cache da transcrição", async () => {
   assert.match(p.system[0].text, /Bruno/);
 });
 
+test("pergunta longa (roteiro detalhado) chega inteira, custa 2 créditos e tem resposta de até 16 mil tokens", async () => {
+  const roteiro = "# Análise detalhada do pregão\n" + "Detalhe cada operação com horário, entrada, alvo e stop. ".repeat(160); // ~9 mil caracteres
+  const before = await balance();
+  ctx.anthropic.calls.length = 0;
+  const r = await u.post("/api/v1/ai/ask", { meeting: sampleMeeting("mt-roteiro"), history: [{ role: "user", text: roteiro }] });
+  assert.ok(parseSse(r.body).some((e) => e.event === "done"));
+  const p = ctx.anthropic.calls[0].params;
+  assert.equal(p.messages.at(-1).content, roteiro);
+  assert.equal(p.max_tokens, 16000);
+  assert.equal(await balance(), before - 2);
+  // pergunta curta continua custando 1
+  const r2 = await u.post("/api/v1/ai/ask", { meeting: sampleMeeting("mt-roteiro"), history: [{ role: "user", text: "Quem decidiu?" }] });
+  assert.ok(parseSse(r2.body).some((e) => e.event === "done"));
+  assert.equal(await balance(), before - 3);
+  await ctx.db.query("UPDATE credit_balances SET balance = $2 WHERE user_id = $1", [u.me.id, before]);
+});
+
 test("revisão: 1 crédito por reunião a cada 24 h", async () => {
   ctx.anthropic.reviewText = JSON.stringify({ fixes: [{ id: "1", text: "Bom dia, vamos revisar o orçamento do Q4." }] });
   const items = [{ id: "1", speaker: "Ana", text: "Bom dia, vamos revisar o orçamento do quiu quatro." }];

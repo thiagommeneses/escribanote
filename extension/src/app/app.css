@@ -668,3 +668,9 @@ body.usage-personal .inst { display: none !important; }
 .cw > textarea { padding-bottom: 18px !important; }
 #count-float { position: fixed; z-index: 70; padding: 1px 7px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
 #count-float[hidden] { display: none; }
+.q-fields textarea[data-k="text"] { field-sizing: content; min-height: 3.4em; max-height: 15em; overflow-y: auto; }
+.long-q > summary { cursor: pointer; list-style: none; }
+.long-q > summary::-webkit-details-marker { display: none; }
+.long-q[open] > summary { display: none; }
+.long-q-body { white-space: pre-wrap; max-height: 50vh; overflow-y: auto; }
+.long-q > summary .muted { color: inherit; opacity: .85; text-decoration: underline; white-space: nowrap; }

@@ -2,6 +2,12 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.57 beta — 2026-11-06
+- Perguntas à IA de até 10.000 caracteres (antes 2.000), para roteiros detalhados de análise: nos modelos de perguntas, na caixa de pergunta, no widget e no app web. A resposta pode ir a 16 mil tokens (antes ~4 mil no Pro e ~8 mil com chave própria), então estudos longos não saem cortados, e a IA segue por completo o roteiro e o formato pedidos.
+- No Pro, pergunta com mais de 2.000 caracteres custa 2 créditos (as curtas continuam custando 1); o app web mostra o custo enquanto você escreve.
+- Na conversa, perguntas longas aparecem recolhidas ("ver a pergunta inteira"); a caixa do modelo cresce até cerca de 10 linhas e rola.
+- Contagem de caracteres também na caixa de pergunta, nas notas da reunião, no editor da ata, no texto do modelo de ata, no glossário, na mensagem de aviso aos participantes, em "Seu nome nas reuniões" e nas janelinhas de nome/texto.
+
 ## 0.9.56 beta — 2026-11-06
 - Contagem de caracteres (ex.: 17/60) nos modelos de perguntas — nome curto e pergunta, também no rascunho de modelo novo —, sempre visível no canto do campo; fica laranja perto do limite e vermelha no limite.
 - Nos outros campos com limite (título da reunião, nova nota, instruções e rótulo da versão da ata; em Ajustes, contexto da equipe, instruções padrão da ata, nome do modelo de ata e nome da tag), a contagem aparece num selo sob o campo enquanto ele é editado.

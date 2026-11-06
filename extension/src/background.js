@@ -12,7 +12,7 @@ import { learnProfiles, loadProfiles, saveProfiles } from "./lib/voiceprofiles.j
 import { readTrack } from "./lib/audiovault.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
-import { streamClaude, ataRequest, chatRequest, previousContext, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS } from "./lib/ai.js";
+import { streamClaude, ataRequest, chatRequest, previousContext, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS, ANSWER_MAX_TOKENS } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
 import { compileGlossary, applyGlossary, glossaryForPrompt, fuzzyTargets, applyFuzzy } from "./lib/glossary.js";
 import { deleteAudio, audioInfo, vaultUsage, listAudio, enforceQuota } from "./lib/audiovault.js";
@@ -739,7 +739,7 @@ function withPrevious(messages, previous, tags) {
 async function runChat(ai, s, messages, settings, { previous, onDelta, signal } = {}) {
   if (ai.kind === "key") {
     const reqBody = chatRequest(s, messages, { tags: settings.tags, previous, glossary: promptGlossary(settings) });
-    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...reqBody, maxTokens: 8000, onDelta, signal });
+    return streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...reqBody, maxTokens: ANSWER_MAX_TOKENS, onDelta, signal });
   }
   const done = await accountCall(() =>
     // A conta recebe a reunião atual; as anteriores vão como material de consulta junto da última pergunta.
