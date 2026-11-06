@@ -83,6 +83,7 @@ export const DEFAULTS = {
   recorderModel: "",
   recorderPlatform: "slack",
   recorderMic: true,
+  folders: [], // pastas da lista de reuniões: [{ id, name, collapsed }]; cada reunião guarda o folderId
   syncSettings: true, // ajustes na conta do Chrome (chrome.storage.sync)
   backupAuto: "downloads",
   folderExport: false, // além do JSON de backup, uma pasta legível por reunião em <pasta de backup>/Reuniões // backup automático sem escolher pasta: "downloads" (Downloads\Escribanote\backup) | "opfs" (área interna do Chrome) | "off"

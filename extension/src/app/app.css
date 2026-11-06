@@ -726,3 +726,40 @@ body.usage-personal .inst { display: none !important; }
 .wait-prev summary { cursor: pointer; color: var(--accent); font-size: 13px; width: max-content; }
 .wait-text { max-height: 280px; overflow: auto; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); opacity: .8; }
 @media (prefers-reduced-motion: reduce) { .spin, .skel i { animation: none; } }
+
+/* Lista: fixadas, pastas e arrastar e soltar */
+.folder-new { display: inline-flex; align-items: center; gap: 5px; margin: 6px 4px 0; font-size: 12.5px; }
+.folder-new svg { width: 15px; height: 15px; }
+.lgroup { border-radius: 12px; margin: 6px 0 2px; transition: background .12s, box-shadow .12s; }
+.lgroup-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 8px 4px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; text-align: left; }
+.lgroup-head svg { width: 15px; height: 15px; flex: none; }
+.lgroup-head small { margin-left: auto; font-weight: 600; letter-spacing: 0; }
+.lgroup-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder > .lgroup-head { cursor: pointer; border-radius: 8px; color: var(--text-2); text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; padding: 7px 8px; }
+.folder > .lgroup-head:hover { background: var(--surface); }
+.folder > .lgroup-head .chev svg { width: 14px; height: 14px; transition: transform .15s; }
+.folder.shut > .lgroup-head .chev svg { transform: rotate(-90deg); }
+.folder > .mcard { margin-left: 10px; width: calc(100% - 10px); }
+.folder-edit { flex: 1; font-size: 13px; }
+.lgroup-empty { color: var(--muted); font-size: 12px; padding: 6px 12px 10px 28px; }
+.pin-mark svg { width: 13px; height: 13px; color: var(--accent); vertical-align: -2px; margin-right: 3px; }
+.mcard.dragging { opacity: .45; }
+.drop-pin { display: none; align-items: center; gap: 6px; margin: 8px 0 2px; padding: 10px 12px; border: 1.5px dashed var(--border-strong, var(--border)); border-radius: 10px; color: var(--muted); font-size: 12.5px; }
+.drop-pin svg { width: 15px; height: 15px; }
+body.list-dragging .drop-pin { display: flex; }
+body.list-dragging .lgroup.loose { min-height: 48px; }
+.drop-over { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.drop-pin.drop-over { color: var(--accent); border-color: var(--accent); }
+
+/* Menu do botão direito */
+.ctx { position: fixed; z-index: 1000; min-width: 210px; max-width: 300px; padding: 5px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.22); }
+.ctx button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px; border: 0; border-radius: 7px; background: none; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.ctx button:hover:not([disabled]), .ctx button:focus-visible { background: var(--accent-soft); outline: none; }
+.ctx button[disabled] { opacity: .45; cursor: default; }
+.ctx button svg, .ctx .ctx-ic { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.ctx button span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx button.danger, .ctx button.danger svg { color: var(--danger); }
+.ctx .ctx-ok svg { color: var(--accent); }
+.ctx .ctx-more { font-style: normal; color: var(--muted); }
+.ctx .ctx-back { color: var(--muted); font-size: 12px; }
+.ctx-sep { height: 1px; margin: 4px 6px; background: var(--border); }

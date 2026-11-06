@@ -295,6 +295,86 @@ try {
     await ev(`chrome.storage.local.remove("apiKey")`);
   }
 
+  // Lista: pasta nova, arrastar e soltar, fixar pelo menu do botão direito e área vazia sem menu.
+  {
+    await send("Emulation.setDeviceMetricsOverride", { width: 1300, height: 900, deviceScaleFactor: 1, mobile: false }, sessionId);
+    await waitFor(() => ev("!document.querySelector('#view-list').hidden && !!document.querySelector('#list [data-open=\"teste-q-1\"]')"), "lista lateral visível");
+    await ev("window.confirm = () => true");
+    await ev("document.querySelector('#folder-new').click()");
+    await waitFor(() => ev("document.activeElement?.classList.contains('folder-edit')"), "nome da pasta em edição");
+    await ev(`(() => { const i = document.activeElement; i.value = 'Mercado'; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()`);
+    await waitFor(() => ev("document.querySelector('[data-folder] .fname')?.textContent === 'Mercado'"), "pasta criada e nomeada");
+
+    // Arrastar o cartão para a pasta.
+    await ev(`(() => {
+      const card = document.querySelector('#list [data-open="teste-q-1"]');
+      const folder = document.querySelector('[data-folder]');
+      const dt = new DataTransfer();
+      card.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+      folder.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      folder.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      card.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
+    })()`);
+    await waitFor(() => ev("!!document.querySelector('[data-folder] [data-open=\"teste-q-1\"]')"), "reunião dentro da pasta");
+    console.log("✓ pasta nova nomeada no lugar e reunião arrastada para dentro dela");
+
+    // Botão direito no cartão: menu próprio; "Fixar no topo" leva para a seção Fixadas.
+    const ctxAt = (sel) => ev(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); const r = el.getBoundingClientRect(); return !el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + r.width - 4, clientY: r.top + 4 })); })()`);
+    const menuItems = () => ev("[...document.querySelectorAll('.ctx button')].map((b) => b.textContent.trim())");
+    assert.equal(await ctxAt('#list [data-open="teste-q-live"]'), true, "o menu do navegador não abre no cartão");
+    const items = await menuItems();
+    for (const x of ["Abrir", "Renomear", "Fixar no topo", "Mover para pasta›", "Apagar reunião"]) assert.ok(items.includes(x), "item do menu: " + x + " em " + items.join(" | "));
+    await ev("[...document.querySelectorAll('.ctx button')].find((b) => b.textContent.includes('Fixar no topo')).click()");
+    await waitFor(() => ev("!!document.querySelector('[data-group=\"pinned\"] [data-open=\"teste-q-live\"]')"), "reunião fixada no topo");
+    assert.equal(await ev("!!document.querySelector('.ctx')"), false, "o menu fecha depois da escolha");
+    console.log("✓ botão direito no cartão: menu próprio e 'Fixar no topo' leva para Fixadas");
+
+    // Submenu "Mover para pasta" no cartão fixado: sai de Fixadas e entra na pasta.
+    await ctxAt('#list [data-open="teste-q-live"]');
+    await ev("[...document.querySelectorAll('.ctx button')].find((b) => b.textContent.includes('Mover para pasta')).click()");
+    await waitFor(async () => (await menuItems()).some((t) => t.includes("Mercado")), "submenu com as pastas");
+    await ev("[...document.querySelectorAll('.ctx button')].find((b) => b.textContent.includes('Mercado')).click()");
+    await waitFor(() => ev("!!document.querySelector('[data-folder] [data-open=\"teste-q-live\"]') && !document.querySelector('[data-group=\"pinned\"] [data-open]')"), "movida para a pasta pelo submenu");
+
+    // Área vazia: nem menu próprio nem o do navegador.
+    const emptyPrevented = await ev(`(() => { const el = document.querySelector('.list-foot'); const r = el.getBoundingClientRect(); return !el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.right - 2, clientY: r.bottom - 2 })); })()`);
+    assert.equal(emptyPrevented, true, "área vazia sem o menu do navegador");
+    assert.equal(await ev("!!document.querySelector('.ctx')"), false, "área vazia sem menu próprio");
+    // Campo de texto: o menu do navegador continua (colar, corretor).
+    assert.equal(await ev(`(() => !document.querySelector('#list-search').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 })))()`), false);
+
+    // Menu da pasta: apagar devolve as reuniões para a lista.
+    await ctxAt('[data-folder] .lgroup-head');
+    assert.ok((await menuItems()).includes("Renomear pasta"));
+    await ev("[...document.querySelectorAll('.ctx button')].find((b) => b.textContent.includes('Apagar pasta')).click()");
+    await waitFor(() => ev("!document.querySelector('[data-folder]') && !!document.querySelector('[data-group=\"loose\"] [data-open=\"teste-q-1\"]') && !!document.querySelector('[data-group=\"loose\"] [data-open=\"teste-q-live\"]')"), "pasta apagada e reuniões de volta");
+    console.log("✓ submenu move entre pastas; área vazia sem menu (campos mantêm o do navegador); apagar pasta devolve as reuniões");
+    // Fala da transcrição: menu com as ações da fala.
+    await ev("document.querySelector('[data-tab=\"transcript\"]').click()");
+    await waitFor(() => ev("!!document.querySelector('.blk')"), "transcrição");
+    await ctxAt(".blk .who");
+    const blkItems = await menuItems();
+    for (const x of ["Copiar fala", "Marcar›", "Nota neste ponto", "Corrigir o texto", "Apagar fala"]) assert.ok(blkItems.includes(x), "menu da fala: " + x + " em " + blkItems.join(" | "));
+    await ev("document.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))");
+    assert.equal(await ev("!!document.querySelector('.ctx')"), false, "clique fora fecha o menu");
+    console.log("✓ botão direito numa fala: copiar, marcar, nota, corrigir, apagar");
+    if (process.env.SHOT_LIST) {
+      await ev("document.querySelector('#folder-new').click()");
+      await waitFor(() => ev("document.activeElement?.classList.contains('folder-edit')"), "pasta para a captura");
+      await ev(`(() => { const i = document.activeElement; i.value = 'Pregão WIN'; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()`);
+      await waitFor(() => ev("document.querySelector('[data-folder] .fname')?.textContent === 'Pregão WIN'"), "pasta nomeada");
+      await ctxAt('#list [data-open="teste-q-1"]');
+      await ev("[...document.querySelectorAll('.ctx button')].find((b) => b.textContent.includes('Fixar no topo')).click()");
+      await waitFor(() => ev("!!document.querySelector('[data-group=\"pinned\"] [data-open]')"), "fixada para a captura");
+      await ev("document.documentElement.dataset.theme = 'dark'");
+      await ctxAt('#list [data-open="teste-q-live"]');
+      await sleep(300);
+      const { data } = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+      (await import("node:fs")).writeFileSync(process.env.SHOT_LIST, Buffer.from(data, "base64"));
+      await ev("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); document.querySelector('.ctx')?.remove()");
+    }
+  }
+
   if (process.env.SHOT) {
     // Captura da seção para conferência visual: um modelo desafixado e o rascunho aberto.
     await send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 1400, deviceScaleFactor: 1, mobile: false }, sessionId);

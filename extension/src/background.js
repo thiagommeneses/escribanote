@@ -127,6 +127,8 @@ function indexEntry(s) {
     hasSummary: !!(s.summary && s.summary.text),
     meetingKey: s.meetingKey,
     part: s.part || 1,
+    pinnedAt: s.pinnedAt || null,
+    folderId: s.folderId || null,
   };
 }
 
@@ -1413,6 +1415,9 @@ async function handle(msg, sender) {
       if (typeof msg.notesText === "string") s.notes.text = msg.notesText;
       if ("ataTemplateId" in msg) s.ataTemplateId = msg.ataTemplateId || null;
       if (typeof msg.ataPrompt === "string") s.ataPrompt = msg.ataPrompt.trim().slice(0, 4000);
+      // Organização da lista: fixar no topo e pasta (as pastas em si ficam nos ajustes, "folders").
+      if ("pinned" in msg) s.pinnedAt = msg.pinned ? Date.now() : null;
+      if ("folderId" in msg) s.folderId = typeof msg.folderId === "string" && msg.folderId ? msg.folderId.slice(0, 40) : null;
       await changed(s, { now: true });
       return s;
     }

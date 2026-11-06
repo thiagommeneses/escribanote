@@ -9,6 +9,16 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Fixadas, pastas e menu do botão direito (0.9.65)
+
+- Sessão: `pinnedAt` e `folderId` (mensagem `update` com `pinned` / `folderId`; entram no índice). Pastas em
+  `settings.folders` (`{ id, name, collapsed }`), sincronizadas com os ajustes e gravadas no backup (`folders`).
+- `renderList`: seção Fixadas, pastas (`[data-folder]`) e a lista solta por dia (`[data-group="loose"]`); arrastar
+  e soltar com `application/x-escribanote-meeting`.
+- `contextmenu` global: `menuFor()` escolhe as opções pelo elemento (cartão, pasta, área da lista, `.blk`, `.msg`);
+  menu com submenus em páginas (‹ voltar), setas e Esc. Sem opções, só deixa o menu nativo em campos, seleção,
+  links/mídia ou sobre texto (`caretRangeFromPoint`); no resto, `preventDefault`.
+
 ## Esperas longas da IA sem travar (0.9.64)
 
 - Porta "ai" do service worker: `beat` a cada 15 s (`port.postMessage` + `chrome.runtime.getPlatformInfo`) mantém o

@@ -2596,8 +2596,8 @@ function cardHtml(m, snippet) {
   const names = m.participants || [];
   const sel = state.session && state.session.id === m.id ? " sel" : "";
   const live = !m.endedAt && Date.now() - m.updatedAt < 5 * 60 * 1000;
-  return `<div class="mcard${sel}" role="button" tabindex="0" data-open="${esc(m.id)}">
-    <div class="mcard-top"><b>${live ? `<span class="live-dot" title="Gravando">${icon("gravando")}</span>` : ""}<span class="mcard-name">${esc(m.title)}</span></b>
+  return `<div class="mcard${sel}${m.pinnedAt ? " pinned" : ""}" role="button" tabindex="0" draggable="true" data-open="${esc(m.id)}" title="Arraste para uma pasta ou para Fixadas; botão direito para mais opções">
+    <div class="mcard-top"><b>${live ? `<span class="live-dot" title="Gravando">${icon("gravando")}</span>` : ""}${m.pinnedAt ? `<span class="pin-mark" title="Fixada no topo">${icon("fixar")}</span>` : ""}<span class="mcard-name">${esc(m.title)}</span></b>
       <button type="button" class="mcard-rename" data-rename="${esc(m.id)}" title="Renomear" aria-label="Renomear ${esc(m.title)}">${icon("editar")}</button></div>
     <div class="sub"><span>${new Date(m.startedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
       <span>${esc(PLATFORM[m.platform] || m.platform)}</span>
@@ -2692,16 +2692,370 @@ async function renderList() {
     }</div>`;
     return;
   }
+  // Fixadas no topo, depois as pastas (recolhíveis) e por fim as demais, agrupadas por dia.
+  const folders = folderList();
+  const known = new Set(folders.map((x) => x.id));
+  const narrowed = f !== "all" || !!hits;
+  const pinned = items.filter((m) => m.pinnedAt).sort((a, b) => b.pinnedAt - a.pinnedAt);
+  const loose = items.filter((m) => !m.pinnedAt && !(m.folderId && known.has(m.folderId)));
+  const card = (m) => cardHtml(m, hits ? hits.get(m.id) : "");
+  let html = pinned.length
+    ? `<section class="lgroup" data-group="pinned"><div class="lgroup-head">${icon("fixar")}<span>Fixadas</span><small>${pinned.length}</small></div>${pinned.map(card).join("")}</section>`
+    : `<div class="drop-pin" data-group="pinned">${icon("fixar")}Solte aqui para fixar no topo</div>`;
+  for (const fo of folders) {
+    const inside = items.filter((m) => !m.pinnedAt && m.folderId === fo.id);
+    if (narrowed && !inside.length) continue;
+    const open = !fo.collapsed || (narrowed && inside.length);
+    html += `<section class="lgroup folder${open ? "" : " shut"}" data-folder="${esc(fo.id)}">
+      <button type="button" class="lgroup-head" data-fold="${esc(fo.id)}" aria-expanded="${!!open}" title="Clique para ${open ? "recolher" : "abrir"}; botão direito para mais opções">
+        <i class="chev">${icon("seta")}</i>${icon("pasta")}<span class="fname">${esc(fo.name)}</span><small>${inside.length}</small></button>
+      ${open ? (inside.length ? inside.map(card).join("") : `<div class="lgroup-empty">Arraste reuniões para cá</div>`) : ""}
+    </section>`;
+  }
   let lastDay = "";
-  $("list").innerHTML = items
+  const rest = loose
     .map((m) => {
       const d = dayLabel(m.startedAt);
       const head = d !== lastDay ? `<div class="day">${esc(d)}</div>` : "";
       lastDay = d;
-      return head + cardHtml(m, hits ? hits.get(m.id) : "");
+      return head + card(m);
     })
     .join("");
+  html += `<section class="lgroup loose" data-group="loose">${rest || (folders.length || pinned.length ? `<div class="lgroup-empty">Todas as reuniões estão em pastas ou fixadas.</div>` : "")}</section>`;
+  $("list").innerHTML = html;
 }
+
+// ----- Organização da lista: fixar, pastas e arrastar e soltar -----
+const folderList = () => (Array.isArray(state.settings?.folders) ? state.settings.folders : []);
+async function saveFolders(list) {
+  state.settings = await setSettings({ folders: list });
+  await renderList();
+}
+async function organize(id, patch, msg) {
+  try {
+    const s = await send({ type: "update", id, ...patch });
+    if (state.session && state.session.id === id && s) state.session = normalize(s);
+    if (msg) toast(msg);
+  } catch (err) {
+    toast(err.message);
+  }
+  await renderList();
+  renderRecent();
+}
+const pinMeeting = (id, on) => organize(id, { pinned: on }, on ? "Fixada no topo" : "Desafixada");
+function moveToFolder(id, folderId) {
+  const fo = folderList().find((x) => x.id === folderId);
+  return organize(id, { folderId: folderId || null, pinned: false }, fo ? `Movida para “${fo.name}”` : "Removida da pasta");
+}
+async function newFolder(thenMoveId) {
+  const id = "f" + Date.now().toString(36);
+  const n = folderList().length + 1;
+  await saveFolders([...folderList(), { id, name: n > 1 ? `Nova pasta ${n}` : "Nova pasta", collapsed: false }]);
+  if (thenMoveId) await moveToFolder(thenMoveId, id);
+  startFolderRename(id);
+  return id;
+}
+function startFolderRename(id) {
+  const head = document.querySelector(`[data-fold="${CSS.escape(id)}"]`);
+  const name = head && head.querySelector(".fname");
+  if (!name) return;
+  const fo = folderList().find((x) => x.id === id);
+  const input = document.createElement("input");
+  input.className = "mcard-edit folder-edit";
+  input.maxLength = 60;
+  input.value = fo.name;
+  input.setAttribute("aria-label", "Nome da pasta");
+  name.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    input.replaceWith(name);
+    if (save && v && v !== fo.name) await saveFolders(folderList().map((x) => (x.id === id ? { ...x, name: v } : x)));
+    else renderList();
+  };
+  input.addEventListener("click", (e) => e.stopPropagation());
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    if (e.key === "Escape") { e.preventDefault(); finish(false); }
+  });
+  input.addEventListener("blur", () => finish(true));
+}
+async function deleteFolder(id) {
+  const fo = folderList().find((x) => x.id === id);
+  if (!fo) return;
+  const members = state.index.filter((m) => m.folderId === id);
+  if (members.length && !confirm(`Apagar a pasta “${fo.name}”? As ${members.length} reuniões dela voltam para a lista (nada é apagado).`)) return;
+  for (const m of members) await send({ type: "update", id: m.id, folderId: null });
+  await saveFolders(folderList().filter((x) => x.id !== id));
+  toast("Pasta apagada");
+}
+function moveFolder(id, dir) {
+  const list = folderList().slice();
+  const i = list.findIndex((x) => x.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= list.length) return;
+  [list[i], list[j]] = [list[j], list[i]];
+  saveFolders(list);
+}
+const toggleFolder = (id, collapsed) => saveFolders(folderList().map((x) => (x.id === id ? { ...x, collapsed: collapsed ?? !x.collapsed } : x)));
+async function deleteMeeting(id) {
+  const m = state.index.find((x) => x.id === id);
+  if (!m || !confirm(`Apagar “${m.title}”? Esta ação não pode ser desfeita.`)) return;
+  await send({ type: "delete", id });
+  if (state.session && state.session.id === id) state.session = null;
+  toast("Reunião apagada");
+  render();
+}
+
+$("list").addEventListener("click", (e) => {
+  const head = e.target.closest("[data-fold]");
+  if (head) toggleFolder(head.dataset.fold);
+});
+$("folder-new").addEventListener("click", () => newFolder());
+
+// Arrastar e soltar: cartão -> pasta (move), "Fixadas" (fixa) ou a lista solta (tira da pasta e desafixa).
+const DRAG_TYPE = "application/x-escribanote-meeting";
+let dragId = null;
+function dropTarget(el) {
+  const t = el && el.closest("[data-folder], [data-group]");
+  if (!t || !$("list").contains(t)) return null;
+  return t.dataset.folder ? { folder: t.dataset.folder, el: t } : { group: t.dataset.group, el: t };
+}
+$("list").addEventListener("dragstart", (e) => {
+  const c = e.target.closest && e.target.closest("[data-open]");
+  if (!c || renaming()) return e.preventDefault();
+  dragId = c.dataset.open;
+  e.dataTransfer.setData(DRAG_TYPE, dragId);
+  e.dataTransfer.setData("text/plain", c.querySelector(".mcard-name")?.textContent || "");
+  e.dataTransfer.effectAllowed = "move";
+  requestAnimationFrame(() => {
+    c.classList.add("dragging");
+    document.body.classList.add("list-dragging");
+  });
+});
+$("list").addEventListener("dragend", () => {
+  dragId = null;
+  document.body.classList.remove("list-dragging");
+  document.querySelectorAll(".dragging, .drop-over").forEach((x) => x.classList.remove("dragging", "drop-over"));
+});
+$("list").addEventListener("dragover", (e) => {
+  if (!dragId) return;
+  const t = dropTarget(e.target);
+  if (!t) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  document.querySelectorAll(".drop-over").forEach((x) => x !== t.el && x.classList.remove("drop-over"));
+  t.el.classList.add("drop-over");
+});
+$("list").addEventListener("dragleave", (e) => {
+  const t = dropTarget(e.target);
+  if (t && !t.el.contains(e.relatedTarget)) t.el.classList.remove("drop-over");
+});
+$("list").addEventListener("drop", async (e) => {
+  const id = e.dataTransfer.getData(DRAG_TYPE) || dragId;
+  const t = dropTarget(e.target);
+  if (!id || !t) return;
+  e.preventDefault();
+  const m = state.index.find((x) => x.id === id);
+  if (!m) return;
+  if (t.folder) {
+    if (m.folderId !== t.folder || m.pinnedAt) await moveToFolder(id, t.folder);
+  } else if (t.group === "pinned") {
+    if (!m.pinnedAt) await pinMeeting(id, true);
+  } else if (t.group === "loose") {
+    if (m.pinnedAt || m.folderId) await organize(id, { pinned: false, folderId: null }, "Voltou para a lista");
+  }
+});
+
+// ----- Menu do botão direito -----
+// Cada área tem as próprias opções; em área vazia não abre nada (nem o menu do navegador). O menu nativo
+// continua onde ele serve: campos de texto, texto selecionado, links, imagens e sobre o próprio texto.
+const ctx = { el: null, stack: [] };
+function closeMenu() {
+  ctx.el?.remove();
+  ctx.el = null;
+  ctx.stack = [];
+}
+function menuHtml(items) {
+  return items
+    .filter(Boolean)
+    .map((it, i) =>
+      it.sep
+        ? '<div class="ctx-sep" role="separator"></div>'
+        : `<button type="button" role="menuitem" data-i="${i}" class="${it.danger ? "danger" : ""}"${it.disabled ? " disabled" : ""}>${it.icon ? icon(it.icon) : '<i class="ctx-ic"></i>'}<span>${esc(it.label)}</span>${it.checked ? `<i class="ctx-ok">${icon("ok")}</i>` : ""}${it.sub ? '<i class="ctx-more">›</i>' : ""}</button>`,
+    )
+    .join("");
+}
+function showMenuPage(items, title) {
+  const list = items.filter(Boolean);
+  ctx.items = list;
+  ctx.el.innerHTML = (title ? `<button type="button" role="menuitem" class="ctx-back" data-back>‹ ${esc(title)}</button><div class="ctx-sep"></div>` : "") + menuHtml(list);
+  ctx.el.querySelector("button:not([disabled])")?.focus();
+}
+function openMenu(x, y, items) {
+  closeMenu();
+  const el = document.createElement("div");
+  el.className = "ctx";
+  el.setAttribute("role", "menu");
+  document.body.appendChild(el);
+  ctx.el = el;
+  showMenuPage(items);
+  const place = () => {
+    const r = el.getBoundingClientRect();
+    el.style.left = Math.max(6, Math.min(x, innerWidth - r.width - 6)) + "px";
+    el.style.top = Math.max(6, Math.min(y, innerHeight - r.height - 6)) + "px";
+  };
+  place();
+  el.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.back !== undefined) {
+      const prev = ctx.stack.pop();
+      showMenuPage(prev.items, prev.title);
+      return place();
+    }
+    const it = ctx.items[Number(b.dataset.i)];
+    if (!it || it.disabled) return;
+    if (it.sub) {
+      ctx.stack.push({ items: ctx.items, title: ctx.title });
+      ctx.title = it.label;
+      showMenuPage(it.sub(), it.label);
+      return place();
+    }
+    closeMenu();
+    it.run?.();
+  });
+  el.addEventListener("keydown", (e) => {
+    const btns = [...el.querySelectorAll("button:not([disabled])")];
+    const i = btns.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); btns[(i + 1) % btns.length]?.focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); btns[(i - 1 + btns.length) % btns.length]?.focus(); }
+    else if (e.key === "ArrowRight" && ctx.items[Number(document.activeElement?.dataset.i)]?.sub) { e.preventDefault(); document.activeElement.click(); }
+    else if (e.key === "ArrowLeft" && ctx.stack.length) { e.preventDefault(); el.querySelector("[data-back]")?.click(); }
+    else if (e.key === "Escape" || e.key === "Tab") { e.preventDefault(); closeMenu(); }
+  });
+}
+document.addEventListener("pointerdown", (e) => ctx.el && !ctx.el.contains(e.target) && closeMenu(), true);
+addEventListener("blur", closeMenu);
+addEventListener("resize", closeMenu);
+document.addEventListener("scroll", (e) => ctx.el && !ctx.el.contains(e.target) && closeMenu(), true);
+
+function meetingMenu(id) {
+  const m = state.index.find((x) => x.id === id);
+  if (!m) return null;
+  const folders = folderList();
+  return [
+    { label: "Abrir", icon: "abrir", run: () => { state.view = "meeting"; state.tab = "transcript"; openSession(id, true); } },
+    { label: "Abrir em nova aba", icon: "ver", run: () => chrome.tabs.create({ url: chrome.runtime.getURL(`src/app/app.html?tab=1&id=${encodeURIComponent(id)}`) }) },
+    { label: "Renomear", icon: "editar", run: () => startRename(id) },
+    { sep: true },
+    m.pinnedAt ? { label: "Desafixar", icon: "fixar", run: () => pinMeeting(id, false) } : { label: "Fixar no topo", icon: "fixar", run: () => pinMeeting(id, true) },
+    {
+      label: "Mover para pasta",
+      icon: "pasta",
+      sub: () => [
+        ...folders.map((fo) => ({ label: fo.name, icon: "pasta", checked: m.folderId === fo.id, run: () => m.folderId !== fo.id && moveToFolder(id, fo.id) })),
+        folders.length ? { sep: true } : null,
+        { label: "Nova pasta…", icon: "editar", run: () => newFolder(id) },
+      ],
+    },
+    m.folderId && folders.some((x) => x.id === m.folderId) ? { label: "Tirar da pasta", icon: "desfazer", run: () => moveToFolder(id, null) } : null,
+    { sep: true },
+    { label: "Apagar reunião", icon: "apagar", danger: true, run: () => deleteMeeting(id) },
+  ];
+}
+function folderMenu(id) {
+  const list = folderList();
+  const i = list.findIndex((x) => x.id === id);
+  if (i < 0) return null;
+  const fo = list[i];
+  return [
+    { label: fo.collapsed ? "Abrir pasta" : "Recolher pasta", icon: "seta", run: () => toggleFolder(id) },
+    { label: "Renomear pasta", icon: "editar", run: () => startFolderRename(id) },
+    { label: "Mover para cima", icon: "anterior", disabled: i === 0, run: () => moveFolder(id, -1) },
+    { label: "Mover para baixo", icon: "seta", disabled: i === list.length - 1, run: () => moveFolder(id, 1) },
+    { sep: true },
+    { label: "Nova pasta", icon: "pasta", run: () => newFolder() },
+    { label: "Apagar pasta", icon: "apagar", danger: true, run: () => deleteFolder(id) },
+  ];
+}
+function listAreaMenu() {
+  const folders = folderList();
+  return [
+    { label: "Nova pasta", icon: "pasta", run: () => newFolder() },
+    folders.length ? { label: "Recolher todas as pastas", icon: "minimizar", run: () => saveFolders(folders.map((x) => ({ ...x, collapsed: true }))) } : null,
+    folders.length ? { label: "Abrir todas as pastas", icon: "seta", run: () => saveFolders(folders.map((x) => ({ ...x, collapsed: false }))) } : null,
+  ];
+}
+function blockMenu(blk) {
+  const act = (a) => () => blk.querySelector(`[data-act="${a}"]`)?.click();
+  const current = JSON.parse(blk.dataset.tags || "[]");
+  return [
+    { label: "Copiar fala", icon: "copiar", run: act("copy") },
+    { label: "Marcar", icon: "tag", sub: () => tags().map((t) => ({ label: t.label, icon: tagIcon(t), checked: current.includes(t.id), run: () => blk.querySelector(`[data-tag="${t.id}"]`)?.click() })) },
+    { label: "Nota neste ponto", icon: "nota", run: act("note") },
+    { sep: true },
+    { label: "Corrigir o texto", icon: "editar", run: act("edit") },
+    { label: "Dividir em duas", icon: "dividir", run: act("split") },
+    { label: "Mover para outro falante", icon: "falante", run: act("move") },
+    { sep: true },
+    { label: "Apagar fala", icon: "apagar", danger: true, run: act("del") },
+  ];
+}
+function chatMenu(msg) {
+  const copy = (sel) => () => msg.querySelector(sel)?.click();
+  if (msg.classList.contains("user")) {
+    return [{ label: "Copiar pergunta", icon: "copiar", run: async () => { await navigator.clipboard.writeText(msg.innerText.trim()); toast("Pergunta copiada"); } }];
+  }
+  if (!msg.querySelector("[data-copy]")) return null;
+  return [
+    { label: "Copiar resposta", icon: "copiar", run: copy('[data-copy="a"]') },
+    msg.querySelector('[data-copy="qa"]') ? { label: "Copiar com a pergunta", icon: "copiar", run: copy('[data-copy="qa"]') } : null,
+  ];
+}
+function menuFor(target) {
+  const card = target.closest("[data-open]");
+  if (card && !target.closest(".mcard-edit")) return meetingMenu(card.dataset.open);
+  const fold = target.closest("[data-folder]");
+  if (fold && target.closest(".lgroup-head")) return folderMenu(fold.dataset.folder);
+  if (target.closest("#view-list") && !target.closest("button, a, input, label, .filters, .list-foot, .banner")) return listAreaMenu();
+  const blk = target.closest(".blk");
+  if (blk && blk.querySelector('[data-act="copy"]')) return blockMenu(blk);
+  const msg = target.closest(".msg");
+  if (msg) return chatMenu(msg);
+  return null;
+}
+// Clique direito sobre texto de verdade (não no espaço em volta): aí o menu nativo serve para copiar e buscar.
+function overText(e) {
+  const r = document.caretRangeFromPoint?.(e.clientX, e.clientY);
+  if (!r || r.startContainer.nodeType !== Node.TEXT_NODE || !r.startContainer.textContent.trim()) return false;
+  const range = document.createRange();
+  range.selectNodeContents(r.startContainer);
+  return [...range.getClientRects()].some((b) => e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom);
+}
+document.addEventListener("contextmenu", (e) => {
+  const t = e.target instanceof Element ? e.target : e.target.parentElement;
+  if (!t || (ctx.el && ctx.el.contains(t))) return e.preventDefault();
+  const editable = t.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']");
+  const selected = String(getSelection() || "").trim();
+  if (editable || selected) return; // menu do navegador: colar, copiar a seleção, corretor
+  const items = menuFor(t);
+  if (items && items.some(Boolean)) {
+    e.preventDefault();
+    // Pelo teclado (tecla de menu / Shift+F10) não há posição do mouse: abre junto do elemento.
+    const kb = !e.clientX && !e.clientY;
+    const r = kb ? t.getBoundingClientRect() : null;
+    openMenu(kb ? r.left + 12 : e.clientX, kb ? r.bottom - 4 : e.clientY, items);
+    return;
+  }
+  if (t.closest("a[href], img, video, audio") || overText(e)) return;
+  e.preventDefault(); // área vazia: sem menu
+});
 
 let searchTimer = null;
 $("list-search").addEventListener("input", (e) => {
@@ -2716,7 +3070,7 @@ $("list-search").addEventListener("input", (e) => {
 
 $("backup").addEventListener("click", async () => {
   const all = await send({ type: "export-all" });
-  const url = URL.createObjectURL(new Blob([JSON.stringify({ app: "escribanote", version: 2, exportedAt: Date.now(), sessions: all }, null, 2)], { type: "application/json" }));
+  const url = URL.createObjectURL(new Blob([JSON.stringify({ app: "escribanote", version: 2, exportedAt: Date.now(), folders: folderList(), sessions: all }, null, 2)], { type: "application/json" }));
   const d = new Date();
   const a = Object.assign(document.createElement("a"), { href: url, download: `escribanote-backup-${d.toISOString().slice(0, 10)}.json` });
   a.click();
@@ -2729,6 +3083,12 @@ $("import").addEventListener("change", async (e) => {
   if (!file) return;
   try {
     const data = JSON.parse(await file.text());
+    // Pastas do backup que ainda não existem aqui (as reuniões já trazem o folderId).
+    if (Array.isArray(data.folders)) {
+      const have = new Set(folderList().map((x) => x.id));
+      const add = data.folders.filter((x) => x && typeof x.id === "string" && typeof x.name === "string" && !have.has(x.id));
+      if (add.length) state.settings = await setSettings({ folders: [...folderList(), ...add] });
+    }
     const n = await send({ type: "import", sessions: data.sessions || data });
     toast(`${n} reuniões importadas`);
     renderList();
