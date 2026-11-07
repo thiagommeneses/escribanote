@@ -1,5 +1,5 @@
 import { toBlocks, speakerName, timeline, participantNames, normalize, effectiveEntries, countMatches } from "../lib/transcript.js";
-import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName, ataEditorHtml, EXPORT_PARTS, EXPORT_DEFAULT, aiConversations } from "../lib/format.js";
+import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName, ataEditorHtml, EXPORT_PARTS, EXPORT_DEFAULT, aiConversations, codeFiles, zipFiles } from "../lib/format.js";
 import { computeStats, findMe, fmtDuration } from "../lib/stats.js";
 import { API_ORIGIN, QUESTION_MAX, LONG_QUESTION, questionLength } from "../lib/ai.js";
 import { getSettings, setSettings, DEFAULT_TAGS, DEFAULT_QUESTIONS, MODELS, DEFAULTS, HQ_MODELS } from "../lib/settings.js";
@@ -1618,9 +1618,9 @@ function renderChatLog(streamText) {
           if (m.waiting) return `<div class="msg assistant">${spinHtml(state.chatPhase || "Pensando…", state.chatT0 || Date.now())}</div>`;
           const done = !streaming || i < msgs.length - 1;
           const acts = done
-            ? `<div class="msg-acts"><button type="button" class="linkish" data-copy="a" data-i="${i}">${icon("copiar")}Copiar resposta</button>${msgs[i - 1]?.role === "user" ? `<button type="button" class="linkish" data-copy="qa" data-i="${i}">${icon("copiar")}Copiar com a pergunta</button>` : ""}<button type="button" class="linkish" data-export data-i="${i}" aria-haspopup="menu">${icon("baixar")}Exportar</button></div>`
+            ? `<div class="msg-acts"><button type="button" class="linkish" data-copy="a" data-i="${i}">${icon("copiar")}Copiar resposta</button>${msgs[i - 1]?.role === "user" ? `<button type="button" class="linkish" data-copy="qa" data-i="${i}">${icon("copiar")}Copiar com a pergunta</button>` : ""}<button type="button" class="linkish" data-export data-i="${i}" aria-haspopup="menu">${icon("baixar")}Exportar</button>${codeFiles(m.text).length > 1 ? `<button type="button" class="linkish" data-zip data-i="${i}">${icon("baixar")}Baixar os arquivos (.zip)</button>` : ""}</div>`
             : "";
-          return `<div class="msg assistant"><div class="md">${withCites(mdToHtml(m.text))}</div>${acts}</div>`;
+          return `<div class="msg assistant" data-i="${i}"><div class="md">${withCites(mdToHtml(m.text, { files: done }))}</div>${acts}</div>`;
         })
         .join("") + (!streaming && answers > 1 ? `<div class="msg-acts all"><button type="button" class="linkish" data-copy="all">${icon("copiar")}Copiar a conversa inteira</button></div>` : "")
     : `<p class="muted tiny">Faça perguntas durante ou depois da reunião. As conversas ficam salvas junto com a transcrição.</p>`;
@@ -1641,6 +1641,8 @@ const qaText = (q, a) => `Pergunta: ${q}\n\nResposta:\n${a}`;
 $("chat-log").addEventListener("click", async (e) => {
   if (e.target.closest("[data-edit]")) return startEditLast();
   if (e.target.closest("[data-redo]")) return resendLast();
+  const fb = e.target.closest("[data-file], [data-zip]");
+  if (fb) return downloadCode(fb);
   const exp = e.target.closest("[data-export]");
   if (exp) {
     const r = exp.getBoundingClientRect();
@@ -1675,6 +1677,27 @@ $("chat-log").addEventListener("click", async (e) => {
     toast("Não foi possível copiar: " + err.message);
   }
 });
+
+// Arquivos que a IA escreveu em blocos de código: um por vez ou todos num .zip.
+function downloadCode(btn) {
+  const chat = currentChat();
+  const i = +(btn.dataset.zip !== undefined ? btn.dataset.i : btn.closest(".msg")?.dataset.i);
+  const files = codeFiles(chat?.messages[i]?.text || "");
+  if (!files.length) return;
+  const save = (blob, name) => {
+    const url = URL.createObjectURL(blob);
+    Object.assign(document.createElement("a"), { href: url, download: name }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+  if (btn.dataset.zip !== undefined) {
+    save(zipFiles(files), `${fileName(state.session, "md").replace(/\.md$/, "")} - arquivos da IA.zip`);
+    return toast(`${files.length} arquivos baixados num .zip`);
+  }
+  const f = files[+btn.dataset.file];
+  if (!f) return;
+  save(new Blob([f.text], { type: "text/plain;charset=utf-8" }), f.name.split("/").pop());
+  toast(`${f.name.split("/").pop()} baixado`);
+}
 
 $("chat-select").addEventListener("change", (e) => {
   state.chatId = e.target.value || null;
@@ -2353,12 +2376,14 @@ async function ask(question, previousId, { replaceLast = false } = {}) {
         // O serviço devolve o par anterior à conversa; mostra-o de novo com o erro embaixo.
         renderChatLog();
         $("chat-log").insertAdjacentHTML("beforeend", `<div class="msg assistant" style="color:var(--danger)">${esc(m.message)}</div>`);
+        $("chat-log").scrollTop = $("chat-log").scrollHeight;
         return;
       }
       if (m.type === "error") {
         // Troca o indicador de espera pelo erro e devolve a pergunta à caixa, para tentar de novo sem redigitar.
         $("chat-log").querySelector(".msg.assistant:last-child .wait-inline")?.closest(".msg")?.remove();
         $("chat-log").insertAdjacentHTML("beforeend", `<div class="msg assistant" style="color:var(--danger)">${esc(m.message)}</div>`);
+        $("chat-log").scrollTop = $("chat-log").scrollHeight;
         if (!$("chat-input").value.trim()) {
           $("chat-input").value = question;
           paintCount($("chat-input"));

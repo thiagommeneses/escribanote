@@ -161,6 +161,22 @@ test("resposta cortada pelo limite de tokens: pede a continuação e emenda no m
   await ctx.db.query("UPDATE credit_balances SET balance = $2 WHERE user_id = $1", [u.me.id, before]);
 });
 
+test("se a continuação falhar, entrega o que já veio com o motivo (não perde a resposta longa)", async () => {
+  const before = await balance();
+  ctx.anthropic.finals = [
+    { text: "```mql5 A.mq5\nint a;", stop_reason: "max_tokens", content: [] },
+    { text: "", fail: Object.assign(new Error("prompt is too long"), { status: 400 }) },
+  ];
+  const r = await u.post("/api/v1/ai/ask", { meeting: sampleMeeting("mt-cut2"), history: [{ role: "user", text: "Gere os arquivos" }] });
+  const events = parseSse(r.body);
+  assert.ok(!events.some((e) => e.event === "error"));
+  const done = events.find((e) => e.event === "done");
+  assert.ok(done.data.text.startsWith("```mql5 A.mq5\nint a;"));
+  assert.match(done.data.text, /parou antes do fim/);
+  ctx.anthropic.finals = null;
+  await ctx.db.query("UPDATE credit_balances SET balance = $2 WHERE user_id = $1", [u.me.id, before]);
+});
+
 test("revisão: 1 crédito por reunião a cada 24 h", async () => {
   ctx.anthropic.reviewText = JSON.stringify({ fixes: [{ id: "1", text: "Bom dia, vamos revisar o orçamento do Q4." }] });
   const items = [{ id: "1", speaker: "Ana", text: "Bom dia, vamos revisar o orçamento do quiu quatro." }];

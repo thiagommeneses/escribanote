@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { refund, reserve } from "./credits.js";
 import { fail } from "./http.js";
-import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, isHeavyQuestion, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, SHOTS_MAX, withSources, phaseOf, continuation, MAX_CONTINUES, CUT_NOTE, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
+import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, isHeavyQuestion, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, SHOTS_MAX, withSources, phaseOf, continuation, MAX_CONTINUES, CUT_NOTE, stoppedNote, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
 import { cleanDoc, loadDoc, requirePro, saveMeeting } from "./meetings.js";
 
 // US$ por milhão de tokens (entrada, saída, leitura de cache, escrita de cache de 5 min).
@@ -162,16 +162,27 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
       let pauses = 0, continues = 0;
       while (!closed) {
         stream = anthropic.messages.stream({ ...params, messages: convo });
-        for await (const ev of stream) {
-          if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") {
-            text += ev.delta.text;
-            send("delta", { text: ev.delta.text });
-          } else if (ev.type === "content_block_start") {
-            const ph = phaseOf(ev.content_block);
-            if (ph) send("phase", { text: ph });
+        try {
+          for await (const ev of stream) {
+            if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") {
+              text += ev.delta.text;
+              send("delta", { text: ev.delta.text });
+            } else if (ev.type === "content_block_start") {
+              const ph = phaseOf(ev.content_block);
+              if (ph) send("phase", { text: ph });
+            }
           }
+          final = await stream.finalMessage();
+        } catch (err) {
+          // Caiu depois de já ter vindo texto (ex.: na continuação): entrega o que veio, com o motivo.
+          if (closed || !text.trim()) throw err;
+          req.log.error({ err: err?.message }, "IA parou no meio; resposta parcial entregue");
+          const note = stoppedNote(friendly(err));
+          text += note;
+          send("delta", { text: note });
+          final = { stop_reason: "error", content: [] };
+          break;
         }
-        final = await stream.finalMessage();
         for (const k of Object.keys(usage)) usage[k] += (k === "web_search_requests" ? final.usage?.server_tool_use?.web_search_requests : final.usage?.[k]) || 0;
         for (const b of final.content || []) for (const c of b.citations || []) if (c.url) sources.push({ url: c.url, title: c.title });
         // Cortada pelo limite de tamanho: pede a continuação e emenda no mesmo texto.

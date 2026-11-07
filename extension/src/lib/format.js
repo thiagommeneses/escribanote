@@ -161,8 +161,66 @@ function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 }
 
-// Markdown simples (títulos, listas, tarefas, negrito) para HTML seguro.
-export function mdToHtml(md) {
+// Blocos de código cercados (```lang nome.ext). A IA não cria arquivos: escreve o conteúdo de cada um num bloco
+// com o nome na linha de abertura, e o app oferece o download (um por bloco ou todos num .zip).
+const FENCE = /^\s*(`{3,}|~{3,})\s*(.*)$/;
+const LANG_EXT = { js: "js", javascript: "js", ts: "ts", typescript: "ts", py: "py", python: "py", json: "json", md: "md", markdown: "md", html: "html", css: "css", sql: "sql", sh: "sh", bash: "sh", shell: "sh", ps1: "ps1", powershell: "ps1", mql5: "mq5", mq5: "mq5", mql4: "mq4", ntsl: "ntsl", pascal: "pas", csharp: "cs", cs: "cs", java: "java", c: "c", cpp: "cpp", go: "go", rust: "rs", yaml: "yml", yml: "yml", xml: "xml", csv: "csv", txt: "txt", text: "txt" };
+const safeName = (n) => n.replace(/^["'`]|["'`]$/g, "").replace(/\\/g, "/").split("/").filter((x) => x && x !== "." && x !== "..").map((x) => x.replace(/[<>:"|?*\x00-\x1f]/g, "_")).join("/");
+function fenceInfo(info, n) {
+  const parts = String(info).trim().split(/\s+/).filter(Boolean);
+  const named = parts.map((x) => x.replace(/^(file(name)?|title|nome)=/i, "")).find((x) => /[\w-]\.[A-Za-z0-9]{1,8}["'`]?$/.test(x));
+  const lang = (parts[0] && parts[0] !== named && !/=/.test(parts[0]) ? parts[0] : "").toLowerCase();
+  const name = named ? safeName(named) : "";
+  return { lang, name: name || `trecho-${n}.${LANG_EXT[lang] || "txt"}`, named: !!name };
+}
+// Divide o Markdown em trechos de texto e blocos de código. Um bloco aberto sem fechamento vai até o fim.
+function splitFences(md) {
+  const out = [];
+  let text = [], code = null, n = 0;
+  for (const line of String(md).split("\n")) {
+    const f = line.match(FENCE);
+    if (code) {
+      if (f && f[1][0] === code.fence[0] && f[1].length >= code.fence.length && !f[2].trim()) out.push(code), (code = null);
+      else code.lines.push(line);
+    } else if (f) {
+      if (text.length) out.push({ type: "text", text: text.join("\n") }), (text = []);
+      code = { type: "code", fence: f[1], ...fenceInfo(f[2], ++n), lines: [] };
+    } else text.push(line);
+  }
+  if (code) out.push(code);
+  if (text.length) out.push({ type: "text", text: text.join("\n") });
+  return out.map((p) => (p.type === "code" ? { type: "code", lang: p.lang, name: p.name, named: p.named, text: p.lines.join("\n") + "\n" } : p));
+}
+
+// Arquivos escritos pela IA numa resposta: [{ name, lang, text, named }]. Nomes repetidos ganham sufixo.
+export function codeFiles(md) {
+  const seen = new Map();
+  return splitFences(md)
+    .filter((p) => p.type === "code")
+    .map((p) => {
+      const k = p.name.toLowerCase();
+      const c = seen.get(k) || 0;
+      seen.set(k, c + 1);
+      return { ...p, name: c ? p.name.replace(/(\.[^./]+)?$/, (ext) => `-${c + 1}${ext}`) : p.name };
+    });
+}
+
+// Markdown simples (títulos, listas, tarefas, negrito, blocos de código) para HTML seguro.
+// files: true põe o botão de baixar em cada bloco de código (só na tela do app; exportação e cópia ficam sem).
+export function mdToHtml(md, { files = false } = {}) {
+  const out = [];
+  const names = files ? codeFiles(md).map((f) => f.name) : [];
+  let k = 0;
+  for (const part of splitFences(md)) {
+    if (part.type === "code") {
+      const i = k++;
+      const head = files ? `<div class="code-head"><span>${esc(names[i])}</span><button type="button" class="linkish" data-file="${i}">Baixar</button></div>` : part.named ? `<div class="code-head"><span>${esc(part.name)}</span></div>` : "";
+      out.push(`<div class="code">${head}<pre><code>${esc(part.text.replace(/\n$/, ""))}</code></pre></div>`);
+    } else out.push(mdLines(part.text));
+  }
+  return out.join("");
+}
+function mdLines(md) {
   const out = [];
   let inList = false;
   const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<code>$1</code>");
@@ -180,6 +238,56 @@ export function mdToHtml(md) {
   }
   if (inList) out.push("</ul>");
   return out.join("");
+}
+
+// .zip sem compressão (método "store"), suficiente para pacotes de código; nomes em UTF-8.
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes) {
+  let c = 0xffffffff;
+  for (const b of bytes) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+export function zipFiles(files, date = new Date()) {
+  const enc = new TextEncoder();
+  const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | (date.getSeconds() >> 1);
+  const dosDate = ((Math.max(date.getFullYear(), 1980) - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+  const locals = [], centrals = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name);
+    const data = typeof f.text === "string" ? enc.encode(f.text) : f.data;
+    const crc = crc32(data);
+    const head = (sig, central) => {
+      const b = new DataView(new ArrayBuffer(central ? 46 : 30));
+      let p = 0;
+      const u32 = (v) => (b.setUint32(p, v, true), (p += 4));
+      const u16 = (v) => (b.setUint16(p, v, true), (p += 2));
+      u32(sig);
+      if (central) u16(20);
+      u16(20), u16(0x0800), u16(0), u16(dosTime), u16(dosDate), u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0);
+      if (central) u16(0), u16(0), u16(0), u32(0), u32(offset);
+      return new Uint8Array(b.buffer);
+    };
+    centrals.push(head(0x02014b50, true), name);
+    locals.push(head(0x04034b50, false), name, data);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = centrals.reduce((s, x) => s + x.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, files.length, true);
+  end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true);
+  end.setUint32(16, offset, true);
+  return new Blob([...locals, ...centrals, new Uint8Array(end.buffer)], { type: "application/zip" });
 }
 
 // HTML autocontido: usado na cópia formatada (Docs, Notion, e-mail) e no PDF.

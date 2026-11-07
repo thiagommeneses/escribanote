@@ -9,6 +9,16 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Arquivos escritos pela IA (0.9.68)
+
+- `FILES_NOTE` no system do `chatRequest` (extensão e Pro): a IA não cria nem anexa arquivos; escreve cada um em
+  bloco cercado com linguagem e nome na abertura (` ```mql5 mt5/JA_Delta.mqh `).
+- `format.js`: `mdToHtml` renderiza blocos cercados (`<div class="code">`); com `{ files: true }` (só na tela)
+  põe o botão `data-file`. `codeFiles(md)` lista `{ name, lang, text, named }` (nomes saneados, sem `..`,
+  repetidos ganham `-2`; sem nome: `trecho-N.ext`). `zipFiles(files)` gera .zip "store" com CRC32 e nomes UTF-8.
+- `streamClaude` e `streamAnswer` (servidor): erro depois de já ter texto (fora cancelamento e JSON estruturado)
+  devolve o parcial + `stoppedNote(motivo)` em vez de lançar; `stopReason: "error"`.
+
 ## Respostas longas, exportar, excluir e editar conversas (0.9.67)
 
 - `ANSWER_MAX_TOKENS` = 32000. `stop_reason: "max_tokens"` com texto: `streamClaude` (sem `format`) e o
