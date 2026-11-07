@@ -1389,3 +1389,50 @@ test("streamClaude: avisa as etapas (analisando, pesquisando, escrevendo) e desi
     globalThis.fetch = real;
   }
 });
+
+test("arquivos da IA: blocos de código viram downloads e .zip válido", async () => {
+  const { codeFiles, mdToHtml, zipFiles } = await import("../src/lib/format.js");
+  const md = "Pacote:\n```mql5 JA_Delta.mqh\nint x = 1 < 2;\n```\n```ntsl profit/../Robo.ntsl\nvar a;\n```\n```\nsolto\n```\n```mql5 JA_Delta.mqh\ndup\n```";
+  const files = codeFiles(md);
+  assert.deepEqual(files.map((f) => f.name), ["JA_Delta.mqh", "profit/Robo.ntsl", "trecho-3.txt", "JA_Delta-2.mqh"]);
+  assert.equal(files[0].text, "int x = 1 < 2;\n");
+  const html = mdToHtml(md, { files: true });
+  assert.match(html, /<pre><code>int x = 1 &lt; 2;<\/code><\/pre>/);
+  assert.match(html, /data-file="3"/);
+  assert.doesNotMatch(mdToHtml(md), /data-file/);
+  const bytes = new Uint8Array(await zipFiles(files).arrayBuffer());
+  assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
+  assert.deepEqual([...bytes.slice(-22, -18)], [0x50, 0x4b, 0x05, 0x06]);
+  assert.equal(bytes[bytes.length - 22 + 10], 4);
+});
+
+test("chat avisa a IA que ela não cria nem anexa arquivos", async () => {
+  const { chatRequest } = await import("../src/lib/ai.js");
+  const s = createSession({ platform: "meet", title: "R" });
+  const r = chatRequest(s, [{ role: "user", text: "gere um zip" }]);
+  assert.match(r.system, /não cria, salva, anexa/);
+  assert.match(r.system, /nunca invente caminhos ou links/);
+});
+
+test("streamClaude: se cair depois de já ter texto (ex.: na continuação), devolve o parcial com o motivo", async () => {
+  const sse = (events) => new Response(new ReadableStream({ start(c) { for (const e of events) c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(e)}\n\n`)); c.close(); } }), { status: 200 });
+  const real = globalThis.fetch;
+  let queue = [
+    sse([{ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }, { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "```mql5 A.mq5\nint a;" } }, { type: "message_delta", delta: { stop_reason: "max_tokens" } }]),
+    new Response(JSON.stringify({ error: { message: "prompt is too long" } }), { status: 400 }),
+  ];
+  globalThis.fetch = async () => queue.shift();
+  try {
+    const seen = [];
+    const r = await streamClaude({ apiKey: "k", model: "m", system: "s", messages: [{ role: "user", content: "x" }], onDelta: (t) => seen.push(t) });
+    assert.ok(r.text.startsWith("```mql5 A.mq5\nint a;"));
+    assert.match(r.text, /parou antes do fim \(Erro 400: prompt is too long\)/);
+    assert.equal(r.stopReason, "error");
+    assert.equal(seen.at(-1), r.text);
+    // Sem texto nenhum, o erro continua subindo.
+    queue = [new Response(JSON.stringify({ error: { message: "ruim" } }), { status: 400 })];
+    await assert.rejects(streamClaude({ apiKey: "k", model: "m", system: "s", messages: [{ role: "user", content: "x" }] }), /ruim/);
+  } finally {
+    globalThis.fetch = real;
+  }
+});

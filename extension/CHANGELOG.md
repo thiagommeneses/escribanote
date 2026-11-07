@@ -2,6 +2,12 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.68 beta — 2026-11-07
+- Corrigido: ao pedir arquivos (código, .md, um pacote .zip), a IA dizia que tinha gerado e anexado arquivos que não existiam, com nomes, pastas e até "conferi o .zip". O chat só recebe texto; agora a IA sabe disso, escreve o conteúdo completo de cada arquivo num bloco de código com o nome dele e nunca mais promete anexos, pastas ou links.
+- Blocos de código nas respostas aparecem formatados, com o nome do arquivo no topo e um botão **Baixar**. Quando a resposta tem dois ou mais arquivos, **Baixar os arquivos (.zip)** junta todos, mantendo as pastas (ex.: `mt5/`, `profit/`).
+- PDF e Word continuam pelo botão **Exportar** da resposta.
+- Corrigido: uma resposta longa que já estava sendo escrita sumia inteira se a conexão caísse ou se a continuação automática falhasse (por exemplo, quando a conversa, as capturas e o texto parcial passavam do limite do modelo). Agora o que já veio fica salvo, com um aviso do motivo no fim, e é só pedir "continue de onde parou". Os erros também passam a aparecer no fim da conversa, sem precisar rolar.
+
 ## 0.9.67 beta — 2026-11-06
 - Corrigido: respostas muito longas (roteiros detalhados) paravam no meio de uma frase sem aviso, porque a IA chegava ao limite de tamanho. O limite das perguntas dobrou (32 mil tokens) e, se ainda assim a resposta for cortada, a IA continua sozinha do ponto exato onde parou, até duas vezes, e o texto sai emendado. Se mesmo assim faltar, a resposta termina com um aviso claro. Vale também para a ata, com a sua chave e no Pro, sem custo extra de créditos.
 - Pergunte à IA: botão **Exportar** em cada resposta, com "Só a resposta", "Pergunta e resposta" ou "Conversa inteira", em Markdown, Word, texto ou PDF.

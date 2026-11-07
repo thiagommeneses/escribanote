@@ -360,6 +360,11 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; }
 .md ul { padding-left: 18px; margin: 4px 0; }
 .md li.task { list-style: none; margin-left: -18px; }
 .md code { background: var(--bg-soft); padding: 0 4px; border-radius: 4px; }
+.md .code { margin: 8px 0; border: 1px solid var(--border, #ddd); border-radius: 6px; overflow: hidden; }
+.md .code-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 8px; font-size: 12px; background: var(--bg-soft); }
+.md .code-head span { font-family: ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
+.md .code pre { margin: 0; padding: 8px; overflow-x: auto; max-height: 420px; font-size: 12px; }
+.md .code pre code { background: none; padding: 0; }
 .chat-log { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; margin: 6px 0; }
 .msg { max-width: 92%; padding: 8px 12px; border-radius: 12px; }
 .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
