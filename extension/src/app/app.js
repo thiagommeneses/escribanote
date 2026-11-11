@@ -4,6 +4,7 @@ import { computeStats, findMe, fmtDuration } from "../lib/stats.js";
 import { API_ORIGIN, QUESTION_MAX, LONG_QUESTION, questionLength } from "../lib/ai.js";
 import { getSettings, setSettings, DEFAULT_TAGS, DEFAULT_QUESTIONS, MODELS, DEFAULTS, HQ_MODELS } from "../lib/settings.js";
 import { LANG_NAMES } from "../lib/lang.js";
+import { probeAudio, WHOLE_MAX_BYTES } from "../asr/decode.js";
 import { diffDocument, diffStats, diffHtml as versionDiffHtml } from "../lib/diff.js";
 import { getBackupDir, setBackupDir, backupPermission, resolveBackupFolder, readBackupFolder } from "../lib/backup.js";
 import { readTrack, writeTrackFile } from "../lib/audiovault.js";
@@ -274,6 +275,11 @@ async function openSession(id, pinned) {
   if (state.session) {
     state.hq = (await send({ type: "hq-get", tabId: state.tabId, id: state.session.id })) || { state: "idle" };
     state.langIssue = isLive(state.session) ? await send({ type: "lang-issue", id: state.session.id }) : null;
+    // transcrição de arquivo rodando (a tela foi reaberta no meio): volta a mostrar o avanço
+    if (!state.retrans) {
+      const live = await send({ type: "retranscribe-status", id: state.session.id }).catch(() => null);
+      if (live) state.retrans = { id: state.session.id, status: live, detached: true };
+    }
   }
   render();
   maybeAutoHq();
@@ -362,13 +368,54 @@ function renderHqButton() {
     : "Transcreve de novo o áudio da reunião com o Whisper, neste computador";
 }
 
+// "1h05" / "47 min" / "40 s"
+function fmtMin(ms) {
+  const m = Math.floor((ms || 0) / 60000);
+  if (m >= 60) return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
+  return m ? `${m} min` : `${Math.round((ms || 0) / 1000)} s`;
+}
+// Transcrição de arquivo em andamento: etapa, barra, parte, minutos transcritos/lidos, tempo e previsão.
+function retransBanner(st) {
+  if (st.state === "error") return `<div class="banner warn">${icon("hq")} <b>A transcrição falhou:</b> ${esc(st.message || "")}</div>`;
+  const total = st.durationMs || 0;
+  const head = st.state === "decoding" || st.state === "starting" ? "Abrindo o arquivo…" : st.state === "loading" ? `Preparando o modelo${st.progress ? `… ${st.progress}%` : "…"}` : st.state === "cancelling" ? "Cancelando…" : `Transcrevendo… ${st.progress || 0}%`;
+  const facts = [];
+  if (st.parts > 1 && st.part) facts.push(`parte ${st.part} de ${st.parts}`);
+  if (st.doneMs != null && total) facts.push(`${fmtMin(st.doneMs)} de ${fmtMin(total)} transcritos`);
+  else if (st.doneMs) facts.push(`${fmtMin(st.doneMs)} transcritos`);
+  if (st.readMs && st.doneMs != null && st.readMs - st.doneMs > 60_000) facts.push(`lido até ${fmtMin(st.readMs)}`);
+  if (st.elapsedMs) facts.push(`${fmtMin(st.elapsedMs)} decorridos`);
+  if (st.etaMs) facts.push(`faltam ~${fmtMin(st.etaMs)}`);
+  const pct = Math.max(0, Math.min(100, st.progress || 0));
+  const long = total > PART_MS ? ` Áudio longo: vai em partes de 30 min e o ponto é salvo ao fim de cada uma; se o navegador fechar, dá para continuar dali.` : "";
+  return `<div class="banner">${icon("hq")} <b>${esc(head)}</b>${facts.length ? ` <span class="muted">· ${esc(facts.join(" · "))}</span>` : ""}
+    ${st.state === "running" ? `<div class="rt-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>` : ""}
+    <span class="muted tiny">A transcrição aparece aqui conforme avança; você pode continuar usando o Escribanote.${long}</span>
+    <span class="banner-acts"><button type="button" class="btn sm" data-retrans="cancel">Cancelar</button></span></div>`;
+}
+const PART_MS = 30 * 60_000;
+$("t-banner").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-retrans]");
+  if (!b || !state.session) return;
+  const s = state.session;
+  if (b.dataset.retrans === "cancel") {
+    if (state.retrans) state.retrans.status = { ...(state.retrans.status || {}), state: "cancelling" };
+    renderBanner();
+    return void send({ type: "retranscribe-cancel", id: s.id }).catch(() => {});
+  }
+  startRetranscribe(b, s, { resume: b.dataset.retrans === "resume" });
+});
+
 function renderBanner() {
   const parts = [];
   const rt = state.retrans;
-  if (rt && state.session && rt.id === state.session.id) {
-    const st = rt.status || {};
-    const label = st.state === "decoding" ? "Lendo o áudio…" : st.state === "loading" ? `Baixando o modelo… ${st.progress || 0}%` : st.state === "error" ? `Falhou: ${st.message || ""}` : `Transcrevendo… ${st.progress || 0}%${st.segments ? ` · ${st.segments} trechos` : ""}`;
-    parts.push(`<div class="banner${st.state === "error" ? " warn" : ""}">${icon("hq")} <b>${esc(label)}</b> ${st.state === "error" ? "" : "A transcrição aparece aqui conforme avança; você pode continuar usando o Escribanote."}</div>`);
+  if (rt && state.session && rt.id === state.session.id) parts.push(retransBanner(rt.status || {}));
+  else if (state.session?.audio?.partial && !rt) {
+    // Transcrição de arquivo interrompida (navegador fechado, erro ou Cancelar): continua do último ponto salvo.
+    const p = state.session.audio.partial;
+    const total = p.durationMs || state.session.audio.durationMs || 0;
+    parts.push(`<div class="banner warn">${icon("hq")} <b>A transcrição do áudio parou ${p.doneMs ? `em ${fmtMin(p.doneMs)}${total ? ` de ${fmtMin(total)}` : ""}` : "antes de terminar a primeira parte"}.</b> ${p.doneMs ? "O que veio até ali está salvo." : ""}
+      <span class="banner-acts"><button type="button" class="btn sm primary" data-retrans="resume">${p.doneMs ? "Continuar de onde parou" : "Começar de novo"}</button>${p.doneMs ? `<button type="button" class="btn sm" data-retrans="restart">Recomeçar do zero</button>` : ""}</span></div>`);
   }
   // Aberto sozinho ao sair da chamada (ajuste "Ao sair da reunião")
   if (params.get("fim") && state.session?.endedAt && params.get("id") === state.session.id) {
@@ -2547,19 +2594,29 @@ $("p-del").addEventListener("click", async () => {
   renderMeeting();
 });
 // Escolha do modelo para transcrever de novo / arquivo importado; depois, o service worker faz o resto.
-async function startRetranscribe(anchor, s) {
+// durationMs (opcional): duração já conhecida do arquivo, para avisar quando for longo.
+async function startRetranscribe(anchor, s, { resume = false, durationMs = 0 } = {}) {
   if (!s || !s.audio || !s.audio.tracks?.length) return;
-  const cur = state.settings.hq !== "off" ? state.settings.hq : "base";
-  const choices = Object.entries(HQ_MODELS).map(([key, m]) => ({ key, label: `${m.label || key}${key === cur ? " (atual)" : ""}`, primary: key === cur }));
-  choices.push({ key: "cancel", label: "Cancelar" });
-  const key = await askChoice(anchor, { title: "Transcrever com qual modelo?", text: "Roda neste computador. O modelo é baixado na primeira vez. A transcrição atual pelo áudio é substituída; legendas, notas e destaques ficam.", choices });
-  if (!key || key === "cancel") return;
+  if (state.retrans) return toast("Já há uma transcrição em andamento.");
+  const partial = resume ? s.audio.partial : null;
+  let key = partial?.model && HQ_MODELS[partial.model] ? partial.model : null;
+  if (!key) {
+    const cur = state.settings.hq !== "off" ? state.settings.hq : "base";
+    const choices = Object.entries(HQ_MODELS).map(([k, m]) => ({ key: k, label: `${m.label || k}${k === cur ? " (atual)" : ""}`, primary: k === cur }));
+    choices.push({ key: "cancel", label: "Cancelar" });
+    const total = durationMs || s.audio.durationMs || 0;
+    const long = total > PART_MS
+      ? ` Este áudio tem ${fmtMin(total)}: será transcrito em ${Math.ceil(total / PART_MS)} partes de 30 min e pode demorar bastante (num computador sem placa de vídeo, às vezes mais que a duração do áudio). O progresso e o tempo restante aparecem acima da transcrição, e dá para cancelar e continuar depois.`
+      : "";
+    key = await askChoice(anchor, { title: "Transcrever com qual modelo?", text: `Roda neste computador. O modelo é baixado na primeira vez. A transcrição atual pelo áudio é substituída; legendas, notas e destaques ficam.${long}`, choices });
+    if (!key || key === "cancel") return;
+  }
   state.retrans = { id: s.id, status: { state: "starting", progress: 0 } };
   renderBanner();
   try {
-    const done = await send({ type: "retranscribe", id: s.id, modelKey: key, lang: state.settings.captionLang });
+    const done = await send({ type: "retranscribe", id: s.id, modelKey: key, lang: state.settings.captionLang, ...(resume ? { resume: true } : {}) });
     if (state.session && state.session.id === s.id && done) state.session = normalize(done);
-    toast("Transcrição concluída");
+    toast(done?.audio?.partial ? "Transcrição cancelada; dá para continuar depois" : "Transcrição concluída");
   } catch (err) {
     toast(err.message || String(err));
   } finally {
@@ -2573,17 +2630,20 @@ $("import-audio").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
-  if (file.size > 1024 * 1024 * 1024) return toast("Arquivo grande demais (máximo 1 GB).");
+  if (file.size > 2 * 1024 * 1024 * 1024) return toast("Arquivo grande demais (máximo 2 GB).");
   try {
+    // Formato e duração antes de importar: arquivos longos recebem o aviso de tempo e vão em partes.
+    const probe = await probeAudio(file).catch(() => null);
+    if (probe && !probe.streaming && file.size > WHOLE_MAX_BYTES) return toast(`Não dá para ler este arquivo em partes (${probe.reason}). Converta para m4a, mp3, ogg ou wav.`);
     const title = file.name.replace(/\.[^.]+$/, "").slice(0, 200) || "Arquivo importado";
     const rec = normalize(await send({ type: "import-create", title, name: file.name, bytes: file.size, startedAt: file.lastModified || Date.now() }));
     const bytes = await writeTrackFile(rec.id, "import", file);
-    await send({ type: "audio-meta", sessionId: rec.id, meta: { startedAt: rec.startedAt, tracks: ["import"], mime: file.type || "", bytes, done: true, keep: false, imported: file.name } });
+    await send({ type: "audio-meta", sessionId: rec.id, meta: { startedAt: rec.startedAt, tracks: ["import"], mime: file.type || "", bytes, done: true, keep: false, imported: file.name, ...(probe?.durationMs ? { durationMs: probe.durationMs } : {}) } });
     state.view = "meeting";
     state.tab = "transcript";
     await openSession(rec.id, true);
     renderList();
-    await startRetranscribe($("p-retrans"), state.session);
+    await startRetranscribe($("p-retrans"), state.session, { durationMs: probe?.durationMs || 0 });
   } catch (err) {
     toast("Não deu para importar: " + (err.message || err));
   }
@@ -3809,7 +3869,15 @@ let pending = null;
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "backup-updated") return refreshBackupUi();
   if (msg.type === "retranscribe-progress") {
-    if (state.retrans && state.retrans.id === msg.sessionId) { state.retrans.status = msg.status || {}; if (state.session && state.session.id === msg.sessionId) renderBanner(); }
+    if (state.retrans && state.retrans.id === msg.sessionId) {
+      state.retrans.status = state.retrans.status?.state === "cancelling" && msg.status?.state === "running" ? state.retrans.status : msg.status || {};
+      // reaberta no meio: ninguém espera a resposta do pedido original, então o fim é tratado aqui
+      if (state.retrans.detached && ["done", "cancelled"].includes(msg.status?.state)) {
+        state.retrans = null;
+        setTimeout(() => state.session?.id === msg.sessionId && openSession(msg.sessionId, state.pinned), 800);
+      }
+      if (state.session && state.session.id === msg.sessionId) renderBanner();
+    }
     return;
   }
   if (msg.type === "account-updated") return renderAccount();

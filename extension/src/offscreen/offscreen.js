@@ -5,6 +5,7 @@ import { createPipeline } from "../asr/pipeline.js";
 import { openMic, watchMic } from "../asr/mic.js";
 import { startKeeping } from "../asr/keep.js";
 import { readTrack } from "../lib/audiovault.js";
+import { probeAudio, decodeAudio } from "../asr/decode.js";
 
 const state = { tabId: null, status: { state: "idle" }, play: null, mic: null, keep: null, retrans: null };
 
@@ -19,12 +20,17 @@ function report(patch) {
 }
 
 const pipe = createPipeline({
-  onStatus: (patch) => { if (state.retrans) retransProgress(patch); else report(patch); },
+  onStatus: (patch) => {
+    if (!state.retrans) return report(patch);
+    // durante a retranscrição o avanço (%) é o do áudio, não o do carregamento do modelo
+    if (patch.state === "running") { const { progress: _p, ...rest } = patch; return retransProgress(rest); }
+    retransProgress(patch);
+  },
   onResult: (seg) => {
     if (state.retrans && seg.mergeVoices) return chrome.runtime.sendMessage({ type: "asr-result", sessionId: state.retrans.sessionId, seg }).catch(() => {});
     if (state.retrans) {
       state.retrans.segments++;
-      retransProgress({ progress: Math.min(99, Math.round(((seg.end - state.retrans.startedAt) / Math.max(1, state.retrans.durationMs)) * 100)) });
+      state.retrans.lastEnd = Math.max(state.retrans.lastEnd, seg.end - state.retrans.startedAt);
       return chrome.runtime.sendMessage({ type: "asr-result", sessionId: state.retrans.sessionId, seg }).catch(() => {});
     }
     return chrome.runtime.sendMessage({ type: "asr-result", tabId: state.tabId, seg }).catch(() => {});
@@ -39,60 +45,117 @@ function retransProgress(patch) {
   chrome.runtime.sendMessage({ type: "retranscribe-progress", sessionId: r.sessionId, status: { ...r.status, segments: r.segments } }).catch(() => {});
 }
 
-// Decodifica uma faixa do cofre (WebM/Opus gravado, ou mp3/wav/m4a importado) em mono 16 kHz.
-async function decodeTrack(file) {
-  const buf = await file.arrayBuffer();
-  const ctx = new AudioContext();
-  let decoded;
-  try {
-    decoded = await ctx.decodeAudioData(buf);
-  } finally {
-    await ctx.close().catch(() => {});
-  }
-  const SR = 16000;
-  const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * SR), SR);
-  const src = off.createBufferSource();
-  src.buffer = decoded;
-  src.connect(off.destination);
-  src.start();
-  const out = await off.startRendering();
-  return { samples: out.getChannelData(0), durationMs: Math.round(decoded.duration * 1000) };
-}
-
 // Transcreve de novo (ou pela primeira vez, num arquivo importado) as faixas guardadas de uma reunião.
 // Usa o mesmo pipeline da alta precisão, com fontes offline no relógio original (startedAt).
-async function retranscribe({ sessionId, modelKey, lang, diarize, startedAt, tracks, profiles }) {
+// O áudio é lido em fluxo (decode.js), em trechos de 30 s, com a fila do Whisper limitada: um arquivo
+// de 3 h ocupa a mesma memória que um de 5 min. O avanço é contado em partes de 30 min; ao fim de cada
+// parte a fila é esvaziada e o ponto é salvo, para retomar dali se o navegador fechar no meio.
+// fromMs > 0 retoma: o começo do áudio é lido e descartado, sem transcrever.
+const PART_MS = 30 * 60_000;
+const QUEUE_MAX = 6;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function retranscribe({ sessionId, modelKey, lang, diarize, startedAt, tracks, profiles, fromMs = 0 }) {
   if (state.tabId) throw new Error("A alta precisão está em uso numa reunião. Termine-a antes de transcrever de novo.");
   if (state.retrans) throw new Error("Já há uma transcrição em andamento.");
-  state.retrans = { sessionId, startedAt, durationMs: 0, segments: 0, status: { state: "starting", progress: 0 } };
+  const t0 = Date.now();
+  const r = (state.retrans = { sessionId, startedAt, durationMs: 0, segments: 0, fromMs, lastEnd: fromMs, cancel: false, status: { state: "starting", progress: 0 } });
+  const elapsed = () => Date.now() - t0;
   try {
     pipe.reset();
-    retransProgress({ state: "decoding" });
-    const decoded = [];
+    retransProgress({ state: "decoding", fromMs });
+    const inputs = [];
     for (const source of tracks) {
       const f = await readTrack(sessionId, source);
       if (!f || !f.size) continue;
-      const d = await decodeTrack(f);
-      decoded.push({ source, ...d });
-      state.retrans.durationMs = Math.max(state.retrans.durationMs, d.durationMs);
+      const probe = await probeAudio(f);
+      inputs.push({ source, file: f, probe });
+      r.durationMs = Math.max(r.durationMs, probe.durationMs || 0);
     }
-    if (!decoded.length) throw new Error("O áudio desta reunião não está mais neste computador.");
+    if (!inputs.length) throw new Error("O áudio desta reunião não está mais neste computador.");
+    const parts = r.durationMs ? Math.max(1, Math.ceil(r.durationMs / PART_MS)) : null;
+    retransProgress({ state: "loading", durationMs: r.durationMs, parts });
     await pipe.run(modelKey, lang, { diarize: !!diarize, profiles });
-    retransProgress({ state: "running", progress: 0 });
     // a faixa dos outros entra antes do microfone: o filtro de eco compara com o que já chegou
-    decoded.sort((a, b) => (a.source === "mic") - (b.source === "mic"));
-    for (const d of decoded) pipe.addOfflineSource(d.source, startedAt)(d.samples);
+    inputs.sort((a, b) => (a.source === "mic") - (b.source === "mic"));
+    const streams = inputs.map((i) => ({
+      source: i.source,
+      it: decodeAudio(i.file, { probe: i.probe, onBytes: (got, total) => (i.bytes = got / total) })[Symbol.asyncIterator](),
+      push: null,
+      ms: 0,
+      done: false,
+      input: i,
+    }));
+    let nextCheckpoint = (Math.floor(fromMs / PART_MS) + 1) * PART_MS;
+    let lastReport = 0;
+    const readMs = () => Math.min(...streams.map((s) => (s.done ? Infinity : s.ms)).concat(r.durationMs || Infinity));
+    const report = (force) => {
+      if (!force && Date.now() - lastReport < 1000) return;
+      lastReport = Date.now();
+      const read = Math.max(0, ...streams.map((s) => s.ms));
+      const done = Math.max(fromMs, Math.min(r.lastEnd, read));
+      const total = r.durationMs || 0;
+      const byBytes = Math.min(...streams.map((s) => s.input.bytes || 0));
+      const progress = total ? Math.min(99, Math.round((done / total) * 100)) : Math.min(99, Math.round(byBytes * 100));
+      const rate = (done - fromMs) / Math.max(1, elapsed()); // minutos de áudio por minuto de trabalho
+      const etaMs = total && done - fromMs > 60_000 && rate > 0 ? Math.round((total - done) / rate) : null;
+      retransProgress({ state: "running", progress, doneMs: done, readMs: Math.min(read, total || read), durationMs: total, part: Math.min(parts || Infinity, Math.floor(done / PART_MS) + 1), parts, elapsedMs: elapsed(), etaMs, fromMs });
+    };
+    for (;;) {
+      if (r.cancel) break;
+      const live = streams.filter((s) => !s.done);
+      if (!live.length) break;
+      // o microfone só avança quando a faixa dos outros já está 30 s à frente (ou acabou)
+      const others = live.filter((s) => s.source !== "mic");
+      const minOther = others.length ? Math.min(...others.map((s) => s.ms)) : Infinity;
+      const pick = live.filter((s) => s.source !== "mic" || s.ms + 30_000 <= minOther).sort((a, b) => a.ms - b.ms)[0] || live[0];
+      const { value, done } = await pick.it.next();
+      if (done) { pick.done = true; continue; }
+      const startMs = pick.ms;
+      pick.ms += (value.length / 16) | 0;
+      if (pick.ms <= fromMs) continue; // retomada: lido e descartado
+      let samples = value;
+      if (!pick.push) {
+        // primeira amostra usada: a fonte começa no ponto de retomada (o horário segue o do áudio)
+        const skip = Math.max(0, Math.round((fromMs - startMs) * 16));
+        samples = value.subarray(skip);
+        pick.push = pipe.addOfflineSource(pick.source, startedAt + startMs + skip / 16);
+      }
+      pick.push(samples);
+      // fila do Whisper limitada: a leitura espera a transcrição alcançar
+      while (pipe.queued > QUEUE_MAX && !r.cancel) { pipe.pump(); report(); await sleep(250); }
+      report();
+      if (readMs() >= nextCheckpoint) {
+        // fim de uma parte: termina o que está na fila e salva o ponto de retomada
+        while (pipe.busy && !r.cancel) { pipe.pump(); await sleep(250); }
+        if (r.cancel) break;
+        chrome.runtime.sendMessage({ type: "retranscribe-checkpoint", sessionId, doneMs: nextCheckpoint, durationMs: r.durationMs, modelKey }).catch(() => {});
+        nextCheckpoint += PART_MS;
+      }
+    }
+    for (const s of streams) s.it.return?.().catch?.(() => {});
+    if (r.cancel) {
+      pipe.reset();
+      await pipe.stopCapture();
+      retransProgress({ state: "cancelled" });
+      return { cancelled: true, segments: r.segments, durationMs: r.durationMs };
+    }
     pipe.flushSources();
     await pipe.drain();
     await pipe.stopCapture();
-    retransProgress({ state: "done", progress: 100 });
-    return { segments: state.retrans.segments, durationMs: state.retrans.durationMs };
+    if (!r.durationMs) r.durationMs = Math.max(...streams.map((s) => s.ms));
+    chrome.runtime.sendMessage({ type: "retranscribe-checkpoint", sessionId, done: true, doneMs: r.durationMs, durationMs: r.durationMs, modelKey }).catch(() => {});
+    retransProgress({ state: "done", progress: 100, doneMs: r.durationMs, durationMs: r.durationMs, elapsedMs: elapsed() });
+    return { segments: r.segments, durationMs: r.durationMs };
   } catch (err) {
     retransProgress({ state: "error", message: err.message || String(err) });
     throw err;
   } finally {
     state.retrans = null;
   }
+}
+async function cancelRetranscribe({ sessionId }) {
+  if (state.retrans && (!sessionId || state.retrans.sessionId === sessionId)) state.retrans.cancel = true;
+  return { ok: true };
 }
 
 async function stopCapture() {
@@ -190,7 +253,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   // object-url: o service worker não tem URL.createObjectURL; o backup automático grande passa por aqui.
   const objectUrl = async ({ text, mime }) => ({ url: URL.createObjectURL(new Blob([text], { type: mime || "application/json" })) });
   const revokeUrl = async ({ url }) => URL.revokeObjectURL(url);
-  const run = { start, stop, retranscribe, "transcribe-samples": transcribeSamples, "analyze-speakers": analyzeSpeakers, status: async () => ({ ...state.status, tabId: state.tabId, retrans: !!state.retrans }), "object-url": objectUrl, "revoke-url": revokeUrl }[msg.type];
+  const run = { start, stop, retranscribe, "retranscribe-cancel": cancelRetranscribe, "transcribe-samples": transcribeSamples, "analyze-speakers": analyzeSpeakers, status: async () => ({ ...state.status, tabId: state.tabId, retrans: !!state.retrans }), "object-url": objectUrl, "revoke-url": revokeUrl }[msg.type];
   if (!run) return;
   run(msg)
     .then((r) => sendResponse(r ?? { ok: true }))

@@ -2,6 +2,12 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.69 beta — 2026-11-10
+- **Transcrever arquivo** aguenta áudios e vídeos longos (1, 2, 3 h): o arquivo é lido aos poucos, em trechos de 30 s, sem carregar tudo na memória, e o trabalho é contado em partes de 30 min. Antes, um arquivo longo podia travar o navegador. Formatos: mp3, wav, ogg (Opus/Vorbis), m4a, mp4, mov e webm, até 2 GB.
+- Antes de começar, um aviso com a duração do áudio, quantas partes ele terá e que pode demorar.
+- Durante a transcrição, uma barra acima do texto mostra a porcentagem, a parte atual ("parte 2 de 6"), os minutos já transcritos e até onde o arquivo foi lido, o tempo decorrido e quanto falta. Fechar e reabrir a tela não perde o acompanhamento.
+- Botão **Cancelar**. Ao fim de cada parte o ponto é salvo: se você cancelar, se der erro ou se o navegador fechar, a reunião mostra **Continuar de onde parou**, sem refazer nem repetir o que já foi transcrito (ou **Recomeçar do zero**).
+
 ## 0.9.68 beta — 2026-11-07
 - Corrigido: ao pedir arquivos (código, .md, um pacote .zip), a IA dizia que tinha gerado e anexado arquivos que não existiam, com nomes, pastas e até "conferi o .zip". O chat só recebe texto; agora a IA sabe disso, escreve o conteúdo completo de cada arquivo num bloco de código com o nome dele e nunca mais promete anexos, pastas ou links.
 - Blocos de código nas respostas aparecem formatados, com o nome do arquivo no topo e um botão **Baixar**. Quando a resposta tem dois ou mais arquivos, **Baixar os arquivos (.zip)** junta todos, mantendo as pastas (ex.: `mt5/`, `profit/`).

@@ -9,6 +9,22 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Arquivos longos em fluxo (0.9.69)
+
+- `src/asr/decode.js`: `probeAudio(file)` (formato, duração, config do decodificador) e `decodeAudio(file)`, gerador
+  de trechos mono 16 kHz (~30 s). Leitura em janelas de 8 MB; demuxadores próprios para WAV (PCM direto), MP3
+  (quadros), OGG (páginas → Opus/Vorbis), WebM/MKV (EBML "achatado", aceita tamanhos desconhecidos do MediaRecorder)
+  e MP4/M4A/MOV (stsz/stsc/stco; moov no início ou no fim). Decodificação pelo `AudioDecoder` (WebCodecs), sem
+  `flush()` no meio (o MP3 perderia o reservatório de bits); `Resampler` sinc/Blackman em fluxo. Sem suporte:
+  `decodeAudioData` inteiro, só até `WHOLE_MAX_BYTES` (300 MB).
+- Offscreen `retranscribe`: fila do Whisper limitada (`pipe.queued` ≤ 6), partes de 30 min (`PART_MS`); no fim de cada
+  parte esvazia a fila e manda `retranscribe-checkpoint` → `s.audio.partial = { doneMs, durationMs, model }`.
+  `retranscribe` com `resume: true` corta `s.asr` no ponto e passa `fromMs` (o começo é lido e descartado).
+  `retranscribe-cancel`; `retranscribe-status` (estado ao vivo em `retransLive`, para a tela reaberta).
+- Testes: `test/e2e-decode.mjs [--longo]` (13 formatos, tom de 440 Hz, inclui 2 h) e `test/e2e-import-long.mjs`
+  (65 min: aviso, partes, cancelar no ponto salvo e continuar). Perfil reaproveitado roda o service worker antigo
+  em cache: apague `Default/Service Worker/{ScriptCache,Database}` de uma cópia do perfil.
+
 ## Arquivos escritos pela IA (0.9.68)
 
 - `FILES_NOTE` no system do `chatRequest` (extensão e Pro): a IA não cria nem anexa arquivos; escreve cada um em

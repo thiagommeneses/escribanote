@@ -27,6 +27,7 @@ const cache = new Map(); // id -> sessão
 const dirty = new Set();
 const tabLocks = new Map();
 const sessionTab = new Map(); // id -> tabId (reunião em andamento)
+const retransLive = new Map(); // id da reunião -> estado da transcrição de arquivo em andamento
 const asrInflight = new Set(); // resultados do Whisper ainda sendo aplicados (o encerramento espera por eles)
 const endedTab = new Map(); // id -> tabId da reunião encerrada (para "Retomar" pelo painel enquanto a aba existir)
 let saveTimer = null;
@@ -1182,23 +1183,62 @@ async function handle(msg, sender) {
       const st = await getSettings();
       const modelKey = HQ_MODELS[msg.modelKey] ? msg.modelKey : st.hq !== "off" ? st.hq : "base";
       const diarize = (msg.diarize ?? st.diarize) && (await isPro());
-      noteEvent(s, "retranscribe-start", { model: modelKey, diarize: !!diarize, tracks: s.audio.tracks });
-      s.asr = [];
-      s.voices = {};
-      s.fixes = {};
-      s.reviewed = {};
+      // Retomar: mantém o que já foi transcrito até o último ponto salvo (fim de uma parte de 30 min).
+      const fromMs = msg.resume && s.audio.partial ? Math.max(0, Number(s.audio.partial.doneMs) || 0) : 0;
+      noteEvent(s, "retranscribe-start", { model: modelKey, diarize: !!diarize, tracks: s.audio.tracks, ...(fromMs ? { fromMs } : {}) });
+      if (fromMs) {
+        const cut = s.audio.startedAt + fromMs;
+        s.asr = s.asr.filter((e) => e.start < cut);
+      } else {
+        s.asr = [];
+        s.voices = {};
+        s.fixes = {};
+        s.reviewed = {};
+      }
+      s.audio.partial = { doneMs: fromMs, durationMs: s.audio.partial?.durationMs || s.audio.durationMs || 0, model: modelKey, at: Date.now() };
       await changed(s, { now: true });
       await ensureOffscreen();
       const profiles = diarize && st.voiceProfiles ? await loadProfiles() : null;
-      const r = await toOffscreen({ type: "retranscribe", sessionId: s.id, modelKey, lang: msg.lang || st.captionLang, diarize, startedAt: s.audio.startedAt, tracks: s.audio.tracks, profiles });
-      if (r && r.error) { noteEvent(s, "retranscribe-error", { message: r.error }); await changed(s, { now: true }); throw new Error(r.error); }
+      retransLive.set(s.id, { state: "starting", progress: 0, fromMs });
+      let r;
+      try {
+        r = await toOffscreen({ type: "retranscribe", sessionId: s.id, modelKey, lang: msg.lang || st.captionLang, diarize, startedAt: s.audio.startedAt, tracks: s.audio.tracks, profiles, fromMs });
+      } finally {
+        retransLive.delete(s.id);
+      }
+      if (r && r.error) { const es = await getSession(s.id); noteEvent(es, "retranscribe-error", { message: r.error }); await changed(es, { now: true }); throw new Error(r.error); }
       const done = await getSession(s.id);
+      if (r && r.cancelled) {
+        noteEvent(done, "retranscribe-cancelled", { doneMs: done.audio?.partial?.doneMs || 0 });
+        await changed(done, { now: true });
+        return done;
+      }
       done.audio = { ...(done.audio || {}), model: modelKey, durationMs: done.audio?.durationMs || r.durationMs };
       if (!done.audio.durationMs && r.durationMs) done.audio.durationMs = r.durationMs;
+      delete done.audio.partial;
       noteEvent(done, "retranscribe-done", { segments: r.segments, model: modelKey });
       await changed(done, { now: true });
       if (st.autoReview) reviewPending(done, { force: true }).catch(() => {});
       return done;
+    }
+    case "retranscribe-cancel":
+      await toOffscreen({ type: "retranscribe-cancel", sessionId: msg.id }).catch(() => {});
+      return true;
+    case "retranscribe-status":
+      return retransLive.get(msg.id) || null;
+    case "retranscribe-progress":
+      // vindo do offscreen: guarda o estado para a tela reaberta continuar mostrando o avanço
+      if (msg.sessionId) ["done", "error", "cancelled"].includes(msg.status?.state) ? retransLive.delete(msg.sessionId) : retransLive.set(msg.sessionId, msg.status || {});
+      return undefined;
+    case "retranscribe-checkpoint": {
+      // fim de uma parte de 30 min (ou do arquivo): ponto de retomada se o navegador fechar no meio
+      const cs = await getSession(msg.sessionId);
+      if (!cs || !cs.audio) return true;
+      if (msg.done) delete cs.audio.partial;
+      else cs.audio.partial = { ...(cs.audio.partial || {}), doneMs: Number(msg.doneMs) || 0, durationMs: Number(msg.durationMs) || 0, model: msg.modelKey || cs.audio.partial?.model, at: Date.now() };
+      if (msg.durationMs && !cs.audio.durationMs) cs.audio.durationMs = Number(msg.durationMs);
+      await changed(cs, { now: true });
+      return true;
     }
     case "chapters": {
       if (!s) throw new Error("Reunião não encontrada.");

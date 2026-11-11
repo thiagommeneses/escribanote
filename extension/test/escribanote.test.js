@@ -1436,3 +1436,29 @@ test("streamClaude: se cair depois de já ter texto (ex.: na continuação), dev
     globalThis.fetch = real;
   }
 });
+
+test("reamostragem em fluxo: 44,1 kHz e 48 kHz viram 16 kHz sem mudar a frequência nem a duração", async () => {
+  const { Resampler, OUT_RATE } = await import("../src/asr/decode.js");
+  for (const rate of [44100, 48000, 22050]) {
+    const rs = new Resampler(rate);
+    const sec = 5, f = 1000;
+    const parts = [];
+    // entra em pedaços de tamanhos irregulares, como sai do decodificador
+    for (let i = 0, n = 0; n < rate * sec; i++) {
+      const len = Math.min(rate * sec - n, 997 + (i % 7) * 311);
+      const x = new Float32Array(len);
+      for (let k = 0; k < len; k++) x[k] = 0.5 * Math.sin((2 * Math.PI * f * (n + k)) / rate);
+      parts.push(rs.push(x));
+      n += len;
+    }
+    parts.push(rs.flush());
+    const out = Float32Array.from(parts.flatMap((p) => [...p]));
+    assert.ok(Math.abs(out.length - OUT_RATE * sec) < 40, `${rate}: ${out.length} amostras`);
+    let cross = 0;
+    for (let i = 1; i < OUT_RATE * sec - 20; i++) if ((out[i] >= 0) !== (out[i - 1] >= 0)) cross++;
+    assert.ok(Math.abs(cross / 2 / sec - f) < 3, `${rate}: ${cross / 2 / sec} Hz`);
+    const mid = out.subarray(OUT_RATE, OUT_RATE * 4);
+    const rms = Math.sqrt(mid.reduce((s, v) => s + v * v, 0) / mid.length);
+    assert.ok(Math.abs(rms - 0.5 / Math.SQRT2) < 0.02, `${rate}: volume ${rms}`);
+  }
+});
