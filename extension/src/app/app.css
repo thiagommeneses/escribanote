@@ -434,6 +434,9 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; border-r
 /* reconhecimento */
 .banner { border-radius: 10px; padding: 9px 12px; margin-bottom: 10px; font-size: 13px; background: var(--accent-soft); color: var(--text); }
 .banner.warn { background: #fff4d6; color: #5c4400; border: 1px solid #f3d98b; }
+.banner .rt-bar { height: 6px; border-radius: 3px; background: color-mix(in srgb, currentColor 14%, transparent); margin: 7px 0 5px; overflow: hidden; }
+.banner .rt-bar span { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width .4s ease; }
+.banner .banner-acts { display: inline-flex; gap: 6px; margin-left: 8px; vertical-align: middle; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .banner.warn { background: #3a3014; color: #fde293; border-color: #5a4b1f; } }
 :root[data-theme="dark"] .banner.warn { background: #3a3014; color: #fde293; border-color: #5a4b1f; }
 .badge-hq, .badge-fix { font-size: 11px; border-radius: 999px; padding: 0 7px; border: 1px solid var(--border); color: var(--text-2); cursor: default; }

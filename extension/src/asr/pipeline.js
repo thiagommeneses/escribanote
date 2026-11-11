@@ -362,7 +362,7 @@ export function createPipeline({ onResult, onStatus = () => {}, onLevel, onEvent
 
   function setEcho(on) { state.echo = !!on; }
 
-  return { addStream, replaceStream, recordStream, addOfflineSource, flushSources, addPushSource, loadEngine, loadSpeakers, run, stop, stopCapture, drain, reset, pump, setEcho, get busy() { return state.busy || state.queue.length > 0; }, get speakers() { return state.speakers; }, get stats() { return state.stats; } };
+  return { addStream, replaceStream, recordStream, addOfflineSource, flushSources, addPushSource, loadEngine, loadSpeakers, run, stop, stopCapture, drain, reset, pump, setEcho, get busy() { return state.busy || state.queue.length > 0; }, get queued() { return state.queue.length; }, get speakers() { return state.speakers; }, get stats() { return state.stats; } };
 }
 
 function trackLabel(stream) {
