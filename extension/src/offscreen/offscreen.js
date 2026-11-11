@@ -54,7 +54,7 @@ function retransProgress(patch) {
 const PART_MS = 30 * 60_000;
 const QUEUE_MAX = 6;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function retranscribe({ sessionId, modelKey, lang, diarize, startedAt, tracks, profiles, fromMs = 0 }) {
+async function retranscribe({ sessionId, modelKey, lang, diarize, startedAt, tracks, profiles, fromMs = 0, server = null }) {
   if (state.tabId) throw new Error("A alta precisão está em uso numa reunião. Termine-a antes de transcrever de novo.");
   if (state.retrans) throw new Error("Já há uma transcrição em andamento.");
   const t0 = Date.now();
@@ -73,6 +73,7 @@ async function retranscribe({ sessionId, modelKey, lang, diarize, startedAt, tra
     }
     if (!inputs.length) throw new Error("O áudio desta reunião não está mais neste computador.");
     const parts = r.durationMs ? Math.max(1, Math.ceil(r.durationMs / PART_MS)) : null;
+    if (server) return await serverTranscribe({ r, input: inputs[0], sessionId, startedAt, fromMs, lang, parts, server, elapsed });
     retransProgress({ state: "loading", durationMs: r.durationMs, parts });
     await pipe.run(modelKey, lang, { diarize: !!diarize, profiles });
     // a faixa dos outros entra antes do microfone: o filtro de eco compara com o que já chegou
@@ -153,6 +154,87 @@ async function retranscribe({ sessionId, modelKey, lang, diarize, startedAt, tra
     state.retrans = null;
   }
 }
+// Transcrição no servidor (Pro): o arquivo é lido aqui, em fluxo, e vai em pedaços de 10 min (WAV 16 kHz
+// mono, ~19 MB) para a conta, que usa o Whisper large-v3-turbo do Groq. As falas voltam com o horário do
+// áudio e entram na reunião como as do Whisper local. Mesmas partes de 30 min, ponto salvo e Cancelar.
+const SERVER_CHUNK_MS = 10 * 60_000;
+function wavBytes(samples) {
+  const out = new DataView(new ArrayBuffer(44 + samples.length * 2));
+  const w = (o, t) => { for (let i = 0; i < t.length; i++) out.setUint8(o + i, t.charCodeAt(i)); };
+  w(0, "RIFF"); out.setUint32(4, 36 + samples.length * 2, true); w(8, "WAVE"); w(12, "fmt "); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 1, true);
+  out.setUint32(24, 16000, true); out.setUint32(28, 32000, true); out.setUint16(32, 2, true); out.setUint16(34, 16, true); w(36, "data"); out.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) out.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 32767, true);
+  return out.buffer;
+}
+async function postChunk(server, wav, offsetMs, lang) {
+  const url = `${server.base}/api/v1/asr/chunk?job=${encodeURIComponent(server.job)}&offsetMs=${offsetMs}&lang=${encodeURIComponent((lang || "pt").slice(0, 2))}`;
+  for (let attempt = 0; ; attempt++) {
+    let res, data;
+    try {
+      res = await fetch(url, { method: "POST", headers: { authorization: `Bearer ${server.token}`, "content-type": "audio/wav" }, body: wav });
+      data = await res.json().catch(() => null);
+    } catch {
+      res = null;
+    }
+    if (res && res.ok) return data;
+    // ocupado ou falha passageira: tenta de novo (até 4 vezes, esperando mais a cada vez)
+    const retry = !res || res.status === 429 || res.status >= 500;
+    if (!retry || attempt >= 3) throw new Error(data?.message || (res ? `Erro ${res.status} no servidor` : "Sem conexão com a conta Escribanote."));
+    await sleep(2000 * 2 ** attempt);
+  }
+}
+async function serverTranscribe({ r, input, sessionId, startedAt, fromMs, lang, parts, server, elapsed }) {
+  const total = r.durationMs;
+  retransProgress({ state: "running", progress: total ? Math.round((fromMs / total) * 100) : 0, doneMs: fromMs, durationMs: total, parts, part: Math.floor(fromMs / PART_MS) + 1, server: true, elapsedMs: elapsed() });
+  let readMs = 0, doneMs = fromMs, nextCheckpoint = (Math.floor(fromMs / PART_MS) + 1) * PART_MS;
+  let buf = [], bufLen = 0, bufStart = null;
+  const send = async () => {
+    if (!bufLen) return;
+    const all = new Float32Array(bufLen);
+    let o = 0;
+    for (const p of buf) { all.set(p, o); o += p.length; }
+    const offsetMs = bufStart;
+    buf = []; bufLen = 0; bufStart = null;
+    const out = await postChunk(server, wavBytes(all), Math.round(offsetMs), lang);
+    for (const seg of out.segments || []) {
+      r.segments++;
+      await chrome.runtime.sendMessage({ type: "asr-result", sessionId, seg: { start: startedAt + seg.start, end: startedAt + seg.end, text: seg.text, source: input.source } }).catch(() => {});
+    }
+    doneMs = offsetMs + all.length / 16;
+    const rate = (doneMs - fromMs) / Math.max(1, elapsed());
+    retransProgress({ state: "running", progress: total ? Math.min(99, Math.round((doneMs / total) * 100)) : 0, doneMs, readMs, durationMs: total, parts, part: Math.min(parts || Infinity, Math.floor(doneMs / PART_MS) + 1), elapsedMs: elapsed(), etaMs: total && rate > 0 ? Math.round((total - doneMs) / rate) : null, segments: r.segments, server: true });
+    while (doneMs >= nextCheckpoint) {
+      chrome.runtime.sendMessage({ type: "retranscribe-checkpoint", sessionId, doneMs: nextCheckpoint, durationMs: total, modelKey: "server" }).catch(() => {});
+      nextCheckpoint += PART_MS;
+    }
+  };
+  const it = decodeAudio(input.file, { probe: input.probe })[Symbol.asyncIterator]();
+  for (;;) {
+    if (r.cancel) break;
+    const { value, done } = await it.next();
+    if (done) break;
+    const start = readMs;
+    readMs += value.length / 16;
+    if (readMs <= fromMs) continue;
+    const skip = Math.max(0, Math.round((fromMs - start) * 16));
+    const part = skip ? value.subarray(skip) : value;
+    if (bufStart == null) bufStart = start + skip / 16;
+    buf.push(part);
+    bufLen += part.length;
+    if (bufLen >= SERVER_CHUNK_MS * 16) await send();
+  }
+  it.return?.().catch?.(() => {});
+  if (r.cancel) {
+    retransProgress({ state: "cancelled" });
+    return { cancelled: true, segments: r.segments, durationMs: total };
+  }
+  await send();
+  if (!r.durationMs) r.durationMs = readMs;
+  chrome.runtime.sendMessage({ type: "retranscribe-checkpoint", sessionId, done: true, doneMs: r.durationMs, durationMs: r.durationMs, modelKey: "server" }).catch(() => {});
+  retransProgress({ state: "done", progress: 100, doneMs: r.durationMs, durationMs: r.durationMs, elapsedMs: elapsed() });
+  return { segments: r.segments, durationMs: r.durationMs };
+}
+
 async function cancelRetranscribe({ sessionId }) {
   if (state.retrans && (!sessionId || state.retrans.sessionId === sessionId)) state.retrans.cancel = true;
   return { ok: true };

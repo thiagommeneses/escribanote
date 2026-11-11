@@ -1462,3 +1462,15 @@ test("reamostragem em fluxo: 44,1 kHz e 48 kHz viram 16 kHz sem mudar a frequên
     assert.ok(Math.abs(rms - 0.5 / Math.SQRT2) < 0.02, `${rate}: volume ${rms}`);
   }
 });
+
+test("página da web (Transcrever esta aba): o som da aba vira o falante do site, sem depender de legendas", () => {
+  const s = createSession({ id: "w1", platform: "web", title: "Aula", startedAt: 1_000_000 });
+  s.web = true;
+  s.speakers.outros = "YouTube";
+  // há uma legenda solta de outra pessoa no mesmo horário: numa página da web ela não manda no falante
+  applyEvent(s, { kind: "caption", id: "c1", speakerId: "ana", speakerName: "Ana", text: "oi" }, 1_001_000);
+  addAsrSegment(s, { start: 1_000_500, end: 1_003_000, text: "Hoje vamos falar de geografia.", source: "tab" });
+  assert.equal(s.asr.length, 1);
+  assert.equal(s.asr[0].speakerId, "outros");
+  assert.equal(speakerName(s, "outros"), "YouTube");
+});

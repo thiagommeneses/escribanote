@@ -29,7 +29,7 @@ export function dateLabel(ts) {
   return new Date(ts).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
-export const PLATFORM = { meet: "Google Meet", teams: "Microsoft Teams", zoom: "Zoom", slack: "Slack", desktop: "Áudio do computador", import: "Arquivo importado" };
+export const PLATFORM = { meet: "Google Meet", teams: "Microsoft Teams", zoom: "Zoom", slack: "Slack", desktop: "Áudio do computador", import: "Arquivo importado", web: "Página da web", youtube: "YouTube" };
 
 // O que entra na exportação (opts.include). Sem escolha, fica como sempre foi: tudo, menos as conversas com a IA.
 export const EXPORT_PARTS = [

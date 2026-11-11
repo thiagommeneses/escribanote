@@ -86,6 +86,9 @@ faça um backup manual (abaixo).
    `STRIPE_SECRET_KEY` no `/opt/escribanote/pro.env`.
 3. No console da Anthropic, crie uma chave só para o servidor, com limite de gasto mensal, e coloque em
    `ANTHROPIC_API_KEY`.
+   Para a transcrição de arquivos no servidor, crie uma chave no console do Groq (console.groq.com) e coloque em
+   `GROQ_API_KEY`. Sem ela, a opção "No servidor" responde 503 e o resto segue normal. O plano gratuito do Groq
+   limita o volume de áudio por hora (e 25 MB por envio, abaixo dos ~19 MB dos pedaços de 10 min); para uso real, ative o plano Developer.
 4. Rode o script que cria produto, preços (mensal R$ 15 e US$ 3, anual R$ 150 e US$ 30), webhook e portal, e grava os IDs no `pro.env`:
 
 ```bash

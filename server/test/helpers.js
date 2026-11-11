@@ -48,6 +48,30 @@ export function fakeAnthropic() {
   return fake;
 }
 
+// Groq simulado: devolve fake.data (formato verbose_json) ou lança fake.failWith.
+export function fakeGroq() {
+  const fake = {
+    calls: [],
+    failWith: null,
+    data: { segments: [{ start: 1.5, end: 4, text: " Bom dia a todos.", no_speech_prob: 0.01, avg_logprob: -0.2 }, { start: 30, end: 31, text: " Obrigado.", no_speech_prob: 0.9, avg_logprob: -1.5 }] },
+    async transcribe(wav, opts) {
+      fake.calls.push({ bytes: wav.length, opts });
+      if (fake.failWith) throw fake.failWith;
+      return fake.data;
+    },
+  };
+  return fake;
+}
+
+// WAV PCM 16 bits mono 16 kHz com `sec` segundos de silêncio.
+export function silentWav(sec) {
+  const data = Math.round(sec * 16000) * 2;
+  const b = Buffer.alloc(44 + data);
+  b.write("RIFF", 0); b.writeUInt32LE(36 + data, 4); b.write("WAVE", 8); b.write("fmt ", 12); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(16000, 24); b.writeUInt32LE(32000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(data, 40);
+  return b;
+}
+
 export function fakeStripe() {
   const s = {
     calls: [],
@@ -79,8 +103,9 @@ export async function setup(overrides = {}) {
   const mailer = fakeMailer();
   const anthropic = fakeAnthropic();
   const stripe = fakeStripe();
-  const app = await buildApp({ config, db, mailer, anthropic, stripe });
-  return { app, db, config, mailer, anthropic, stripe, close: async () => (await app.close(), await db.close()) };
+  const groq = fakeGroq();
+  const app = await buildApp({ config, db, mailer, anthropic, stripe, transcribe: groq.transcribe });
+  return { app, db, config, mailer, anthropic, stripe, groq, close: async () => (await app.close(), await db.close()) };
 }
 
 // Faz login pelo link mágico e devolve um cliente com o cookie da sessão.

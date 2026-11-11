@@ -395,7 +395,9 @@ export function addAsrSegment(session, seg, meId) {
   let speakerId;
   if (seg.source === "mic") speakerId = meId || "me";
   else {
-    const byCaption = seg.source === "system" || seg.source === "import" ? null : resolveSpeaker(session, seg.start, seg.end);
+    // Sem legendas (áudio do computador, arquivo importado, página da web): o falante vem da voz ou é "outros".
+    const noCaptions = seg.source === "system" || seg.source === "import" || !!session.web;
+    const byCaption = noCaptions ? null : resolveSpeaker(session, seg.start, seg.end);
     if (seg.voice) {
       // Voz identificada pelo Whisper: aprende a quem ela pertence pelas legendas e, quando as
       // legendas faltam (ou no gravador, que não tem legendas), usa a voz como falante.
@@ -403,7 +405,7 @@ export function addAsrSegment(session, seg, meId) {
       if (byCaption) votes[byCaption] = (votes[byCaption] || 0) + 1;
       const learned = Object.entries(votes).sort((a, b) => b[1] - a[1])[0];
       speakerId = byCaption || (learned && learned[1] >= 2 ? learned[0] : seg.voice);
-    } else speakerId = seg.source === "system" || seg.source === "import" ? "outros" : byCaption;
+    } else speakerId = noCaptions ? "outros" : byCaption;
   }
   // Voz reconhecida por um perfil salvo: o nome vem dele (e junta com o participante de mesmo nome).
   if (seg.voiceName && seg.voice && speakerId === seg.voice && !isJunkName(seg.voiceName)) {

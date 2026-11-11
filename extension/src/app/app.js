@@ -251,6 +251,8 @@ async function followCurrent() {
   }
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   state.tabId = tab ? tab.id : null;
+  // Sem a permissão "tabs" a URL só vem para a aba em que o ícone foi clicado; sem URL, oferece mesmo assim.
+  state.tabWeb = !!tab && (!tab.url || /^https?:/.test(tab.url));
   const id = state.tabId != null ? await send({ type: "active-for-tab", tabId: state.tabId }) : null;
   await openSession(id, false);
 }
@@ -308,6 +310,7 @@ function renderMeeting() {
   const s = state.session;
   $("m-empty").hidden = !!s;
   $("m").hidden = !s;
+  $("web-cta").hidden = IS_TAB || !state.tabWeb;
   if (!s) return renderRecent();
   syncClean();
 
@@ -323,7 +326,7 @@ function renderMeeting() {
   ].join("");
   $("m-pause").hidden = !isLive(s);
   // Parar: fecha a reunião agora, mesmo continuando na chamada. Retomar: só logo depois de parar, com a aba aberta.
-  const resumable = !!s.endedAt && !s.recorder && Date.now() - s.endedAt < 10 * 60 * 1000 && s.id === state.stoppedHere;
+  const resumable = !!s.endedAt && !s.recorder && !s.web && Date.now() - s.endedAt < 10 * 60 * 1000 && s.id === state.stoppedHere;
   $("m-stop").hidden = !(isLive(s) || resumable);
   $("m-stop").className = "btn sm danger" + (resumable ? " resume" : "");
   $("m-stop").innerHTML = resumable
@@ -352,7 +355,7 @@ function renderMeeting() {
 function renderHqButton() {
   const s = state.session;
   const b = $("m-hq");
-  b.hidden = !isLive(s) || s.recorder; // o gravador do computador já transcreve com o Whisper
+  b.hidden = !isLive(s) || s.recorder || s.web; // o gravador e a página da web já transcrevem com o Whisper
   const h = state.hq || { state: "idle" };
   const label = {
     idle: "Alta precisão",
@@ -378,7 +381,7 @@ function fmtMin(ms) {
 function retransBanner(st) {
   if (st.state === "error") return `<div class="banner warn">${icon("hq")} <b>A transcrição falhou:</b> ${esc(st.message || "")}</div>`;
   const total = st.durationMs || 0;
-  const head = st.state === "decoding" || st.state === "starting" ? "Abrindo o arquivo…" : st.state === "loading" ? `Preparando o modelo${st.progress ? `… ${st.progress}%` : "…"}` : st.state === "cancelling" ? "Cancelando…" : `Transcrevendo… ${st.progress || 0}%`;
+  const head = st.state === "decoding" || st.state === "starting" ? "Abrindo o arquivo…" : st.state === "loading" ? `Preparando o modelo${st.progress ? `… ${st.progress}%` : "…"}` : st.state === "cancelling" ? "Cancelando…" : `Transcrevendo${st.server ? " no servidor" : ""}… ${st.progress || 0}%`;
   const facts = [];
   if (st.parts > 1 && st.part) facts.push(`parte ${st.part} de ${st.parts}`);
   if (st.doneMs != null && total) facts.push(`${fmtMin(st.doneMs)} de ${fmtMin(total)} transcritos`);
@@ -497,6 +500,21 @@ $("m-title").addEventListener("keydown", (e) => {
   if (e.key === "Escape") { e.target.value = state.session ? state.session.title : ""; e.target.blur(); }
 });
 $("m-rename").addEventListener("click", () => { $("m-title").focus(); $("m-title").select(); });
+
+$("web-start").addEventListener("click", async (e) => {
+  const b = e.currentTarget;
+  if (state.tabId == null) return;
+  b.disabled = true;
+  try {
+    const id = await send({ type: "web-start", tabId: state.tabId });
+    await openSession(id, false);
+    toast("Transcrevendo o som desta aba. Dê play no vídeo; para terminar, use Parar.");
+  } catch (err) {
+    toast(err.message || String(err));
+  } finally {
+    b.disabled = false;
+  }
+});
 
 $("m-stop").addEventListener("click", async () => {
   const s = state.session;
@@ -2599,22 +2617,29 @@ async function startRetranscribe(anchor, s, { resume = false, durationMs = 0 } =
   if (!s || !s.audio || !s.audio.tracks?.length) return;
   if (state.retrans) return toast("Já há uma transcrição em andamento.");
   const partial = resume ? s.audio.partial : null;
-  let key = partial?.model && HQ_MODELS[partial.model] ? partial.model : null;
+  let key = partial?.model && (HQ_MODELS[partial.model] || partial.model === "server") ? partial.model : null;
+  const total = durationMs || s.audio.durationMs || 0;
   if (!key) {
     const cur = state.settings.hq !== "off" ? state.settings.hq : "base";
     const choices = Object.entries(HQ_MODELS).map(([k, m]) => ({ key: k, label: `${m.label || k}${k === cur ? " (atual)" : ""}`, primary: k === cur }));
+    // Pro: transcrição no servidor (Whisper large no Groq), para arquivos importados com duração conhecida.
+    const { account } = await chrome.storage.local.get("account");
+    const pro = !!(account?.token && account.plan === "pro" && !account.invalid);
+    const serverOk = pro && s.audio.tracks.length === 1 && total > 0;
+    const credits = Math.max(1, Math.ceil(total / 3_600_000));
+    if (serverOk) choices.push({ key: "server", label: `No servidor (Pro, rápido) · ${credits} crédito${credits === 1 ? "" : "s"}` });
     choices.push({ key: "cancel", label: "Cancelar" });
-    const total = durationMs || s.audio.durationMs || 0;
     const long = total > PART_MS
-      ? ` Este áudio tem ${fmtMin(total)}: será transcrito em ${Math.ceil(total / PART_MS)} partes de 30 min e pode demorar bastante (num computador sem placa de vídeo, às vezes mais que a duração do áudio). O progresso e o tempo restante aparecem acima da transcrição, e dá para cancelar e continuar depois.`
+      ? ` Este áudio tem ${fmtMin(total)}: será transcrito em ${Math.ceil(total / PART_MS)} partes de 30 min e, neste computador, pode demorar bastante (sem placa de vídeo, às vezes mais que a duração do áudio). O progresso e o tempo restante aparecem acima da transcrição, e dá para cancelar e continuar depois.`
       : "";
-    key = await askChoice(anchor, { title: "Transcrever com qual modelo?", text: `Roda neste computador. O modelo é baixado na primeira vez. A transcrição atual pelo áudio é substituída; legendas, notas e destaques ficam.${long}`, choices });
+    const srv = serverOk ? ` No servidor, o áudio vai para a sua conta Escribanote e é transcrito pelo Whisper large em poucos minutos (1 crédito por hora de áudio; você tem ${account.balance ?? 0}).` : "";
+    key = await askChoice(anchor, { title: "Transcrever com qual modelo?", text: `Os modelos rápido e equilibrado rodam neste computador; o modelo é baixado na primeira vez. A transcrição atual pelo áudio é substituída; legendas, notas e destaques ficam.${long}${srv}`, choices });
     if (!key || key === "cancel") return;
   }
   state.retrans = { id: s.id, status: { state: "starting", progress: 0 } };
   renderBanner();
   try {
-    const done = await send({ type: "retranscribe", id: s.id, modelKey: key, lang: state.settings.captionLang, ...(resume ? { resume: true } : {}) });
+    const done = await send({ type: "retranscribe", id: s.id, modelKey: key, lang: state.settings.captionLang, ...(total ? { durationMs: total } : {}), ...(resume ? { resume: true } : {}) });
     if (state.session && state.session.id === s.id && done) state.session = normalize(done);
     toast(done?.audio?.partial ? "Transcrição cancelada; dá para continuar depois" : "Transcrição concluída");
   } catch (err) {
