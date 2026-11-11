@@ -488,7 +488,7 @@ async function openAfterCall(s, settings) {
   const mode = settings.afterCall || "off";
   const diag = { at: Date.now(), id: s.id, mode, entries: s.entries.length + s.asr.length, recorder: !!s.recorder };
   const note = (patch) => chrome.storage.local.set({ afterCallDiag: Object.assign(diag, patch) }).catch(() => {});
-  if (mode === "off" || s.recorder || diag.entries === 0) return note({ skipped: true });
+  if (mode === "off" || s.recorder || s.web || diag.entries === 0) return note({ skipped: true });
   let url = chrome.runtime.getURL(`src/app/app.html?id=${encodeURIComponent(s.id)}&fim=1`);
   if (mode === "web" && (await isPro())) {
     try {
@@ -843,7 +843,7 @@ function broadcastHq(tabId, status) {
   chrome.tabs.sendMessage(tabId, { type: "hq-updated", status }).catch(() => {});
 }
 
-async function startHq(tabId) {
+async function startHq(tabId, { mic } = {}) {
   const settings = await getSettings();
   // Sem modelo escolhido (ex.: huddle do Slack, que só tem o áudio), usa o do gravador ou o rápido.
   const modelKey = settings.hq !== "off" ? settings.hq : settings.recorderModel || "base";
@@ -868,7 +868,7 @@ async function startHq(tabId) {
   const keep = settings.audioKeep && hs ? { sessionId: hs.id } : null;
   const diarize = settings.diarize && (await isPro());
   const profiles = diarize && settings.voiceProfiles ? await loadProfiles() : null;
-  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: settings.hqMic, echo: settings.echoFilter !== false, diarize, keep, profiles });
+  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: mic ?? settings.hqMic, echo: settings.echoFilter !== false, diarize, keep, profiles });
   if (r && r.error) {
     broadcastHq(tabId, { state: "error", message: r.error });
     throw new Error(r.error);
@@ -1181,8 +1181,9 @@ async function handle(msg, sender) {
       if (!s.audio || !s.audio.tracks || !s.audio.tracks.length) throw new Error("Esta reunião não tem áudio guardado.");
       if (sessionTab.has(s.id)) throw new Error("A reunião ainda está em andamento.");
       const st = await getSettings();
-      const modelKey = HQ_MODELS[msg.modelKey] ? msg.modelKey : st.hq !== "off" ? st.hq : "base";
-      const diarize = (msg.diarize ?? st.diarize) && (await isPro());
+      const onServer = msg.modelKey === "server";
+      const modelKey = onServer ? "server" : HQ_MODELS[msg.modelKey] ? msg.modelKey : st.hq !== "off" ? st.hq : "base";
+      const diarize = !onServer && (msg.diarize ?? st.diarize) && (await isPro());
       // Retomar: mantém o que já foi transcrito até o último ponto salvo (fim de uma parte de 30 min).
       const fromMs = msg.resume && s.audio.partial ? Math.max(0, Number(s.audio.partial.doneMs) || 0) : 0;
       noteEvent(s, "retranscribe-start", { model: modelKey, diarize: !!diarize, tracks: s.audio.tracks, ...(fromMs ? { fromMs } : {}) });
@@ -1200,11 +1201,33 @@ async function handle(msg, sender) {
       await ensureOffscreen();
       const profiles = diarize && st.voiceProfiles ? await loadProfiles() : null;
       retransLive.set(s.id, { state: "starting", progress: 0, fromMs });
+      // No servidor (Pro): reserva os créditos pela duração que falta e passa o trabalho ao offscreen,
+      // que lê o arquivo aqui e manda os pedaços direto para a conta.
+      let server = null;
+      if (onServer) {
+        try {
+          if (!(await isPro())) throw new Error("A transcrição no servidor faz parte do Escribanote Pro.");
+          if (s.audio.tracks.length !== 1) throw new Error("No servidor só dá para transcrever arquivos importados (uma faixa). Use o Whisper deste computador.");
+          const total = Number(msg.durationMs) || s.audio.durationMs || 0;
+          if (!total) throw new Error("Não deu para saber a duração do áudio; use o Whisper deste computador.");
+          const job = await accountCall(() => accountFetch("/asr/start", { method: "POST", body: { durationMs: Math.max(1000, total - fromMs), meetingId: s.id } }));
+          server = { base: await accountBase(), token: (await getAccount()).token, job: job.job };
+          noteEvent(s, "asr-server", { credits: job.credits });
+          await changed(s);
+        } catch (err) {
+          retransLive.delete(s.id);
+          delete s.audio.partial;
+          await changed(s, { now: true });
+          throw new Error(err.body?.message || err.message);
+        }
+      }
       let r;
       try {
-        r = await toOffscreen({ type: "retranscribe", sessionId: s.id, modelKey, lang: msg.lang || st.captionLang, diarize, startedAt: s.audio.startedAt, tracks: s.audio.tracks, profiles, fromMs });
+        r = await toOffscreen({ type: "retranscribe", sessionId: s.id, modelKey, lang: msg.lang || st.captionLang, diarize, startedAt: s.audio.startedAt, tracks: s.audio.tracks, profiles, fromMs, server });
       } finally {
         retransLive.delete(s.id);
+        // fecha o trabalho na conta: sem nada transcrito, os créditos voltam
+        if (server) accountCall(() => accountFetch("/asr/finish", { method: "POST", body: { job: server.job, ok: !!(r && !r.error && (r.segments || !r.cancelled)), error: r?.error || (r?.cancelled ? "cancelado" : undefined) } })).catch(() => {});
       }
       if (r && r.error) { const es = await getSession(s.id); noteEvent(es, "retranscribe-error", { message: r.error }); await changed(es, { now: true }); throw new Error(r.error); }
       const done = await getSession(s.id);
@@ -1341,6 +1364,38 @@ async function handle(msg, sender) {
       asrInflight.add(p);
       p.finally(() => asrInflight.delete(p));
       return p;
+    }
+    case "web-start": {
+      // "Transcrever esta aba": qualquer página com som (YouTube, Instagram, aulas, podcasts). Sem legendas:
+      // o áudio da aba vai direto para o Whisper (alta precisão), sem microfone. O Chrome só libera o áudio
+      // da aba depois de um clique no ícone do Escribanote nela (o painel lateral aberto ali já conta).
+      const tabId = Number(msg.tabId);
+      const tab = await chrome.tabs.get(tabId).catch(() => null);
+      // Sem a permissão "tabs", a URL só aparece na aba em que o ícone foi clicado; sem ela, o próprio Chrome decide.
+      if (!tab || (tab.url && !/^https?:/.test(tab.url))) throw new Error("Abra a página com o vídeo ou áudio e use o botão no painel do Escribanote aberto nela.");
+      const cur = await activeFor(tabId);
+      if (cur) {
+        const live = await getSession(cur.id);
+        if (live && !live.endedAt && !live.web) throw new Error("Esta aba já tem uma reunião sendo transcrita.");
+        if (live && !live.endedAt) return live.id;
+      }
+      const now = Date.now();
+      const host = (tab.url ? new URL(tab.url).hostname : "página da web").replace(/^www\./, "").replace(/^m\./, "");
+      const site = /youtube\.com$|youtu\.be$/.test(host) ? "YouTube" : /instagram\.com$/.test(host) ? "Instagram" : host;
+      const title = String(tab.title || site).replace(/\s*[-–|]\s*(YouTube|Instagram)\s*$/i, "").slice(0, 200) || site;
+      const rec = await sessionForTab(tabId, { platform: "web", key: `web:${tabId}:${now}`, title, url: tab.url || "" });
+      rec.web = true;
+      rec.speakers.outros ||= site;
+      noteEvent(rec, "web-start", { host });
+      setBadge(tabId, rec);
+      await changed(rec, { now: true });
+      try {
+        await startHq(tabId, { mic: false });
+      } catch (err) {
+        await endSession(tabId, "web-error");
+        throw err;
+      }
+      return rec.id;
     }
     case "recorder-start": {
       // Gravador do computador (Slack e outros apps): a aba do gravador faz o papel da reunião,

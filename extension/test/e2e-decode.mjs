@@ -57,7 +57,7 @@ let failed = 0;
 try {
   let extId;
   for (let i = 0; i < 100 && !extId; i++) { const { targetInfos } = await send("Target.getTargets"); const sw = targetInfos.find((t) => t.type === "service_worker" && t.url.endsWith("/src/background.js")); if (sw) extId = new URL(sw.url).host; else await sleep(200); }
-  const { targetId } = await send("Target.createTarget", { url: `chrome-extension://${extId}/src/app/print.html` });
+  const { targetId } = await send("Target.createTarget", { url: `chrome-extension://${extId}/src/app/app.html?tab=1` });
   const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
   await sleep(1000);
   const ev = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }, sessionId); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
@@ -65,8 +65,9 @@ try {
     const t0 = Date.now();
     const r = await ev(`(async () => {
       const { probeAudio, decodeAudio, OUT_RATE } = await import("/src/asr/decode.js");
-      const blob = await (await fetch(${JSON.stringify(FILES + c.name)})).blob();
-      const file = new File([blob], ${JSON.stringify(c.name)});
+      // arrayBuffer: neste ambiente o Chromium recusa blobs grandes em /tmp (tmpfs); no app o File vem do disco
+      const bytes = await (await fetch(${JSON.stringify(FILES + c.name)})).arrayBuffer();
+      const file = new File([bytes], ${JSON.stringify(c.name)});
       const probe = await probeAudio(file);
       const out = { format: probe.format, durationMs: probe.durationMs, codec: probe.info?.config?.codec || null, streaming: probe.streaming };
       if (probe.info?.config) out.supported = (await AudioDecoder.isConfigSupported(probe.info.config)).supported;

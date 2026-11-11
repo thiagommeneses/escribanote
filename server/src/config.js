@@ -20,6 +20,7 @@ export function loadConfig(overrides = {}) {
     },
     mailFrom: env.MAIL_FROM || "",
     anthropicKey: env.ANTHROPIC_API_KEY || "",
+    groqKey: env.GROQ_API_KEY || "", // transcrição de arquivos no servidor (Pro)
     models: {
       strong: env.MODEL_STRONG || "claude-sonnet-5-5",
       fast: env.MODEL_FAST || "claude-haiku-5-5",

@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.70 beta — 2026-11-10
+- **Transcrever esta aba**: em qualquer página com som (YouTube, Instagram, aulas, podcasts), abra o painel do Escribanote pelo ícone e clique no botão. O som da aba é transcrito com o Whisper neste computador enquanto toca, sem microfone, numa sessão "Página da web" com o nome do vídeo. **Parar** encerra; fechar a aba também.
+- **Transcrever no servidor (Pro)**: ao importar um arquivo, a opção "No servidor (Pro, rápido)" manda o áudio para a sua conta e transcreve com o Whisper large em poucos minutos, mesmo arquivos de horas. Custa 1 crédito por hora de áudio, arredondado para cima e mostrado antes de começar. Se nada for transcrito, os créditos voltam. Também tem progresso, Cancelar e Continuar de onde parou.
+- O arquivo continua sendo lido no seu computador. Para o servidor vão só pedaços de 10 min de áudio.
+
 ## 0.9.69 beta — 2026-11-10
 - **Transcrever arquivo** aguenta áudios e vídeos longos (1, 2, 3 h): o arquivo é lido aos poucos, em trechos de 30 s, sem carregar tudo na memória, e o trabalho é contado em partes de 30 min. Antes, um arquivo longo podia travar o navegador. Formatos: mp3, wav, ogg (Opus/Vorbis), m4a, mp4, mov e webm, até 2 GB.
 - Antes de começar, um aviso com a duração do áudio, quantas partes ele terá e que pode demorar.

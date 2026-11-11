@@ -9,6 +9,21 @@ Extensão do Chrome (Manifest V3) que transcreve reuniões do **Google Meet**, *
 Até a versão 2.3 o projeto se chamava **Escriba** e, nas versões 2.4 e 2.5, **Reunilo**. A 2.6 só troca o
 nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, ajustes e a pasta de backup continuam valendo.
 
+## Página da web e transcrição no servidor (0.9.70)
+
+- `web-start {tabId}`: sessão `platform: "web"`, `s.web = true`, falante `outros` com o nome do site; chama
+  `startHq(tabId, { mic: false })`. `addAsrSegment` trata `session.web` como fonte sem legendas. O Chrome só libera
+  `tabCapture` depois do clique no ícone na aba (o painel aberto ali conta). Teste: `test/e2e-webtab.mjs`
+  (`--allowlisted-extension-id`; sem saída de áudio a fala não chega, `REQUIRE_AUDIO=1` exige).
+- `retranscribe` com `modelKey: "server"` (Pro, uma faixa, duração conhecida): o service worker abre
+  `POST /api/v1/asr/start {durationMs}` e passa `{ base, token, job }` ao offscreen, que lê o arquivo em fluxo e manda
+  pedaços de 10 min (`SERVER_CHUNK_MS`, WAV 16 kHz s16) para `POST /asr/chunk?job&offsetMs&lang`, com até 4
+  tentativas em 429/5xx. No fim, `POST /asr/finish {job, ok}`. Partes, checkpoint e retomada iguais aos do Whisper local.
+  Teste: `test/e2e-import-server.mjs` (conta simulada).
+- Servidor (`server/src/asr.js`): Groq `whisper-large-v3-turbo` (`GROQ_API_KEY`), 1 crédito por hora (`asrCredits`),
+  `ai_requests.kind = 'asr'` com `audio_ms` (migração 005) e `cost_usd` (US$ 0,04/h, mínimo de 10 s por envio).
+  O trabalho não aceita mais áudio que o pago (+2 min). Trechos com `no_speech_prob > 0,6` e `avg_logprob < -0,8` saem.
+
 ## Arquivos longos em fluxo (0.9.69)
 
 - `src/asr/decode.js`: `probeAudio(file)` (formato, duração, config do decodificador) e `decodeAudio(file)`, gerador

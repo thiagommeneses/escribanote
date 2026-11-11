@@ -2,6 +2,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import Stripe from "stripe";
 import { buildApp } from "./app.js";
+import { groqTranscriber } from "./asr.js";
 import { loadConfig } from "./config.js";
 import { grantMonthly } from "./credits.js";
 import { createDb, migrate } from "./db.js";
@@ -17,6 +18,7 @@ const app = await buildApp({
   mailer: createMailer(config, { info: (obj, msg) => console.log(JSON.stringify({ level: 30, msg, ...obj })) }),
   anthropic: config.anthropicKey ? new Anthropic({ apiKey: config.anthropicKey }) : null,
   stripe: config.stripe.secretKey ? new Stripe(config.stripe.secretKey) : null,
+  transcribe: config.groqKey ? groqTranscriber(config.groqKey) : null,
   logger: true,
 });
 if (applied.length) app.log.info({ applied }, "migrações aplicadas");

@@ -2,6 +2,7 @@
 import cookie from "@fastify/cookie";
 import Fastify from "fastify";
 import { registerAi } from "./ai.js";
+import { registerAsr } from "./asr.js";
 import { registerAuth } from "./auth.js";
 import { registerBilling } from "./billing.js";
 import { createSealer } from "./crypto.js";
@@ -13,7 +14,7 @@ import { registerSlack } from "./slack.js";
 
 export const VERSION = "1.0.0";
 
-export async function buildApp({ config, db, mailer, anthropic = null, stripe = null, logger = false, fetchImpl = globalThis.fetch }) {
+export async function buildApp({ config, db, mailer, anthropic = null, stripe = null, transcribe = null, logger = false, fetchImpl = globalThis.fetch }) {
   const app = Fastify({
     logger: logger && {
       level: "info",
@@ -73,6 +74,7 @@ export async function buildApp({ config, db, mailer, anthropic = null, stripe = 
   registerAuth(app, deps);
   registerMeetings(app, deps);
   registerAi(app, deps);
+  registerAsr(app, { ...deps, transcribe });
   registerBilling(app, deps);
   registerShares(app, deps);
   registerSlack(app, { ...deps, fetchImpl });
