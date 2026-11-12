@@ -1,5 +1,5 @@
 import { toBlocks, speakerName, timeline, participantNames, normalize, effectiveEntries, countMatches } from "../lib/transcript.js";
-import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName, ataEditorHtml, EXPORT_PARTS, EXPORT_DEFAULT, aiConversations, codeFiles, zipFiles } from "../lib/format.js";
+import { FORMATS, fileName, clock, toText, toHtml, mdToHtml, PLATFORM, dateLabel, ataPlainText, ataFileName, ataEditorHtml, EXPORT_PARTS, EXPORT_DEFAULT, aiConversations, codeFiles, zipFiles, normalizeLink } from "../lib/format.js";
 import { computeStats, findMe, fmtDuration } from "../lib/stats.js";
 import { API_ORIGIN, QUESTION_MAX, LONG_QUESTION, questionLength } from "../lib/ai.js";
 import { getSettings, setSettings, DEFAULT_TAGS, DEFAULT_QUESTIONS, MODELS, DEFAULTS, HQ_MODELS } from "../lib/settings.js";
@@ -254,7 +254,19 @@ async function followCurrent() {
   // Sem a permissão "tabs" a URL só vem para a aba em que o ícone foi clicado; sem URL, oferece mesmo assim.
   state.tabWeb = !!tab && (!tab.url || /^https?:/.test(tab.url));
   const id = state.tabId != null ? await send({ type: "active-for-tab", tabId: state.tabId }) : null;
+  state.linkWaiting = !id && state.tabId != null && !!(await send({ type: "link-pending", tabId: state.tabId }));
   await openSession(id, false);
+}
+
+// Link colado: o Chrome só libera o som da aba nova depois de um clique no ícone do Escribanote nela.
+const LINK_HINT = "Cole o link (YouTube, Instagram, aula, podcast). O vídeo abre numa aba e é transcrito enquanto toca.";
+const LINK_WAIT = "Clique no ícone do Escribanote na barra do navegador (ou Alt+Shift+E) e a transcrição começa sozinha. O Chrome exige esse clique para liberar o som da aba.";
+function renderLinkCta() {
+  $("link-form").classList.toggle("waiting", !!state.linkWaiting);
+  $("link-title").textContent = state.linkWaiting ? "O vídeo abriu: falta um clique" : "Tem o link de um vídeo?";
+  $("link-hint").textContent = state.linkWaiting ? LINK_WAIT : LINK_HINT;
+  $("link-url").hidden = !!state.linkWaiting;
+  $("link-go").hidden = !!state.linkWaiting;
 }
 
 async function openSession(id, pinned) {
@@ -310,8 +322,8 @@ function renderMeeting() {
   const s = state.session;
   $("m-empty").hidden = !!s;
   $("m").hidden = !s;
-  $("web-cta").hidden = IS_TAB || !state.tabWeb;
-  if (!s) return renderRecent();
+  $("web-cta").hidden = IS_TAB || !state.tabWeb || state.linkWaiting;
+  if (!s) return renderLinkCta(), renderRecent();
   syncClean();
 
   if (document.activeElement !== $("m-title")) $("m-title").value = s.title;
@@ -513,6 +525,24 @@ $("web-start").addEventListener("click", async (e) => {
     toast(err.message || String(err));
   } finally {
     b.disabled = false;
+  }
+});
+
+$("link-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  let url;
+  try { url = normalizeLink($("link-url").value); } catch (err) { return toast(err.message); }
+  $("link-go").disabled = true;
+  try {
+    const r = await send({ type: "link-open", url });
+    if (r && r.error) throw new Error(r.error);
+    $("link-url").value = "";
+    if (!IS_TAB && !state.pinned) followCurrent();
+    if (IS_TAB) toast("O vídeo abriu numa aba nova. Clique no ícone do Escribanote nela para começar.");
+  } catch (err) {
+    toast(err.message || String(err));
+  } finally {
+    $("link-go").disabled = false;
   }
 });
 
@@ -3903,6 +3933,13 @@ chrome.runtime.onMessage.addListener((msg) => {
       }
       if (state.session && state.session.id === msg.sessionId) renderBanner();
     }
+    return;
+  }
+  if (msg.type === "link-started" || msg.type === "link-error") {
+    if (msg.tabId === state.tabId) state.linkWaiting = false;
+    if (msg.type === "link-error") toast(msg.message);
+    else if (msg.tabId === state.tabId) toast("Transcrevendo o som do vídeo. Se ele não estiver tocando, dê play; para terminar, use Parar.");
+    if (msg.tabId === state.tabId && !state.pinned && !IS_TAB) followCurrent();
     return;
   }
   if (msg.type === "account-updated") return renderAccount();

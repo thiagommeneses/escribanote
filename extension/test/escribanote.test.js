@@ -1487,3 +1487,12 @@ test("servidor: fala inventada em silêncio cai, fala real fica e o fim é corta
   assert.equal(keepServerSegment(samples, off, { start: off + 5000, end: off + 9000, text: "Legendas pela comunidade Amara.org" }), null);
   assert.equal(keepServerSegment(samples, off, { start: off + 13_000, end: off + 14_000, text: "Fora do pedaço" }), null);
 });
+
+test("link colado: completa https://, recusa vazio e outros esquemas", async () => {
+  const { normalizeLink } = await import("../src/lib/format.js");
+  assert.equal(normalizeLink(" youtu.be/abc "), "https://youtu.be/abc");
+  assert.equal(normalizeLink("https://www.instagram.com/reel/x/"), "https://www.instagram.com/reel/x/");
+  assert.throws(() => normalizeLink(""), /Cole o link/);
+  assert.throws(() => normalizeLink("ftp://exemplo.com/a.mp3"), /http/);
+  assert.throws(() => normalizeLink("javascript:alert(1)"));
+});

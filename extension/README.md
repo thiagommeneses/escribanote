@@ -23,6 +23,13 @@ nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, aju
 - Servidor (`server/src/asr.js`): Groq `whisper-large-v3-turbo` (`GROQ_API_KEY`), 1 crédito por hora (`asrCredits`),
   `ai_requests.kind = 'asr'` com `audio_ms` (migração 005) e `cost_usd` (US$ 0,04/h, mínimo de 10 s por envio).
   O trabalho não aceita mais áudio que o pago (+2 min). Trechos com `no_speech_prob > 0,6` e `avg_logprob < -0,8` saem.
+- 0.9.72, link colado: `link-open {url}` (`normalizeLink` em format.js) abre a aba ativa e guarda `pendingLinks`
+  (tabId → url, prazo de 10 min, também em `storage.session`). O Chrome recusa `tabCapture.getMediaStreamId` numa aba
+  que a extensão abriu sem um clique no ícone nela ("Extension has not been invoked"), então a cada 1,5 s o service
+  worker tenta pegar o stream; quando o clique libera, chama `startWeb(tabId, { streamId, url })` (o antigo
+  `web-start`) e avisa o painel com `link-started`/`link-error`. `link-pending {tabId}` mostra o aviso no painel.
+  Sem a permissão "tabs", o título só aparece depois do clique: `startWeb` troca o nome provisório (o site) pelo
+  título da aba quando ele chega. Teste: `test/e2e-link.mjs` (sem e com `--allowlisted-extension-id`).
 - 0.9.71: o Groq devolve `no_speech_prob` 0 e "Thank you." em silêncio puro, então o filtro do servidor não basta.
   `keepServerSegment(samples, offsetMs, seg)` (segmenter.js) corta o fim no tamanho do pedaço, aplica `cleanTranscript`
   e descarta a fala se o pico de RMS em quadros de 30 ms ficar abaixo de `MIN_SPEECH_RMS` (ou de 0,02 numa frase pronta).
