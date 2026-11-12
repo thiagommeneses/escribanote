@@ -1507,3 +1507,34 @@ test("conta: o teste grátis do Pro para de valer no fim do prazo, mesmo sem con
   assert.equal(accountIsPro({ plan: "pro" }), false);
   assert.equal(accountIsPro(null), false);
 });
+
+test("loopStart: reel que recomeça é cortado na segunda volta; aula longa e frase repetida não", async () => {
+  const { loopStart } = await import("../src/lib/transcript.js");
+  const seg = (texts) => texts.map((text, i) => ({ text, start: i * 4000, end: i * 4000 + 3500 }));
+  const volta1 = [
+    "O Banco Central manteve a Selic em dez e meio por cento nesta quarta.",
+    "A decisão foi unânime e o comunicado veio mais duro do que o mercado esperava.",
+    "Para os analistas, o recado é que os juros não caem antes do segundo semestre.",
+    "E isso pesa no crédito, no consumo e na bolsa.",
+  ];
+  // segunda volta: cortes diferentes e pequenas diferenças do Whisper
+  const volta2 = [
+    "O Banco Central manteve a Selic em 10,5% nesta quarta. A decisão foi unânime",
+    "e o comunicado veio mais duro do que o mercado esperava. Para os analistas,",
+  ];
+  const asr = seg([...volta1, ...volta2]);
+  assert.equal(loopStart(asr), 4, "corta na primeira fala da segunda volta");
+  assert.equal(loopStart(seg(volta1)), -1, "uma volta só: nada a cortar");
+  assert.equal(loopStart(seg([...volta1, volta2[0]])), -1, "poucas palavras repetidas ainda não bastam");
+
+  const aula = seg([
+    "Hoje vamos falar de política monetária e de como os juros afetam a inflação.",
+    "Quando o Banco Central sobe a Selic, o crédito fica mais caro e a demanda desacelera.",
+    "Lembrem que o efeito não é imediato: leva de seis a nove meses para aparecer nos preços.",
+    "Repetindo o ponto principal: quando o Banco Central sobe a Selic, o crédito fica mais caro.",
+    "Agora vamos ver a curva de juros futuros e como o mercado precifica as próximas reuniões.",
+    "O DI de janeiro mostra a expectativa para a Selic no fim do ano que vem.",
+  ]);
+  assert.equal(loopStart(aula), -1, "frase repetida no meio da aula não é loop");
+  assert.equal(loopStart([]), -1);
+});

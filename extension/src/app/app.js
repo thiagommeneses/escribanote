@@ -3997,6 +3997,10 @@ chrome.runtime.onMessage.addListener((msg) => {
     }
     return;
   }
+  if (msg.type === "web-loop") {
+    if (state.session && state.session.id === msg.id) toast("O vídeo recomeçou: a transcrição parou sozinha, com uma volta completa.");
+    return;
+  }
   if (msg.type === "link-started" || msg.type === "link-error") {
     if (msg.tabId === state.tabId) state.linkWaiting = false;
     if (msg.type === "link-error") toast(msg.message);
