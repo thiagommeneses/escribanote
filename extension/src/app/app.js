@@ -36,7 +36,7 @@ const state = {
   shots: {},
   chatId: null,
   aiPort: null,
-  busy: null, // "ata" | "chat" | "review"
+  jobs: {}, // IA em andamento por tarefa: { ata|chat|review: { sessionId, stop } }; no Pro, várias ao mesmo tempo
   hq: { state: "idle" },
   hqAutoTried: new Set(),
   showOrig: new Set(),
@@ -1324,11 +1324,19 @@ function previousWithSame(s) {
     .slice(0, 5);
 }
 
+// Tarefas de IA em andamento. Sem o Pro, uma por vez (como antes); com o Pro, ata, revisão e pergunta rodam
+// juntas (cada uma com a sua conexão e o seu Cancelar/Parar). Duas perguntas na mesma conversa, nunca.
+const jobOf = (kind) => state.jobs[kind] || null;
+const isBusy = (kind) => !!jobOf(kind) && (!state.session || jobOf(kind).sessionId === state.session.id);
+const blocked = (kind) => !!jobOf(kind) || (!state.multiAi && Object.keys(state.jobs).some((k) => k !== kind));
+const BLOCKED_MSG = "A IA já está trabalhando em outra tarefa. Espere terminar ou cancele. No Escribanote Pro, ata, revisão e perguntas rodam ao mesmo tempo.";
+
 async function aiStatus() {
   if (!state.settings) state.settings = await getSettings();
   const { apiKey, account } = await chrome.storage.local.get(["apiKey", "account"]);
   const model = MODELS.find((m) => m.id === state.settings.aiModel);
   const pro = account?.token && account.plan === "pro" && !account.invalid;
+  state.multiAi = !!pro;
   if (apiKey) return { ok: true, kind: "key", text: `Sua chave da API · ${model ? model.label : state.settings.aiModel}`, hint: "A transcrição só é enviada quando você pede." };
   if (pro) return { ok: true, kind: "pro", text: `Escribanote Pro · ${account.balance ?? 0} crédito${account.balance === 1 ? "" : "s"}`, hint: `Ata, revisão e pergunta custam 1 crédito cada; pergunta com mais de ${LONG_QUESTION.toLocaleString("pt-BR")} caracteres, material de apoio, capturas ou pesquisa na web, 2.` };
   return { ok: false, kind: "none", text: "IA não configurada", hint: "Cadastre sua chave da API do Claude em Ajustes ou conecte a sua conta Escribanote Pro." };
@@ -1344,8 +1352,8 @@ async function renderAta() {
   const cur = hist[hist.length - 1];
   const viewing = state.viewing && state.viewing !== cur?.id ? hist.find((v) => v.id === state.viewing) : null;
   if (!viewing) state.viewing = null;
-  $("ata-gen").textContent = s.summary ? "Gerar de novo" : "Gerar ata";
-  $("ata-gen").disabled = !s.entries.length || (state.busy && state.busy !== "ata");
+  $("ata-gen").textContent = isBusy("ata") ? "Cancelar" : s.summary ? "Gerar de novo" : "Gerar ata";
+  $("ata-gen").disabled = !s.entries.length || (!isBusy("ata") && blocked("ata"));
   renderAtaTemplateSelect(s);
   // instruções extras desta reunião
   if (document.activeElement !== $("ata-prompt")) $("ata-prompt").value = s.ataPrompt || "";
@@ -1354,7 +1362,7 @@ async function renderAta() {
   $("ata-prompt-box").classList.toggle("active", hasPrompt);
 
   const editing = !$("ata-editor").hidden;
-  if (state.busy !== "ata" && !editing) {
+  if (!isBusy("ata") && !editing) {
     if (viewing) $("ata-body").innerHTML = withCites(mdToHtml(viewing.text));
     else if (s.summary) $("ata-body").innerHTML = withCites(mdToHtml(s.summary.text));
     if (viewing || s.summary) decorateAta();
@@ -1362,7 +1370,7 @@ async function renderAta() {
       ? `<div class="ata-empty"><div class="ico">${icon("nota")}</div><b>Nenhuma ata ainda</b><p>Gere uma ata com resumo, decisões, itens de ação e pendências. Escolha um modelo acima se a sua equipe tem um formato próprio.</p></div>`
       : `<div class="ata-empty"><div class="ico">${icon("mic")}</div><b>A ata nasce da transcrição</b><p>Quando a reunião tiver falas registradas, gere a ata por aqui.</p></div>`;
   }
-  $("ata-doc").classList.toggle("empty", !s.summary && !viewing && state.busy !== "ata");
+  $("ata-doc").classList.toggle("empty", !s.summary && !viewing && !isBusy("ata"));
   if (!s.summary && !viewing) $("ata-tools").hidden = true;
   // faixa com o estado da ata atual
   const meta = $("ata-meta");
@@ -1389,7 +1397,7 @@ async function renderAI() {
   $("ai-hint").innerHTML = `<span class="ai-dot"></span><b>${esc(st.text)}</b><span class="muted">${esc(st.hint)}</span>${st.ok ? "" : ' <button type="button" class="linkish" data-goto-view="settings">Abrir Ajustes</button>'}`;
 
   // Revisão
-  if (state.busy !== "review") {
+  if (!isBusy("review")) {
     const eff = toBlocks(s);
     const fixedCount = eff.filter((b) => b.fixed).length;
     $("review-run").textContent = fixedCount ? "Revisar de novo" : "Revisar com IA";
@@ -1397,16 +1405,18 @@ async function renderAI() {
       ? `${fixedCount} trecho${fixedCount > 1 ? "s" : ""} corrigido${fixedCount > 1 ? "s" : ""}. As palavras alteradas aparecem marcadas na transcrição; clique em “revisado” para ver o original.`
       : "Corrige palavras mal reconhecidas (fala rápida, nomes, siglas) usando o contexto e o seu glossário. O texto original fica guardado.";
   }
-  $("review-run").disabled = !s.entries.length || (state.busy && state.busy !== "review");
+  $("review-run").disabled = !s.entries.length || (!isBusy("review") && blocked("review"));
 
   // Conversas
   const sel = $("chat-select");
   sel.innerHTML =
     `<option value="">Nova conversa</option>` +
     s.chats.map((c, i) => `<option value="${esc(c.id)}">${c.auto ? "[auto] " : ""}${esc((questions().find((q) => q.id === c.tplId)?.label || c.messages[0]?.text || `Conversa ${i + 1}`).slice(0, 40))}</option>`).join("");
-  if (state.chatId && !s.chats.some((c) => c.id === state.chatId)) state.chatId = null;
+  // (uma releitura que chega no meio de uma pergunta pode ainda não ter a conversa nova: não a perde)
+  if (state.chatId && !isBusy("chat") && !s.chats.some((c) => c.id === state.chatId)) state.chatId = null;
   sel.value = state.chatId || "";
-  if (state.busy !== "chat") renderChatLog();
+  if (!isBusy("chat")) renderChatLog();
+  renderChatSend();
 
   // Sugestões
   if (!state.index.length) state.index = await send({ type: "list" });
@@ -1859,7 +1869,7 @@ $("chat-export").addEventListener("click", (e) => {
 async function deleteChat(id = state.chatId) {
   const s = state.session;
   const at = s?.chats.findIndex((c) => c.id === id) ?? -1;
-  if (at < 0 || state.busy === "chat") return;
+  if (at < 0 || isBusy("chat")) return;
   const chat = structuredClone(s.chats[at]);
   state.session = await send({ type: "chat-delete", id: s.id, chatId: id });
   if (state.chatId === id) state.chatId = null;
@@ -1879,7 +1889,7 @@ $("chat-del").addEventListener("click", () => deleteChat());
 
 function startEditLast() {
   const chat = currentChat();
-  if (!chat || state.busy) return;
+  if (!chat || jobOf("chat")) return;
   const i = chat.messages.length - 2;
   const el = $("chat-log").querySelector(`.msg.user[data-i="${i}"]`);
   if (!el) return;
@@ -1909,7 +1919,7 @@ function startEditLast() {
 function resendLast() {
   const chat = currentChat();
   const m = chat?.messages.at(-2);
-  if (!m || m.role !== "user" || state.busy) return;
+  if (!m || m.role !== "user" || jobOf("chat")) return;
   ask(stripPrev(m.text), undefined, { replaceLast: true });
 }
 
@@ -1974,7 +1984,6 @@ function watchPort(port, onMessage, onDone) {
     try {
       port.disconnect();
     } catch {}
-    if (state.aiPort === port) state.aiPort = null;
     onDone(m);
   };
   const arm = () => {
@@ -1997,31 +2006,67 @@ function watchPort(port, onMessage, onDone) {
     } catch {}
   };
 }
-function runAI(payload, onDelta, onDone, onPhase) {
-  state.aiStop?.();
+function runAI(kind, payload, onDelta, onDone, onPhase, onRaw) {
+  jobOf(kind)?.stop();
   const port = chrome.runtime.connect({ name: "ai" });
-  state.aiPort = port;
-  state.aiStop = watchPort(
+  const job = { sessionId: payload.id, port };
+  state.jobs[kind] = job;
+  job.stop = watchPort(
     port,
     (m) => {
-      if (m.type === "chat") state.chatId = m.chatId;
+      if (m.type === "chat") {
+        job.chatId = m.chatId;
+        if (state.session?.id === job.sessionId) state.chatId = m.chatId;
+      }
       if (m.type === "delta") onDelta(m.text);
       if (m.type === "phase") onPhase?.(m.text);
+      onRaw?.(m);
     },
-    onDone,
+    (m) => {
+      if (state.jobs[kind] === job) delete state.jobs[kind];
+      onDone(m);
+      refreshAiButtons();
+    },
   );
   port.postMessage(payload);
+  refreshAiButtons();
+  return job;
+}
+// Cancela uma tarefa pelo botão (sem mensagem de erro); devolve true se havia algo rodando.
+function stopJob(kind) {
+  const job = jobOf(kind);
+  if (!job) return false;
+  job.stop();
+  delete state.jobs[kind];
+  refreshAiButtons();
+  return true;
+}
+// Botões que dependem das outras tarefas (no Free, uma por vez).
+function refreshAiButtons() {
+  const s = state.session;
+  if (!s) return;
+  $("ata-gen").disabled = !s.entries.length || (!isBusy("ata") && blocked("ata"));
+  $("review-run").disabled = !s.entries.length || (!isBusy("review") && blocked("review"));
+  renderChatSend();
+}
+function renderChatSend() {
+  const b = $("chat-send");
+  const running = isBusy("chat");
+  b.textContent = running ? "Parar" : "Enviar";
+  b.classList.toggle("danger", running);
+  b.classList.toggle("primary", !running);
+  b.title = running ? "Interromper a resposta (o que já foi escrito fica na conversa)" : "";
+  b.disabled = !running && blocked("chat");
 }
 
 $("ata-gen").addEventListener("click", async () => {
-  if (state.busy === "ata") {
-    state.aiStop?.();
-    state.aiPort = null;
-    state.busy = null;
+  if (isBusy("ata")) {
+    stopJob("ata");
     return renderAta();
   }
+  if (blocked("ata")) return toast(BLOCKED_MSG);
   if (!(await ensureApiPermission())) return toast("Permissão para a API negada");
-  state.busy = "ata";
+  const ataSession = state.session.id;
   state.viewing = null;
   $("ata-viewing").hidden = true;
   $("ata-editor").hidden = true;
@@ -2030,10 +2075,11 @@ $("ata-gen").addEventListener("click", async () => {
   $("ata-doc").classList.remove("empty");
   const card = waitCard($("ata-body"), { label: "Lendo a transcrição…", writing: "Escrevendo a ata…" });
   runAI(
+    "ata",
     { action: "ata", id: state.session.id },
     (t) => card.update(t),
     async (m) => {
-      state.busy = null;
+      if (state.session?.id !== ataSession) return toast(m.type === "error" ? "A ata da outra reunião falhou: " + m.message : "Ata da outra reunião gerada");
       if (m.type === "error") {
         $("ata-body").innerHTML = `<p style="color:var(--danger)">${esc(m.message)}</p>`;
         $("ata-gen").textContent = "Tentar de novo";
@@ -2046,33 +2092,27 @@ $("ata-gen").addEventListener("click", async () => {
   );
 });
 $("review-run").addEventListener("click", async () => {
-  if (state.busy === "review") {
-    state.aiStop?.();
-    state.aiPort = null;
-    state.busy = null;
+  if (isBusy("review")) {
+    stopJob("review");
     return renderAI();
   }
+  if (blocked("review")) return toast(BLOCKED_MSG);
   if (!(await ensureApiPermission())) return toast("Permissão para a API negada");
-  state.busy = "review";
   $("review-run").textContent = "Cancelar";
   const reviewT0 = Date.now();
   $("review-info").innerHTML = spinHtml("Revisando…", reviewT0);
-  const port = chrome.runtime.connect({ name: "ai" });
-  state.aiPort = port;
-  state.aiStop = watchPort(port, (m) => {
-    if (m.type === "progress") $("review-info").innerHTML = spinHtml(`Revisando… ${m.done} de ${m.total} falas · ${m.changed} correções`, reviewT0);
-  }, async (m) => {
-    {
-      state.busy = null;
-      if (m.type === "error") {
-        $("review-info").innerHTML = `<span style="color:var(--danger)">${esc(m.message)}</span>`;
-        return;
-      }
-      await reloadSession();
-      toast(m.total ? `${m.changed} ${m.changed === 1 ? "correção" : "correções"} em ${m.total} ${m.total === 1 ? "fala" : "falas"}` : "Nada novo para revisar");
+  const reviewSession = state.session.id;
+  runAI("review", { action: "review", id: state.session.id }, () => {}, async (m) => {
+    if (state.session?.id !== reviewSession) return;
+    if (m.type === "error") {
+      $("review-info").innerHTML = `<span style="color:var(--danger)">${esc(m.message)}</span>`;
+      return;
     }
+    await reloadSession();
+    toast(m.total ? `${m.changed} ${m.changed === 1 ? "correção" : "correções"} em ${m.total} ${m.total === 1 ? "fala" : "falas"}` : "Nada novo para revisar");
+  }, null, (m) => {
+    if (m.type === "progress" && state.session?.id === reviewSession) $("review-info").innerHTML = spinHtml(`Revisando… ${m.done} de ${m.total} falas · ${m.changed} correções`, reviewT0);
   });
-  port.postMessage({ action: "review", id: state.session.id });
 });
 
 $("ata-copy").addEventListener("click", (e) => {
@@ -2449,10 +2489,11 @@ function renderScope() {
 
 async function ask(question, previousId, { replaceLast = false } = {}) {
   question = (question || "").trim();
-  if (!question || !state.session || state.busy) return;
+  if (!question || !state.session || jobOf("chat")) return;
+  if (blocked("chat")) return toast(BLOCKED_MSG);
   if (!(await ensureApiPermission())) return toast("Permissão para a API negada");
   replaceLast = replaceLast && !!currentChat();
-  state.busy = "chat";
+  const chatSession = state.session.id;
   state.replacing = replaceLast;
   state.chatT0 = Date.now();
   state.chatPhase = null;
@@ -2461,12 +2502,13 @@ async function ask(question, previousId, { replaceLast = false } = {}) {
   if (document.activeElement === $("chat-input")) paintCount($("chat-input"));
   renderChatLog("");
   runAI(
+    "chat",
     { action: "chat", id: state.session.id, chatId: state.chatId, question, previousId, previousIds: scopeIds(), ...(replaceLast ? { replaceLast: true } : {}) },
-    (t) => renderChatLog(t),
+    (t) => state.session?.id === chatSession && renderChatLog(t),
     async (m) => {
-      state.busy = null;
       state.pendingQuestion = null;
       state.replacing = false;
+      if (state.session?.id !== chatSession) return;
       if (m.type === "error" && replaceLast) {
         // O serviço devolve o par anterior à conversa; mostra-o de novo com o erro embaixo.
         renderChatLog();
@@ -2494,11 +2536,21 @@ async function ask(question, previousId, { replaceLast = false } = {}) {
     },
   );
 }
-$("chat-send").addEventListener("click", () => ask($("chat-input").value));
+$("chat-send").addEventListener("click", () => (isBusy("chat") ? stopChat() : ask($("chat-input").value)));
+// Parar: fecha a conexão; o serviço guarda o que já foi escrito, com a nota de resposta interrompida.
+function stopChat() {
+  const job = jobOf("chat");
+  if (!stopJob("chat")) return;
+  if (job.chatId && state.session?.id === job.sessionId) state.chatId = job.chatId;
+  state.pendingQuestion = null;
+  state.replacing = false;
+  toast("Resposta interrompida");
+  setTimeout(() => reloadSession(), 600);
+}
 $("chat-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
-    ask($("chat-input").value);
+    if (!isBusy("chat")) ask($("chat-input").value);
   }
 });
 $("chat-input").addEventListener("input", (e) => {
@@ -2978,6 +3030,18 @@ async function renderList() {
   const pinned = items.filter((m) => m.pinnedAt).sort((a, b) => b.pinnedAt - a.pinnedAt);
   const loose = items.filter((m) => !m.pinnedAt && !(m.folderId && known.has(m.folderId)));
   const card = (m) => cardHtml(m, hits ? hits.get(m.id) : "");
+  // Cartões agrupados por dia (Hoje, Ontem, terça-feira, 10 de novembro…), na lista e dentro de cada pasta.
+  const withDays = (list) => {
+    let lastDay = "";
+    return list
+      .map((m) => {
+        const d = dayLabel(m.startedAt);
+        const head = d !== lastDay ? `<div class="day">${esc(d)}</div>` : "";
+        lastDay = d;
+        return head + card(m);
+      })
+      .join("");
+  };
   let html = pinned.length
     ? `<section class="lgroup" data-group="pinned"><div class="lgroup-head">${icon("fixar")}<span>Fixadas</span><small>${pinned.length}</small></div>${pinned.map(card).join("")}</section>`
     : `<div class="drop-pin" data-group="pinned">${icon("fixar")}Solte aqui para fixar no topo</div>`;
@@ -2988,18 +3052,10 @@ async function renderList() {
     html += `<section class="lgroup folder${open ? "" : " shut"}" data-folder="${esc(fo.id)}">
       <button type="button" class="lgroup-head" data-fold="${esc(fo.id)}" aria-expanded="${!!open}" title="Clique para ${open ? "recolher" : "abrir"}; botão direito para mais opções">
         <i class="chev">${icon("seta")}</i>${icon("pasta")}<span class="fname">${esc(fo.name)}</span><small>${inside.length}</small></button>
-      ${open ? (inside.length ? inside.map(card).join("") : `<div class="lgroup-empty">Arraste reuniões para cá</div>`) : ""}
+      ${open ? (inside.length ? withDays(inside) : `<div class="lgroup-empty">Arraste reuniões para cá</div>`) : ""}
     </section>`;
   }
-  let lastDay = "";
-  const rest = loose
-    .map((m) => {
-      const d = dayLabel(m.startedAt);
-      const head = d !== lastDay ? `<div class="day">${esc(d)}</div>` : "";
-      lastDay = d;
-      return head + card(m);
-    })
-    .join("");
+  const rest = withDays(loose);
   html += `<section class="lgroup loose" data-group="loose">${rest || (folders.length || pinned.length ? `<div class="lgroup-empty">Todas as reuniões estão em pastas ou fixadas.</div>` : "")}</section>`;
   $("list").innerHTML = html;
 }
@@ -3290,7 +3346,7 @@ function blockMenu(blk) {
 }
 function chatMenu(msg) {
   const copy = (sel) => () => msg.querySelector(sel)?.click();
-  const tail = state.chatId && !state.busy ? [{ sep: true }, { label: "Exportar a conversa", icon: "baixar", sub: () => exportFormats("all") }, { label: "Excluir a conversa", icon: "apagar", danger: true, run: () => deleteChat() }] : [];
+  const tail = state.chatId && !jobOf("chat") ? [{ sep: true }, { label: "Exportar a conversa", icon: "baixar", sub: () => exportFormats("all") }, { label: "Excluir a conversa", icon: "apagar", danger: true, run: () => deleteChat() }] : [];
   if (msg.classList.contains("editing")) return null;
   if (msg.classList.contains("user")) {
     const last = msg.nextElementSibling?.classList.contains("msg-edit");
@@ -3967,7 +4023,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (!mine && !newForTab) return;
   clearTimeout(pending);
   pending = setTimeout(async () => {
-    if (state.busy && mine) return; // não atrapalha a IA respondendo
+    if (mine && isBusy("chat")) return; // não atrapalha a IA respondendo
     const keepTab = state.tab;
     await openSession(msg.id, state.pinned);
     state.tab = keepTab;

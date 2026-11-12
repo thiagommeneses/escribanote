@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.73 beta — 2026-11-12
+- **Datas dentro das pastas**: as reuniões de cada pasta aparecem separadas por dia (Hoje, Ontem, terça-feira, 10 de novembro…), como na lista.
+- **Parar a resposta da IA**: enquanto a IA responde, o botão Enviar vira **Parar**. O que já foi escrito fica na conversa, com a nota "Resposta interrompida por você".
+- **Pro: IA em paralelo**: com o Escribanote Pro, dá para perguntar enquanto a ata é gerada (e durante a revisão). Cada tarefa tem o seu Cancelar/Parar. Sem o Pro, continua uma tarefa de IA por vez, com um aviso.
+
 ## 0.9.72 beta — 2026-11-12
 - **Colar o link de um vídeo**: no painel, "Tem o link de um vídeo?" abre o link (YouTube, Instagram, aula, podcast) numa aba nova. Falta só um clique no ícone do Escribanote nessa aba (ou Alt+Shift+E), que o Chrome exige para liberar o som, e a transcrição começa sozinha, sem precisar apertar mais nada. O painel avisa enquanto espera o clique; fechar a aba desiste.
 - O nome da sessão passa a ser o título do vídeo assim que a página termina de carregar.

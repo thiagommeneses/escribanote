@@ -1954,13 +1954,17 @@ chrome.runtime.onConnect.addListener((port) => {
     port.onDisconnect.addListener(() => clearInterval(beat));
     const onPhase = (text) => post({ type: "phase", text });
     let replaced = null; // "Editar e reenviar": o par pergunta/resposta substituído volta se a nova pergunta falhar
+    let partial = ""; // o que a IA já escreveu: no Parar, fica na conversa com uma nota
     try {
       const s = await getSession(req.id);
       if (!s) throw new Error("Reunião não encontrada.");
       const settings = await getSettings();
       const ai = await aiProvider();
       if (!ai) throw new Error(NO_AI);
-      const onDelta = (text) => post({ type: "delta", text });
+      const onDelta = (text) => {
+        partial = text;
+        post({ type: "delta", text });
+      };
 
       if (req.action === "review") {
         const r = await reviewPending(s, { force: true, onProgress: (p) => post({ type: "progress", ...p }) });
@@ -2000,7 +2004,12 @@ chrome.runtime.onConnect.addListener((port) => {
       // Não deixa uma pergunta sem resposta no histórico (a API exige alternância).
       const s = await getSession(req.id);
       const chat = s && s.chats.find((c) => c.messages.at(-1)?.role === "user" && c.messages.at(-1)?.text === req.question);
-      if (chat) {
+      if (chat && err.name === "AbortError" && partial.trim()) {
+        // Parar no meio da resposta: o que já foi escrito fica, marcado como interrompido.
+        chat.messages.push({ role: "assistant", text: `${partial.trimEnd()}\n\n_${STOPPED_BY_USER}_`, at: Date.now(), stopped: true });
+        chat.updatedAt = Date.now();
+        await changed(s, { now: true });
+      } else if (chat) {
         chat.messages.pop();
         if (replaced?.chatId === chat.id) chat.messages.push(...replaced.pair);
         if (!chat.messages.length) s.chats = s.chats.filter((c) => c !== chat);
@@ -2012,6 +2021,8 @@ chrome.runtime.onConnect.addListener((port) => {
     }
   });
 });
+
+const STOPPED_BY_USER = "(Resposta interrompida por você.)";
 
 // ---------------- Página da web e link colado ----------------
 // "Transcrever esta aba": qualquer página com som (YouTube, Instagram, aulas, podcasts). Sem legendas:
