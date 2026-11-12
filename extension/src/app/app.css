@@ -899,3 +899,30 @@ body.list-dragging .lgroup.loose { min-height: 48px; }
 .pv-editor .sw-side { box-shadow: inset 3px 0 0 #3794ff; }
 .row-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; margin: 4px 0 6px; }
 .row-check input { margin-top: 3px; }
+
+/* Lista de reuniões: cada reunião é um cartão com a faixa da plataforma; datas com linha; pastas e fixadas em blocos. */
+.mcard { position: relative; background: var(--surface); border: 1px solid var(--border); margin: 0 0 6px; padding: 10px 12px 10px 14px;
+  transition: border-color .12s, box-shadow .12s; }
+.mcard::before { content: ""; position: absolute; left: 4px; top: 9px; bottom: 9px; width: 3px; border-radius: 3px; background: var(--pf, var(--border-strong, var(--border))); }
+.mcard:hover { background: var(--surface); border-color: var(--border-strong, var(--muted)); box-shadow: var(--shadow); }
+.mcard.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow); }
+.mcard b { font-size: 14px; }
+.mcard[data-pf="meet"] { --pf: #1e8e3e; }
+.mcard[data-pf="teams"] { --pf: #5b5fc7; }
+.mcard[data-pf="zoom"] { --pf: #2d8cff; }
+.mcard[data-pf="slack"] { --pf: #a1449a; }
+.mcard[data-pf="web"], .mcard[data-pf="youtube"] { --pf: #e8710a; }
+.mcard[data-pf="import"], .mcard[data-pf="desktop"] { --pf: #8a8f98; }
+.lgroup.drop-over { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.day { display: flex; align-items: center; gap: 8px; padding: 14px 2px 7px; font-size: 11.5px; color: var(--text-2); }
+.day::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.lgroup.folder, .lgroup[data-group="pinned"] { background: var(--bg-soft); border: 1px solid var(--border); padding: 2px 6px 4px; margin: 10px 0; }
+.lgroup[data-group="pinned"] > .lgroup-head { color: var(--accent); }
+.folder > .mcard, .lgroup.folder > .mcard { margin-left: 0; width: 100%; }
+.lgroup.folder .day { padding: 8px 2px 6px; font-size: 10.5px; }
+.lgroup.folder.shut { padding-bottom: 2px; }
+.lgroup.loose { margin-top: 4px; }
+:root[data-palette="editor"] .mcard:hover { border-color: var(--border); background: #2a2d2e; }
+:root[data-palette="editor"] .mcard.sel { border-color: var(--accent); box-shadow: none; }
+.mcard .av { width: 22px; height: 22px; font-size: 9px; letter-spacing: -.2px; border-color: var(--surface); margin-left: -4px; }
+.mcard .av:first-child { margin-left: 0; }
