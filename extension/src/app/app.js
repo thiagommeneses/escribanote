@@ -8,6 +8,7 @@ import { probeAudio, WHOLE_MAX_BYTES } from "../asr/decode.js";
 import { diffDocument, diffStats, diffHtml as versionDiffHtml } from "../lib/diff.js";
 import { getBackupDir, setBackupDir, backupPermission, resolveBackupFolder, readBackupFolder } from "../lib/backup.js";
 import { readTrack, writeTrackFile } from "../lib/audiovault.js";
+import { accountIsPro } from "../lib/account.js";
 import "../lib/icons.js";
 
 const { icon, tagIcon, TAG_ICONS } = globalThis.EsIcons;
@@ -1335,7 +1336,7 @@ async function aiStatus() {
   if (!state.settings) state.settings = await getSettings();
   const { apiKey, account } = await chrome.storage.local.get(["apiKey", "account"]);
   const model = MODELS.find((m) => m.id === state.settings.aiModel);
-  const pro = account?.token && account.plan === "pro" && !account.invalid;
+  const pro = accountIsPro(account);
   state.multiAi = !!pro;
   if (apiKey) return { ok: true, kind: "key", text: `Sua chave da API · ${model ? model.label : state.settings.aiModel}`, hint: "A transcrição só é enviada quando você pede." };
   if (pro) return { ok: true, kind: "pro", text: `Escribanote Pro · ${account.balance ?? 0} crédito${account.balance === 1 ? "" : "s"}`, hint: `Ata, revisão e pergunta custam 1 crédito cada; pergunta com mais de ${LONG_QUESTION.toLocaleString("pt-BR")} caracteres, material de apoio, capturas ou pesquisa na web, 2.` };
@@ -2706,7 +2707,7 @@ async function startRetranscribe(anchor, s, { resume = false, durationMs = 0 } =
     const choices = Object.entries(HQ_MODELS).map(([k, m]) => ({ key: k, label: `${m.label || k}${k === cur ? " (atual)" : ""}`, primary: k === cur }));
     // Pro: transcrição no servidor (Whisper large no Groq), para arquivos importados com duração conhecida.
     const { account } = await chrome.storage.local.get("account");
-    const pro = !!(account?.token && account.plan === "pro" && !account.invalid);
+    const pro = accountIsPro(account);
     const serverOk = pro && s.audio.tracks.length === 1 && total > 0;
     const credits = Math.max(1, Math.ceil(total / 3_600_000));
     if (serverOk) choices.push({ key: "server", label: `No servidor (Pro, rápido) · ${credits} crédito${credits === 1 ? "" : "s"}` });
@@ -3736,7 +3737,7 @@ async function renderAccount() {
           : "Sincronização ligada.";
   }
   const banner = $("sync-banner");
-  const show = a && a.plan === "pro" && !a.invalid && !r.sync.consent;
+  const show = accountIsPro(a) && !r.sync.consent;
   banner.hidden = !show;
   if (show) $("sync-banner-text").textContent = r.pending
     ? `Conta conectada (${a.email}). Enviar as ${r.pending} reuniões deste computador para a conta?`

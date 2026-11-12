@@ -64,6 +64,15 @@ const dayLabel = (iso) => {
 const timeLabel = (iso) => new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 const dateShort = (iso) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "");
 const isPro = () => state.me?.plan === "pro";
+const dateTimeShort = (iso) => (iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
+// Teste grátis do Pro (48 h, sem cartão): disponível, ativo ou já usado.
+const onTrial = () => !!state.me?.trial?.active;
+function trialOfferHtml(t) {
+  if (!t?.available) return "";
+  return `<div class="trial-offer"><div><b>Teste o Pro grátis por ${t.hours} horas</b>
+      <span>Sem cartão e sem cobrança no fim. Tudo do Pro liberado, com ${t.credits} créditos de IA para experimentar a ata, as perguntas e a transcrição no servidor.</span></div>
+      <button class="btn dark" data-act="trial">Começar o teste grátis</button></div>`;
+}
 // Marca os termos da busca sem depender de acento ("orcamento" marca "orçamento").
 function markWords(text, words) {
   const chars = [...text];
@@ -1243,6 +1252,7 @@ async function renderAccount(params) {
     active: sub?.cancelAtPeriodEnd ? `Cancelada; o Pro continua até ${dateShort(sub.periodEnd)}` : `Ativa · renova em ${dateShort(sub?.periodEnd)}`,
     past_due: "Pagamento pendente: atualize a forma de pagamento para não perder o Pro",
     trialing: "Em período de teste",
+    trial: me.trial?.active ? `Teste grátis até ${dateTimeShort(me.trial.endsAt)}` : "O teste grátis terminou",
     canceled: "Cancelada",
     incomplete: "Aguardando a confirmação do pagamento",
   }[sub?.status] || "Sem assinatura";
@@ -1255,12 +1265,13 @@ async function renderAccount(params) {
   const PLAN_NAMES = { brl: { month: "R$ 15/mês", year: "R$ 150/ano" }, usd: { month: "US$ 3/mês", year: "US$ 30/ano" } };
   const plan = isPro()
     ? `<section class="panel pro"><h2>Escribanote Pro</h2>
-        <dl class="kv"><dt>Assinatura</dt><dd>${esc(statusText)}</dd><dt>Plano</dt><dd>${sub?.interval === "year" ? "Anual" : "Mensal"} · ${PLAN_NAMES[sub?.currency === "usd" ? "usd" : "brl"][sub?.interval === "year" ? "year" : "month"]}</dd></dl>
-        <div><div class="row" style="justify-content:space-between"><b>Créditos de IA</b><span class="small muted">${c.balance} de ${c.max} · +${c.perCycle} ${c.renewsAt ? `em ${dateShort(c.renewsAt)}` : "a cada mês"}</span></div>
+        <dl class="kv"><dt>Assinatura</dt><dd>${esc(statusText)}</dd><dt>Plano</dt><dd>${onTrial() ? `Teste grátis de ${me.trial.hours} horas, sem cobrança` : `${sub?.interval === "year" ? "Anual" : "Mensal"} · ${PLAN_NAMES[sub?.currency === "usd" ? "usd" : "brl"][sub?.interval === "year" ? "year" : "month"]}`}</dd></dl>
+        <div><div class="row" style="justify-content:space-between"><b>Créditos de IA</b><span class="small muted">${c.balance} de ${c.max} · ${onTrial() ? `do teste grátis; assinando, +${c.perCycle} por mês` : `+${c.perCycle} ${c.renewsAt ? `em ${dateShort(c.renewsAt)}` : "a cada mês"}`}</span></div>
         <div class="meter" style="margin-top:6px"><b style="width:${Math.min(100, (c.balance / c.max) * 100)}%"></b></div>
         <p class="small muted" style="margin-top:6px">Ata, revisão, pergunta, e-mail de follow-up e tarefas: 1 crédito. Pergunta com mais de 2.000 caracteres ou sobre todas as reuniões: 2. Os que sobram acumulam até ${c.max}${sub?.interval === "year" ? ". No plano anual, os créditos chegam todo mês" : ""}.</p></div>
-        <div class="row"><button class="btn" data-act="portal">Forma de pagamento, recibos e cancelamento</button></div></section>`
-    : `<section class="panel subscribe" id="subscribe">${subscribeHtml(pendingPlan() || {})}</section>`;
+        ${onTrial() ? "" : `<div class="row"><button class="btn" data-act="portal">Forma de pagamento, recibos e cancelamento</button></div>`}</section>
+      ${onTrial() ? `<section class="panel subscribe" id="subscribe"><div class="notice">Gostou? Assine para continuar com o Pro depois do teste. Os créditos que sobrarem continuam com você.</div>${subscribeHtml(pendingPlan() || {})}</section>` : ""}`
+    : `<section class="panel subscribe" id="subscribe">${sub?.status === "trial" ? `<div class="notice">O seu teste grátis do Pro terminou. Assine para continuar; as reuniões que subiram continuam na conta para ler e exportar.</div>` : trialOfferHtml(me.trial)}${subscribeHtml(pendingPlan() || {})}</section>`;
   view.innerHTML = `<section class="page">
     <h1>Sua <em>conta</em></h1>
     ${justPaid && !isPro() ? `<div class="notice" id="paid-wait">Recebemos o seu pagamento. Estamos confirmando com a Stripe; com Pix pode levar alguns instantes.</div>` : ""}
@@ -1387,7 +1398,10 @@ function subscribeHtml({ interval = "year", currency = "brl" }) {
         <li>Reuniões salvas na conta e sincronizadas entre computadores</li>
         <li>Esta área web: busca em todas as falas, ata ao lado da transcrição, análise de fala</li>
         <li>IA sem chave de API: 15 créditos por mês, que acumulam até 30</li>
+        <li>Quem fala, reconhecido pela voz</li>
+        <li>Arquivos longos transcritos no servidor (1 crédito por hora) e várias tarefas de IA ao mesmo tempo</li>
         <li>Links de leitura para quem não usa o Escribanote</li>
+        <li>Garantia de 7 dias: desistiu, devolvemos tudo</li>
       </ul>
     </div>
     <div class="trust" aria-label="Segurança e privacidade">
@@ -1772,6 +1786,16 @@ view.addEventListener("click", async (e) => {
         });
         location.href = r.url;
         return;
+      }
+      case "trial": {
+        el.disabled = true;
+        state.me = await api.post("/billing/trial").catch((err) => {
+          el.disabled = false;
+          throw err;
+        });
+        renderCredits();
+        toast(`Teste grátis começou: o Pro está liberado até ${dateTimeShort(state.me.trial.endsAt)}`);
+        return renderAccount(new URLSearchParams());
       }
       case "portal": {
         const r = await api.post("/billing/portal");

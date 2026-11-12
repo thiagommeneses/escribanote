@@ -10,7 +10,7 @@ import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, wr
 import { toMarkdown, clock, normalizeLink } from "./lib/format.js";
 import { learnProfiles, loadProfiles, saveProfiles } from "./lib/voiceprofiles.js";
 import { readTrack } from "./lib/audiovault.js";
-import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
+import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError, accountIsPro } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
 import { streamClaude, ataRequest, chatRequest, previousContext, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS, ANSWER_MAX_TOKENS, chatModel, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, sampleShots, withSources, EmptyAnswer } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
@@ -653,7 +653,7 @@ async function aiProvider() {
   const apiKey = await aiReady();
   if (apiKey) return { kind: "key", apiKey };
   const acct = await getAccount();
-  if (acct && acct.plan === "pro" && !acct.invalid) return { kind: "account" };
+  if (accountIsPro(acct)) return { kind: "account" };
   return null;
 }
 const NO_AI = "Para usar a IA, cadastre sua chave de API em Ajustes ou conecte a sua conta Escribanote Pro.";
@@ -886,8 +886,7 @@ async function stopHq(tabId) {
 
 // Identificação de falantes pela voz é do plano Pro (roda no computador, mas é um diferencial do plano).
 async function isPro() {
-  const a = await getAccount();
-  return !!(a && a.plan === "pro" && !a.invalid);
+  return accountIsPro(await getAccount());
 }
 
 function meIdFor(s, myName) {
@@ -1729,7 +1728,7 @@ async function refreshAccount() {
   if (!(await getAccount())) return null;
   try {
     const me = await accountFetch("/me");
-    const a = await setAccount({ email: me.email, plan: me.plan, balance: me.credits?.balance ?? 0, renewsAt: me.credits?.renewsAt || null, invalid: false, checkedAt: Date.now() });
+    const a = await setAccount({ email: me.email, plan: me.plan, balance: me.credits?.balance ?? 0, renewsAt: me.credits?.renewsAt || null, trialEndsAt: me.trial?.active ? me.trial.endsAt : null, invalid: false, checkedAt: Date.now() });
     notifyAccount();
     return a;
   } catch (err) {

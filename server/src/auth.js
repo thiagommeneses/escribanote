@@ -1,4 +1,5 @@
 // Contas: login por e-mail + senha ou link mágico, redefinição de senha, sessões do app (cookie), tokens da extensão, conta e exclusão (LGPD).
+import { createHash } from "node:crypto";
 import { hashPassword, hashToken, newToken, verifyPassword } from "./crypto.js";
 import { clientIp, fail, iso } from "./http.js";
 import { loginEmail, passwordEmail } from "./mail.js";
@@ -7,7 +8,10 @@ const COOKIE = "rs";
 const EMAIL_RE = /^[^\s@<>()",;]{1,64}@[^\s@<>()",;]+\.[a-z]{2,}$/i;
 const ACTIVE = new Set(["active", "trialing", "past_due"]);
 
-export const isPro = (sub) => !!sub && ACTIVE.has(sub.status);
+// "trial": teste grátis de 48 h, sem a Stripe; vale até current_period_end.
+export const isPro = (sub, now = Date.now()) =>
+  !!sub && (ACTIVE.has(sub.status) || (sub.status === "trial" && !!sub.current_period_end && new Date(sub.current_period_end).getTime() > now));
+export const emailHash = (email) => createHash("sha256").update(String(email).trim().toLowerCase()).digest("hex");
 
 export async function audit(db, userId, action, detail = {}, ip = "") {
   await db.query("INSERT INTO audit_log (user_id, action, detail, ip) VALUES ($1, $2, $3, $4)", [userId, action, detail, ip]);
@@ -18,6 +22,8 @@ export async function account(db, userId, config) {
   if (!u) return null;
   const sub = await db.one("SELECT * FROM subscriptions WHERE user_id = $1", [userId]);
   const cr = await db.one("SELECT balance, renews_at FROM credit_balances WHERE user_id = $1", [userId]);
+  const claimed = !!(await db.one("SELECT 1 AS x FROM trial_claims WHERE email_hash = $1", [emailHash(u.email)]));
+  const trialOn = sub?.status === "trial" && isPro(sub);
   return {
     id: u.id,
     email: u.email,
@@ -36,6 +42,14 @@ export async function account(db, userId, config) {
         }
       : null,
     credits: { balance: cr?.balance ?? 0, renewsAt: iso(cr?.renews_at), perCycle: config.credits.perCycle, max: config.credits.max },
+    // Teste grátis: disponível só para quem nunca assinou nem testou (por e-mail).
+    trial: {
+      available: !claimed && (!sub || sub.status === "none"),
+      active: trialOn,
+      endsAt: sub?.status === "trial" ? iso(sub.current_period_end) : null,
+      hours: config.trial.hours,
+      credits: config.trial.credits,
+    },
   };
 }
 
