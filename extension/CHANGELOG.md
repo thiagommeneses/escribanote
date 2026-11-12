@@ -2,6 +2,10 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.72 beta — 2026-11-12
+- **Colar o link de um vídeo**: no painel, "Tem o link de um vídeo?" abre o link (YouTube, Instagram, aula, podcast) numa aba nova. Falta só um clique no ícone do Escribanote nessa aba (ou Alt+Shift+E), que o Chrome exige para liberar o som, e a transcrição começa sozinha, sem precisar apertar mais nada. O painel avisa enquanto espera o clique; fechar a aba desiste.
+- O nome da sessão passa a ser o título do vídeo assim que a página termina de carregar.
+
 ## 0.9.71 beta — 2026-11-12
 - **Transcrever no servidor (Pro)**: trechos de silêncio não viram mais falas inventadas ("Thank you.", "Legendas pela comunidade…"). O nível de cada fala é medido no próprio áudio e falas em silêncio são descartadas, como já acontecia no Whisper local. O horário final de uma fala também não passa mais do fim do pedaço.
 

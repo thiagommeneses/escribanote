@@ -485,3 +485,14 @@ export function ataEditorHtml(md) {
   }
   return out.join("\n");
 }
+
+// Link colado para transcrever (YouTube, Instagram, qualquer página): aceita sem "https://", recusa outros esquemas.
+export function normalizeLink(raw) {
+  let t = String(raw || "").trim();
+  if (!t) throw new Error("Cole o link do vídeo ou áudio.");
+  if (!/^[a-z]+:\/\//i.test(t)) t = "https://" + t;
+  let u;
+  try { u = new URL(t); } catch { throw new Error("Esse link não parece válido."); }
+  if (!/^https?:$/.test(u.protocol)) throw new Error("Use um link que comece com http:// ou https://.");
+  return u.href;
+}

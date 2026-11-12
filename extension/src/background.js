@@ -7,7 +7,7 @@ import { mergeSpeakers, dedupeSpeakers, mergeVoices, keepApart, replaceAll,
 } from "./lib/transcript.js";
 import { getSettings, DEFAULTS, HQ_MODELS, pushSyncedSettings, pullSyncedSettings } from "./lib/settings.js";
 import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, writeSettingsFile, internalBackupDir, backupFileName, sessionFileText, settingsFileText, SETTINGS_FILE, readBackupFolder, writeMeetingFolder, removeMeetingFolder, meetingManifest } from "./lib/backup.js";
-import { toMarkdown, clock } from "./lib/format.js";
+import { toMarkdown, clock, normalizeLink } from "./lib/format.js";
 import { learnProfiles, loadProfiles, saveProfiles } from "./lib/voiceprofiles.js";
 import { readTrack } from "./lib/audiovault.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError } from "./lib/account.js";
@@ -843,7 +843,7 @@ function broadcastHq(tabId, status) {
   chrome.tabs.sendMessage(tabId, { type: "hq-updated", status }).catch(() => {});
 }
 
-async function startHq(tabId, { mic } = {}) {
+async function startHq(tabId, { mic, streamId: givenStream } = {}) {
   const settings = await getSettings();
   // Sem modelo escolhido (ex.: huddle do Slack, que só tem o áudio), usa o do gravador ou o rápido.
   const modelKey = settings.hq !== "off" ? settings.hq : settings.recorderModel || "base";
@@ -855,8 +855,8 @@ async function startHq(tabId, { mic } = {}) {
     : null;
   if (busy && busy.tabId != null && busy.tabId !== tabId && (await chrome.tabs.get(busy.tabId).then(() => true, () => false)))
     throw new Error("O áudio de outra reunião já está sendo transcrito. Pare a transcrição pelo áudio nela para usar aqui; as legendas continuam funcionando nas duas.");
-  let streamId;
-  try {
+  let streamId = givenStream;
+  if (!streamId) try {
     streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
   } catch (err) {
     throw new Error("O Chrome só libera o áudio depois que você clica no ícone do Escribanote na aba da reunião. Clique no ícone e tente de novo.");
@@ -1365,38 +1365,12 @@ async function handle(msg, sender) {
       p.finally(() => asrInflight.delete(p));
       return p;
     }
-    case "web-start": {
-      // "Transcrever esta aba": qualquer página com som (YouTube, Instagram, aulas, podcasts). Sem legendas:
-      // o áudio da aba vai direto para o Whisper (alta precisão), sem microfone. O Chrome só libera o áudio
-      // da aba depois de um clique no ícone do Escribanote nela (o painel lateral aberto ali já conta).
-      const tabId = Number(msg.tabId);
-      const tab = await chrome.tabs.get(tabId).catch(() => null);
-      // Sem a permissão "tabs", a URL só aparece na aba em que o ícone foi clicado; sem ela, o próprio Chrome decide.
-      if (!tab || (tab.url && !/^https?:/.test(tab.url))) throw new Error("Abra a página com o vídeo ou áudio e use o botão no painel do Escribanote aberto nela.");
-      const cur = await activeFor(tabId);
-      if (cur) {
-        const live = await getSession(cur.id);
-        if (live && !live.endedAt && !live.web) throw new Error("Esta aba já tem uma reunião sendo transcrita.");
-        if (live && !live.endedAt) return live.id;
-      }
-      const now = Date.now();
-      const host = (tab.url ? new URL(tab.url).hostname : "página da web").replace(/^www\./, "").replace(/^m\./, "");
-      const site = /youtube\.com$|youtu\.be$/.test(host) ? "YouTube" : /instagram\.com$/.test(host) ? "Instagram" : host;
-      const title = String(tab.title || site).replace(/\s*[-–|]\s*(YouTube|Instagram)\s*$/i, "").slice(0, 200) || site;
-      const rec = await sessionForTab(tabId, { platform: "web", key: `web:${tabId}:${now}`, title, url: tab.url || "" });
-      rec.web = true;
-      rec.speakers.outros ||= site;
-      noteEvent(rec, "web-start", { host });
-      setBadge(tabId, rec);
-      await changed(rec, { now: true });
-      try {
-        await startHq(tabId, { mic: false });
-      } catch (err) {
-        await endSession(tabId, "web-error");
-        throw err;
-      }
-      return rec.id;
-    }
+    case "web-start":
+      return startWeb(Number(msg.tabId));
+    case "link-open":
+      return openLink(msg.url);
+    case "link-pending":
+      return pendingLinks.has(Number(msg.tabId));
     case "recorder-start": {
       // Gravador do computador (Slack e outros apps): a aba do gravador faz o papel da reunião,
       // então fechar a aba encerra a sessão como sair de uma reunião.
@@ -2039,6 +2013,113 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
+// ---------------- Página da web e link colado ----------------
+// "Transcrever esta aba": qualquer página com som (YouTube, Instagram, aulas, podcasts). Sem legendas:
+// o áudio da aba vai direto para o Whisper (alta precisão), sem microfone. O Chrome só libera o áudio
+// da aba depois de um clique no ícone do Escribanote nela (o painel lateral aberto ali já conta).
+async function startWeb(tabId, { streamId, url } = {}) {
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  const tabUrl = (tab && tab.url) || url || "";
+  // Sem a permissão "tabs", a URL só aparece na aba em que o ícone foi clicado; sem ela, o próprio Chrome decide.
+  if (!tab || (tabUrl && !/^https?:/.test(tabUrl))) throw new Error("Abra a página com o vídeo ou áudio e use o botão no painel do Escribanote aberto nela.");
+  const cur = await activeFor(tabId);
+  if (cur) {
+    const live = await getSession(cur.id);
+    if (live && !live.endedAt && !live.web) throw new Error("Esta aba já tem uma reunião sendo transcrita.");
+    if (live && !live.endedAt) return live.id;
+  }
+  const now = Date.now();
+  const host = (tabUrl ? new URL(tabUrl).hostname : "página da web").replace(/^www\./, "").replace(/^m\./, "");
+  const site = /youtube\.com$|youtu\.be$/.test(host) ? "YouTube" : /instagram\.com$/.test(host) ? "Instagram" : host;
+  const cleanTitle = (t) => String(t || "").replace(/^\(\d+\)\s*/, "").replace(/\s*[-–|]\s*(YouTube|Instagram)\s*$/i, "").slice(0, 200);
+  const looksLikeUrl = (t) => !t || /^(https?:\/\/|[\w.-]+\.[a-z]{2,}(:\d+)?(\/|$))/i.test(t) || /^\d{1,3}(\.\d{1,3}){3}(:\d+)?(\/|$)/.test(t);
+  const title = (!looksLikeUrl(tab.title) && cleanTitle(tab.title)) || site;
+  const rec = await sessionForTab(tabId, { platform: "web", key: `web:${tabId}:${now}`, title, url: tabUrl });
+  rec.web = true;
+  rec.speakers.outros ||= site;
+  noteEvent(rec, "web-start", { host, link: !!url });
+  setBadge(tabId, rec);
+  await changed(rec, { now: true });
+  try {
+    await startHq(tabId, { mic: false, streamId });
+  } catch (err) {
+    await endSession(tabId, "web-error");
+    throw err;
+  }
+  // Link aberto agora: a página ainda pode estar carregando. Quando o título do vídeo aparecer, troca
+  // o nome provisório (o do site), a menos que a pessoa já tenha renomeado.
+  if (title === site) {
+    (async () => {
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const t = await chrome.tabs.get(tabId).catch(() => null);
+        if (!t) return;
+        const name = !looksLikeUrl(t.title) && cleanTitle(t.title);
+        if (!name) continue;
+        const cur = await getSession(rec.id);
+        if (cur && cur.title === site) {
+          cur.title = name;
+          await changed(cur, { now: true });
+        }
+        return;
+      }
+    })().catch(() => {});
+  }
+  return rec.id;
+}
+
+// Link colado: abre o vídeo numa aba nova e começa a transcrever assim que o Chrome liberar o som dela.
+// O Chrome não deixa uma extensão capturar uma aba que ela mesma abriu: falta um clique no ícone do
+// Escribanote nessa aba (ou Alt+Shift+E). Até lá, a cada 1,5 s, tenta pegar o áudio; quando o clique
+// acontece, a transcrição começa sozinha. Desiste depois de 10 min ou quando a aba fecha.
+const LINK_WAIT_MS = 10 * 60_000;
+const pendingLinks = new Map(); // tabId -> { url, until }
+let linkTimer = null;
+
+
+async function openLink(raw) {
+  const url = normalizeLink(raw);
+  const tab = await chrome.tabs.create({ url, active: true });
+  pendingLinks.set(tab.id, { url, until: Date.now() + LINK_WAIT_MS });
+  await savePendingLinks();
+  pollLinks();
+  return { tabId: tab.id };
+}
+
+async function savePendingLinks() {
+  await chrome.storage.session.set({ pendingLinks: [...pendingLinks] }).catch(() => {});
+}
+
+function pollLinks() {
+  if (linkTimer || !pendingLinks.size) return;
+  linkTimer = setTimeout(async () => {
+    linkTimer = null;
+    for (const [tabId, p] of [...pendingLinks]) {
+      if (Date.now() > p.until || !(await chrome.tabs.get(tabId).then(() => true, () => false))) {
+        pendingLinks.delete(tabId);
+        continue;
+      }
+      let streamId = null;
+      try { streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }); } catch {}
+      if (!streamId) continue;
+      pendingLinks.delete(tabId);
+      try {
+        const id = await startWeb(tabId, { streamId, url: p.url });
+        chrome.runtime.sendMessage({ type: "link-started", tabId, id }).catch(() => {});
+      } catch (err) {
+        chrome.runtime.sendMessage({ type: "link-error", tabId, message: err.message || String(err) }).catch(() => {});
+      }
+    }
+    await savePendingLinks();
+    pollLinks();
+  }, 1500);
+}
+
+chrome.storage.session.get("pendingLinks").then(({ pendingLinks: saved }) => {
+  for (const [tabId, p] of saved || []) if (Date.now() < p.until) pendingLinks.set(tabId, p);
+  pollLinks();
+}).catch(() => {});
+
 // ---------------- Atalhos de teclado ----------------
 async function waitUntil(fn, ms) {
   const end = Date.now() + ms;
@@ -2082,6 +2163,7 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabLocks.delete(tabId);
+  if (pendingLinks.delete(tabId)) savePendingLinks();
   endSession(tabId, "tab-removed");
 });
 
