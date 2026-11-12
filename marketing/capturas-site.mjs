@@ -77,11 +77,30 @@ const outras = [
   { id: "demo-cliente", title: "Alinhamento com o cliente", platform: "zoom", startedAt: T - 3 * DAY, endedAt: T - 3 * DAY + 50 * MIN, participants: ["Paula Franco", "Thiago"], count: 132, highlights: 5, hasSummary: true, folderId: "f-clientes" },
   { id: "demo-kickoff", title: "Kickoff — Construtora Alfa", platform: "teams", startedAt: T - 6 * DAY, endedAt: T - 6 * DAY + 64 * MIN, participants: ["Rafael Dias", "Paula Franco", "Thiago"], count: 205, highlights: 2, folderId: "f-clientes" },
   { id: "demo-retro", title: "Retrospectiva da sprint 18", platform: "teams", startedAt: T - DAY, endedAt: T - DAY + 35 * MIN, participants: ["Ana Teixeira", "Bruno Lima", "Thiago"], count: 84, highlights: 3 },
+  { id: "demo-video", title: "Copom: o que muda nos juros — entrevista", platform: "youtube", startedAt: T - 2.5 * 3600000, endedAt: T - 2.5 * 3600000 + 38 * MIN, participants: [], count: 96, highlights: 1, hasSummary: true },
   { id: "demo-huddle", title: "Huddle em #projeto-q4", platform: "slack", startedAt: T - 2 * DAY, endedAt: T - 2 * DAY + 12 * MIN, participants: ["Bruno Lima", "Thiago"], count: 31, highlights: 0 },
 ];
+const T2 = T - 26 * 60 * MIN; // ontem à tarde
+const aulaFalas = [
+  "Bom dia, turma. Hoje a gente fecha o módulo de política monetária com a relação entre juros e inflação.",
+  "Quando o Banco Central sobe a Selic, o crédito fica mais caro e a demanda desacelera.",
+  "O efeito na inflação não é imediato: leva de seis a nove meses para aparecer nos preços.",
+  "Por isso o Copom olha as expectativas do Focus, e não só o IPCA do mês.",
+  "Anotem: juro real é a Selic menos a inflação esperada para os próximos doze meses.",
+  "Com Selic de 10,5% e expectativa de 4%, o juro real fica perto de 6,3%, bem acima do neutro.",
+  "Na próxima parte a gente vê como isso aparece na curva de juros futuros, o DI.",
+];
+const aula = {
+  id: "demo-aula", platform: "import", title: "Aula de macroeconomia — juros e inflação", startedAt: T2, updatedAt: T2 + 52 * MIN, endedAt: T2 + 120 * MIN,
+  speakers: { outros: "Profª Helena Prado" }, entries: [],
+  asr: aulaFalas.map((text, i) => ({ id: `asr/${T2 + i * 7 * MIN}/import`, start: T2 + i * 7 * MIN + 20000, end: T2 + i * 7 * MIN + 31000, text, source: "import", speakerId: "outros" })),
+  audio: { startedAt: T2, durationMs: 120 * MIN, model: "auto", file: "aula-macro-modulo3.mp3" },
+  highlights: { [`asr/${T2 + 4 * 7 * MIN}/import`]: ["importante"] }, notes: { text: "", items: [] }, shots: [], import: true,
+};
 const index = [
   { id: sessao.id, title: sessao.title, platform: "meet", startedAt: T, updatedAt: sessao.updatedAt, endedAt: sessao.endedAt, count: entries.length, participants: Object.values(SP), highlights: 2, hasSummary: true, meetingKey: sessao.meetingKey, pinnedAt: sessao.pinnedAt },
   ...outras.map((o) => ({ ...o, updatedAt: o.endedAt })),
+  { id: aula.id, title: aula.title, platform: "import", startedAt: T2, updatedAt: aula.updatedAt, endedAt: aula.endedAt, count: aula.asr.length, participants: [], highlights: 1, folderId: "f-mercado" },
 ];
 const folders = [{ id: "f-clientes", name: "Clientes", collapsed: false }, { id: "f-mercado", name: "Mercado financeiro", collapsed: false }];
 
@@ -132,6 +151,7 @@ await ev(`(async () => {
   const { settings = {} } = await chrome.storage.local.get("settings");
   await chrome.storage.local.set({
     ["session:" + ${JSON.stringify(sessao.id)}]: ${JSON.stringify(sessao)},
+    ["session:" + ${JSON.stringify(aula.id)}]: ${JSON.stringify(aula)},
     "shot:demo-q4:s1": ${JSON.stringify(slide)},
     index: ${JSON.stringify(index)},
     welcomeDone: Date.now(),
@@ -169,6 +189,18 @@ await ev(`(() => { const el = document.querySelector('#list [data-open="demo-ret
 await sleep(300);
 await shot("app-menu");
 await ev(`document.querySelector('.ctx')?.remove(); true`);
+
+// 5b) Arquivo longo transcrevendo: a mesma faixa de progresso que a extensão mostra (retransBanner)
+await go(`&id=${aula.id}`);
+await ev(`(() => {
+  const ic = document.querySelector('[data-act="hq"] svg, #hq svg, .hq svg')?.outerHTML || "";
+  document.getElementById("t-banner").innerHTML = '<div class="banner">' + ic + ' <b>Transcrevendo… 43%</b> <span class="muted">· parte 2 de 4 · 52 min de 2h00 transcritos · 11 min decorridos · faltam ~14 min</span>'
+    + '<div class="rt-bar" role="progressbar"><span style="width:43%"></span></div>'
+    + '<span class="muted tiny">A transcrição aparece aqui conforme avança; você pode continuar usando o Escribanote. Áudio longo: vai em partes de 30 min e o ponto é salvo ao fim de cada uma; se o navegador fechar, dá para continuar dali.</span>'
+    + '<span class="banner-acts"><button type="button" class="btn sm">Cancelar</button></span></div>';
+  return true;
+})()`);
+await shot("app-arquivo");
 
 // 6) Temas: Papel e Editor
 await theme({ theme: "light", themeLight: "paper" });
