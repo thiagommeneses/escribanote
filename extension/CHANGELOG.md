@@ -2,6 +2,9 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.75 beta — 2026-11-12
+- **Lista de reuniões mais fácil de ler**: cada reunião virou um cartão, com uma faixa na cor da plataforma (Meet verde, Teams roxo, Zoom azul, Slack magenta, página da web laranja, arquivo e computador cinza). As datas ganharam uma linha divisória, e as pastas e as Fixadas aparecem em blocos próprios. As iniciais dos participantes não se sobrepõem mais.
+
 ## 0.9.74 beta — 2026-11-12
 - **Teste grátis do Pro por 48 horas**: sem cartão e sem cobrança no fim, com tudo do Pro liberado e 5 créditos de IA. Começa em Conta, no app web, e vale uma vez por e-mail. Quando o prazo acaba, a extensão volta para o grátis sozinha, mesmo sem consultar a conta.
 - **Garantia de 7 dias** na assinatura do Pro: desistiu, devolvemos tudo.

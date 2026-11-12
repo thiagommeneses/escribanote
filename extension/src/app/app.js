@@ -2928,7 +2928,7 @@ function cardHtml(m, snippet) {
   const names = m.participants || [];
   const sel = state.session && state.session.id === m.id ? " sel" : "";
   const live = !m.endedAt && Date.now() - m.updatedAt < 5 * 60 * 1000;
-  return `<div class="mcard${sel}${m.pinnedAt ? " pinned" : ""}" role="button" tabindex="0" draggable="true" data-open="${esc(m.id)}" title="Arraste para uma pasta ou para Fixadas; botão direito para mais opções">
+  return `<div class="mcard${sel}${m.pinnedAt ? " pinned" : ""}" role="button" tabindex="0" draggable="true" data-pf="${esc(m.platform || "")}" data-open="${esc(m.id)}" title="Arraste para uma pasta ou para Fixadas; botão direito para mais opções">
     <div class="mcard-top"><b>${live ? `<span class="live-dot" title="Gravando">${icon("gravando")}</span>` : ""}${m.pinnedAt ? `<span class="pin-mark" title="Fixada no topo">${icon("fixar")}</span>` : ""}<span class="mcard-name">${esc(m.title)}</span></b>
       <button type="button" class="mcard-rename" data-rename="${esc(m.id)}" title="Renomear" aria-label="Renomear ${esc(m.title)}">${icon("editar")}</button></div>
     <div class="sub"><span>${new Date(m.startedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
