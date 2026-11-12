@@ -1710,8 +1710,8 @@ function notifyAccount() {
 }
 
 async function syncActive() {
-  const a = await getAccount();
-  if (!a || a.invalid || a.plan !== "pro") return false;
+  // accountIsPro também confere o fim do teste grátis: vencido o prazo, para de enviar sem esperar a conta recusar.
+  if (!accountIsPro(await getAccount())) return false;
   return !!(await getSyncMeta()).consent;
 }
 
@@ -1803,7 +1803,11 @@ async function flushSync() {
         meta.error = err.message;
         if (err.status === 401 || err.status === 402) {
           if (err.status === 401) await setAccount({ invalid: true });
-          else await setAccount({ plan: "free" });
+          else {
+            // O Pro (ou o teste) acabou: não é erro. As reuniões ficam na fila e vão quando o Pro voltar.
+            await setAccount({ plan: "free", trialEndsAt: null });
+            meta.error = null;
+          }
           left.push(...ids.slice(ids.indexOf(id) + 1));
           break;
         }
@@ -1895,7 +1899,7 @@ async function externalLibrary(msg) {
     return {
       ok: true,
       meetings: index.map((m) => ({ id: m.id, title: m.title, platform: m.platform, startedAt: m.startedAt, endedAt: m.endedAt, count: m.count, participants: m.participants, part: m.part || 1, status: status(m) })),
-      sync: { consent: meta.consent, pending: meta.pending.length, error: meta.error, lastSyncAt: meta.lastSyncAt, plan: acct.plan },
+      sync: { consent: meta.consent, pending: meta.pending.length, error: meta.error, lastSyncAt: meta.lastSyncAt, plan: accountIsPro(acct) ? "pro" : "free" },
     };
   }
   if (msg.type === "escribanote-unsynced") {

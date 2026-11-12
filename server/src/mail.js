@@ -22,7 +22,8 @@ const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 
 // HTML completo (doctype, head, título, texto de pré-visualização) e com texto suficiente:
 // e-mails só com um botão e quase nada escrito parecem phishing para os filtros.
-const wrap = (title, preheader, inner) => `<!doctype html>
+const ACCESS_NOTE = "Você recebeu este e-mail porque alguém pediu acesso ao Escribanote com este endereço. Se não foi você, pode ignorar: nada acontece sem o clique no link.";
+const wrap = (title, preheader, inner, note = ACCESS_NOTE) => `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title></head>
 <body style="margin:0;padding:0;background:#f6f4ef;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#1f1b16">
 <div style="display:none;max-height:0;overflow:hidden">${esc(preheader)}</div>
@@ -31,7 +32,7 @@ const wrap = (title, preheader, inner) => `<!doctype html>
 <tr><td style="padding:28px 28px 8px"><p style="font-size:20px;font-weight:700;margin:0">Escribanote</p></td></tr>
 <tr><td style="padding:8px 28px 28px">${inner}</td></tr>
 </table>
-<p style="max-width:520px;font-size:12px;line-height:1.5;color:#7a7268;margin:20px auto 0">Escribanote · transcrição de reuniões · escribanote.com<br>Você recebeu este e-mail porque alguém pediu acesso ao Escribanote com este endereço. Se não foi você, pode ignorar: nada acontece sem o clique no link.</p>
+<p style="max-width:520px;font-size:12px;line-height:1.5;color:#7a7268;margin:20px auto 0">Escribanote · transcrição de reuniões · escribanote.com<br>${esc(note)}</p>
 </td></tr></table></body></html>`;
 
 export function loginEmail(link, minutes) {
@@ -61,5 +62,20 @@ export function passwordEmail(link, minutes, hasPassword) {
 <p style="font-size:13px;line-height:1.5;color:#7a7268;margin:0 0 6px">Se o botão não funcionar, copie este endereço no navegador:</p>
 <p style="font-size:13px;line-height:1.5;color:#7a7268;word-break:break-all;margin:0">${esc(link)}</p>
 <p style="font-size:13px;line-height:1.5;color:#7a7268;margin:16px 0 0">Se você não pediu, ignore este e-mail: sua senha continua a mesma.</p>`),
+  };
+}
+
+export function trialEndingEmail(link, hoursLeft) {
+  const when = hoursLeft <= 1 ? "em cerca de 1 hora" : `em cerca de ${hoursLeft} horas`;
+  const subject = `Seu teste do Escribanote Pro termina ${when}`;
+  return {
+    subject,
+    text: `Olá!\n\nSeu teste grátis do Escribanote Pro termina ${when}. Depois disso a conta volta para o plano grátis: a extensão continua transcrevendo no seu computador, mas a sincronização, a área web, a IA sem chave e a transcrição no servidor param. Nada do que já está na conta é apagado.\n\nPara continuar com o Pro (R$ 150 por ano ou R$ 15 por mês, Pix ou cartão, com garantia de 7 dias):\n\n${link}\n\nSe preferir ficar no grátis, não precisa fazer nada: não há cobrança.\n\nEscribanote · escribanote.com`,
+    html: wrap(subject, `O Pro volta para o grátis ${when}. Nada é apagado e não há cobrança automática.`, `
+<p style="font-size:15px;line-height:1.55;margin:0 0 12px">Olá!</p>
+<p style="font-size:15px;line-height:1.55;margin:0 0 12px">Seu teste grátis do <b>Escribanote Pro</b> termina ${esc(when)}. Depois disso a conta volta para o plano grátis: a extensão continua transcrevendo no seu computador, mas a sincronização, a área web, a IA sem chave e a transcrição no servidor param. Nada do que já está na conta é apagado.</p>
+<p style="font-size:15px;line-height:1.55;margin:0 0 12px">Para continuar com o Pro: R$ 150 por ano ou R$ 15 por mês, no Pix ou no cartão, com garantia de 7 dias.</p>
+<p style="margin:24px 0"><a href="${esc(link)}" style="background:#c8442a;color:#fffdf9;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:600;display:inline-block">Assinar o Pro</a></p>
+<p style="font-size:13px;line-height:1.5;color:#7a7268;margin:0">Se preferir ficar no grátis, não precisa fazer nada: o teste não tem cartão e não há cobrança.</p>`, "Você recebeu este e-mail porque começou o teste grátis do Escribanote Pro com este endereço. É o único aviso sobre o teste."),
   };
 }

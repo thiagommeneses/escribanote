@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.76 beta — 2026-11-12
+- **Fim do teste grátis sem erro de sincronização**: vencido o prazo, a extensão para de enviar reuniões sozinha. Se a conta recusar por falta de plano, isso não aparece como erro; as reuniões ficam na fila e vão quando o Pro voltar.
+- Servidor: e-mail de aviso algumas horas antes do fim do teste (um só), e respostas no thread do Slack só com o Pro ativo.
+- Site: página de **Termos de uso** (teste, assinatura, garantia de 7 dias, créditos, cancelamento) e a linha do Slack na tabela Grátis × Pro.
+
 ## 0.9.75 beta — 2026-11-12
 - **Lista de reuniões mais fácil de ler**: cada reunião virou um cartão, com uma faixa na cor da plataforma (Meet verde, Teams roxo, Zoom azul, Slack magenta, página da web laranja, arquivo e computador cinza). As datas ganharam uma linha divisória, e as pastas e as Fixadas aparecem em blocos próprios. As iniciais dos participantes não se sobrepõem mais.
 

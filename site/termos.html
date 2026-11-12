@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Termos de uso — Escribanote</title>
+  <meta name="description" content="Regras de uso do Escribanote e do Escribanote Pro: teste grátis, assinatura, garantia, créditos de IA e cancelamento.">
+  <link rel="icon" href="img/icon.png">
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    // Transição entre páginas: se a navegação for rápida demais o navegador pula a animação e rejeita
+    // as promessas dela. É esperado; não deve aparecer como erro. Fica no <head> porque o "pagereveal"
+    // acontece antes dos scripts com defer.
+    for (const ev of ["pageswap", "pagereveal"]) addEventListener(ev, (e) => { for (const k of ["ready", "finished", "updateCallbackDone"]) e.viewTransition?.[k]?.catch(() => {}); });
+  </script>
+  <style>
+    .legal { max-width: 46rem; padding-bottom: 6rem; }
+    .legal h1 { font-size: var(--step-3); margin-bottom: 0.6rem; }
+    .legal h2 { font-size: var(--step-2); margin: 2.6rem 0 0.8rem; }
+    .legal p, .legal li { color: var(--ink-2); margin-bottom: 0.8rem; }
+    .legal ul { padding-left: 1.2rem; }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <a class="wordmark" href="./"><span class="rec" aria-hidden="true"></span>Escribanote</a>
+    <nav aria-label="Seções"><a class="nav-pro" href="pro/">Pro</a></nav>
+    <a class="nav-login" href="app/">Entrar</a>
+    <a class="btn btn-ink" href="./#instalar">Baixar grátis</a>
+  </header>
+  <main>
+    <section class="legal">
+      <p class="eyebrow">Em vigor desde 12 de novembro de 2026</p>
+      <h1>Termos de uso</h1>
+      <p>Estes termos valem para o Escribanote, a extensão de navegador grátis que transcreve reuniões, e para o
+        <b>Escribanote Pro</b>, a assinatura opcional com conta online, IA inclusa e sincronização. Ambos são produtos da
+        meneseslabs. Ao instalar a extensão, criar uma conta ou assinar o Pro, você concorda com estes termos e com a
+        <a href="privacidade.html">política de privacidade</a>, que explica o que acontece com os seus dados.</p>
+
+      <h2>1. O plano grátis</h2>
+      <p>A extensão é grátis, sem limite de minutos e sem conta. As reuniões ficam no seu computador. A IA, nesse plano,
+        usa uma chave da API da Anthropic cadastrada por você, e o custo dessa chave é cobrado pela Anthropic, na sua conta
+        com ela. O código é aberto e pode ser conferido no <a href="https://github.com/thiagommeneses/escribanote">GitHub</a>.</p>
+
+      <h2>2. Conta</h2>
+      <p>O Pro exige uma conta com um e-mail seu, que você acessa por um link enviado a ele ou por senha. A conta é pessoal:
+        não a compartilhe com outras pessoas. Você é responsável pelo que for feito com ela e deve nos avisar pelo
+        <a href="./#contato">formulário de contato</a> se suspeitar de acesso indevido.</p>
+
+      <h2>3. Teste grátis do Pro</h2>
+      <ul>
+        <li>O teste dá 48 horas de Pro com todos os recursos e 5 créditos de IA. Não pede cartão e não vira cobrança sozinho.</li>
+        <li>Vale uma vez por e-mail e só para quem nunca assinou. Criar contas novas para repetir o teste não é permitido, e
+          contas usadas assim podem ser encerradas.</li>
+        <li>Algumas horas antes do fim, mandamos um e-mail de aviso. Quando o teste acaba, a conta volta ao plano grátis: as
+          reuniões já sincronizadas continuam na conta e podem ser exportadas ou apagadas, mas a sincronização, a área web,
+          a IA inclusa e a transcrição no servidor param até você assinar.</li>
+      </ul>
+
+      <h2>4. Assinatura, preço e renovação</h2>
+      <ul>
+        <li>O Pro custa R$ 150 por ano ou R$ 15 por mês no Brasil, e US$ 30 por ano ou US$ 3 por mês nos outros países. O preço
+          aparece antes do pagamento, com os impostos aplicáveis.</li>
+        <li>O pagamento é processado pela Stripe: cartão de crédito no plano mensal, cartão ou Pix Automático no plano anual.</li>
+        <li>A assinatura renova sozinha ao fim de cada período, pelo mesmo meio de pagamento, até você cancelar.</li>
+        <li>Se mudarmos o preço, avisamos por e-mail com pelo menos 30 dias de antecedência. O preço novo só vale a partir da
+          renovação seguinte, e você pode cancelar antes dela.</li>
+        <li>Se um pagamento falhar, a Stripe tenta de novo por alguns dias. Sem pagamento, a conta volta ao plano grátis, com as
+          reuniões preservadas.</li>
+      </ul>
+
+      <h2 id="garantia">5. Garantia de 7 dias e reembolso</h2>
+      <p>Se você desistir em até 7 dias depois do primeiro pagamento de uma assinatura, devolvemos o valor inteiro, sem
+        perguntas, como prevê o direito de arrependimento do Código de Defesa do Consumidor (art. 49). Peça pelo
+        <a href="./#contato">formulário de contato</a>, com o e-mail da conta. O valor volta pelo mesmo meio de pagamento,
+        e a assinatura é encerrada na hora. Cartão: o prazo para aparecer na fatura depende do banco emissor.</p>
+      <p>Depois desses 7 dias, e nas renovações, o valor de um período já começado não é devolvido. Ao cancelar, o Pro continua
+        até o fim do período pago. Cobranças em duplicidade ou feitas por erro nosso são sempre devolvidas.</p>
+
+      <h2>6. Cancelamento</h2>
+      <p>Cancele quando quiser em Conta › Forma de pagamento, recibos e cancelamento, na <a href="app/">área da conta</a>.
+        Não há multa nem fidelidade. Apagar a conta também cancela a assinatura, na hora.</p>
+
+      <h2>7. Créditos de IA</h2>
+      <ul>
+        <li>O Pro inclui 15 créditos por mês, que acumulam até 30. Uma ata, uma pergunta ou uma revisão gastam 1 crédito;
+          atas de reuniões longas e perguntas mais pesadas gastam 2. A transcrição de arquivos no servidor gasta 1 crédito
+          por hora de áudio.</li>
+        <li>Créditos só podem ser usados enquanto o Pro (ou o teste) estiver ativo. Não têm valor em dinheiro, não são
+          transferidos para outra conta e não são devolvidos quando a assinatura termina.</li>
+        <li>Se algo falhar do nosso lado e a IA não entregar a resposta, o crédito volta.</li>
+      </ul>
+
+      <h2>8. Uso permitido</h2>
+      <p>Você pode usar o Escribanote para transcrever reuniões, aulas, vídeos e arquivos que tenha o direito de gravar ou
+        transcrever. Cabe a você:</p>
+      <ul>
+        <li>Informar os participantes e obter o consentimento quando a lei exigir. O megafone do widget envia esse aviso no
+          chat da reunião.</li>
+        <li>Respeitar direitos autorais e acordos de confidencialidade ao transcrever vídeos, cursos ou materiais de terceiros e
+          ao compartilhar links de leitura.</li>
+        <li>Não usar o serviço para algo ilegal, nem para vigiar pessoas sem que saibam.</li>
+        <li>Não tentar burlar os limites de créditos, sobrecarregar o servidor, revender o acesso ou usar a API da conta por
+          meios automatizados que não sejam a extensão, o app web ou a integração com o Slack.</li>
+      </ul>
+
+      <h2>9. Seu conteúdo</h2>
+      <p>As reuniões, notas e atas são suas. No Pro, você nos autoriza a guardá-las e processá-las só para prestar o serviço:
+        sincronizar, buscar, gerar atas e respostas, transcrever arquivos e mostrar os links que você criar. Não usamos o seu
+        conteúdo para treinar modelos de IA e não o vendemos. Você pode exportar tudo e apagar a conta a qualquer momento.</p>
+
+      <h2>10. Limites do serviço</h2>
+      <ul>
+        <li>Transcrições e respostas da IA podem ter erros, como nomes trocados, palavras mal entendidas ou resumos
+          incompletos. Confira o que for importante antes de usar em decisões, documentos oficiais ou processos.</li>
+        <li>O Escribanote depende das plataformas de reunião (Meet, Teams, Zoom, Slack) e do navegador. Mudanças nelas podem
+          interromper recursos até lançarmos uma correção.</li>
+        <li>Fazemos o possível para manter o Pro no ar, com backups diários, mas não garantimos funcionamento sem
+          interrupções. A extensão continua funcionando no seu computador mesmo se o servidor estiver fora do ar.</li>
+        <li>Nada nestes termos limita os direitos que o Código de Defesa do Consumidor e outras leis garantem a você.</li>
+      </ul>
+
+      <h2>11. Suspensão e encerramento</h2>
+      <p>Podemos suspender ou encerrar uma conta que viole estes termos, como em caso de fraude no pagamento, abuso do teste
+        grátis ou uso ilegal. Quando possível, avisamos antes por e-mail e damos prazo para exportar as reuniões. Se o Pro
+        deixar de existir, avisamos com pelo menos 60 dias de antecedência e devolvemos o valor proporcional dos períodos
+        já pagos e não usados.</p>
+
+      <h2>12. Mudanças nestes termos</h2>
+      <p>Quando mudarmos algo importante, atualizamos a data no alto desta página e avisamos os assinantes por e-mail antes
+        de a mudança valer. Se não concordar, você pode cancelar a assinatura.</p>
+
+      <h2>13. Lei aplicável</h2>
+      <p>Estes termos seguem a lei brasileira. Fica eleito o foro do seu domicílio para resolver qualquer questão. Antes
+        disso, fale conosco: a maior parte dos problemas se resolve pelo <a href="./#contato">formulário de contato</a>.</p>
+    </section>
+  </main>
+  <footer class="foot">
+    <a class="wordmark" href="./"><span class="rec" aria-hidden="true"></span>Escribanote</a>
+    <a class="made" href="https://meneseslabs.com.br"><img src="img/meneseslabs.svg" alt="" width="28" height="22">um produto <b>meneses<span>labs</span></b></a>
+    <nav aria-label="Rodapé"><a href="pro/">Escribanote Pro</a><a href="privacidade.html">Política de privacidade</a><a href="./#contato">Contato</a></nav>
+  </footer>
+</body>
+</html>
