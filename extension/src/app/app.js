@@ -255,16 +255,16 @@ async function followCurrent() {
   // Sem a permissão "tabs" a URL só vem para a aba em que o ícone foi clicado; sem URL, oferece mesmo assim.
   state.tabWeb = !!tab && (!tab.url || /^https?:/.test(tab.url));
   const id = state.tabId != null ? await send({ type: "active-for-tab", tabId: state.tabId }) : null;
-  state.linkWaiting = !id && state.tabId != null && !!(await send({ type: "link-pending", tabId: state.tabId }));
+  state.linkWaiting = (!id && state.tabId != null && (await send({ type: "link-pending", tabId: state.tabId }))) || false;
   await openSession(id, false);
 }
 
 // Link colado: o Chrome só libera o som da aba nova depois de um clique no ícone do Escribanote nela.
 const LINK_HINT = "Cole o link (YouTube, Instagram, aula, podcast). O vídeo abre numa aba e é transcrito enquanto toca.";
-const LINK_WAIT = "Clique no ícone do Escribanote na barra do navegador (ou Alt+Shift+E) e a transcrição começa sozinha. O Chrome exige esse clique para liberar o som da aba.";
+const LINK_WAIT = "Clique no ícone do Escribanote na barra do navegador (ou Alt+Shift+E) e a transcrição começa sozinha. O navegador exige esse clique em cada aba para liberar o som dela.";
 function renderLinkCta() {
   $("link-form").classList.toggle("waiting", !!state.linkWaiting);
-  $("link-title").textContent = state.linkWaiting ? "O vídeo abriu: falta um clique" : "Tem o link de um vídeo?";
+  $("link-title").textContent = state.linkWaiting === "web" ? "Falta um clique para liberar o som" : state.linkWaiting ? "O vídeo abriu: falta um clique" : "Tem o link de um vídeo?";
   $("link-hint").textContent = state.linkWaiting ? LINK_WAIT : LINK_HINT;
   $("link-url").hidden = !!state.linkWaiting;
   $("link-go").hidden = !!state.linkWaiting;
@@ -520,6 +520,11 @@ $("web-start").addEventListener("click", async (e) => {
   b.disabled = true;
   try {
     const id = await send({ type: "web-start", tabId: state.tabId });
+    if (id && id.waiting) {
+      // falta o clique no ícone nesta aba: o painel avisa e a transcrição começa sozinha depois dele
+      state.linkWaiting = "web";
+      return renderMeeting();
+    }
     await openSession(id, false);
     toast("Transcrevendo o som desta aba. Dê play no vídeo; para terminar, use Parar.");
   } catch (err) {

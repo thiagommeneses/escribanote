@@ -70,7 +70,7 @@ try {
   assert.equal(await linkTab(ev), null, "link inválido não abre aba");
   await submit(ev, PAGE_URL);
   const tabId = await waitFor(() => linkTab(ev), "aba do link aberta", 10000);
-  assert.equal(await ev(`chrome.runtime.sendMessage({ type: "link-pending", tabId: ${tabId} })`), true);
+  assert.equal(await ev(`chrome.runtime.sendMessage({ type: "link-pending", tabId: ${tabId} })`), "link");
   await waitFor(() => ev(`document.querySelector("#link-form").classList.contains("waiting") && /falta um clique/.test(document.querySelector("#link-title").textContent) && document.querySelector("#web-cta").hidden`), "aviso de falta um clique", 10000);
   await sleep(4000);
   assert.deepEqual(await webSessions(ev), [], "sem o clique nada começa");
@@ -79,6 +79,16 @@ try {
   await sleep(500);
   assert.equal(await ev(`chrome.runtime.sendMessage({ type: "link-pending", tabId: ${tabId} })`), false, "aba fechada desiste");
   console.log("✓ fechar a aba desiste da espera");
+  // "Transcrever esta aba" sem o clique no ícone: espera em vez de erro, e nenhuma sessão vazia fica na lista
+  const t3 = (await ev(`chrome.tabs.create({ url: ${JSON.stringify(PAGE_URL)}, active: false })`)).id;
+  await sleep(1500);
+  const r3 = await ev(`chrome.runtime.sendMessage({ type: "web-start", tabId: ${t3} })`);
+  assert.deepEqual(r3, { waiting: true }, "web-start sem o clique espera: " + JSON.stringify(r3));
+  assert.equal(await ev(`chrome.runtime.sendMessage({ type: "link-pending", tabId: ${t3} })`), "web");
+  await sleep(2000);
+  assert.deepEqual(await webSessions(ev), [], "sem sessão vazia");
+  await ev(`chrome.tabs.remove(${t3})`);
+  console.log("✓ Transcrever esta aba sem o clique: fica esperando, sem erro e sem sessão vazia");
   await close();
 
   // 2. liberada (equivale ao clique no ícone): começa sozinha

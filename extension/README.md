@@ -31,6 +31,10 @@ nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, aju
 - 0.9.76, fim do teste grátis: `syncActive()` usa `accountIsPro` (confere `trialEndsAt`), então a sincronização para
   sozinha quando o prazo vence. Um 402 no envio põe a conta em `plan: "free"` sem `meta.error`, e as reuniões ficam em
   `meta.pending` até o Pro voltar. Teste: `test/e2e-trial-end.mjs`.
+- 0.9.77, som da aba: o ícone não usa mais `openPanelOnActionClick`; `action.onClicked` chama `sidePanel.open` (ainda no
+  gesto) e o clique conta como invocação para o `tabCapture` daquela aba. `startWeb` pede o `streamId` antes de criar a
+  sessão; sem ele, a aba entra em `pendingLinks` com `web: true` e `web-start` responde `{ waiting: true }` (o painel mostra
+  "Falta um clique…"; `link-pending` responde `"web"` ou `"link"`). Teste: `test/e2e-link.mjs`.
 - 0.9.72, link colado: `link-open {url}` (`normalizeLink` em format.js) abre a aba ativa e guarda `pendingLinks`
   (tabId → url, prazo de 10 min, também em `storage.session`). O Chrome recusa `tabCapture.getMediaStreamId` numa aba
   que a extensão abriu sem um clique no ícone nela ("Extension has not been invoked"), então a cada 1,5 s o service

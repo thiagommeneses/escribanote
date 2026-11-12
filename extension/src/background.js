@@ -95,7 +95,16 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
   if (!remote || next._at > (remote._at || 0)) pushSyncedSettings(next).catch(() => {});
 });
 
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+// O clique no ícone abre o painel por aqui (e não pelo openPanelOnActionClick): assim o clique sempre conta como
+// "invocação" da extensão nesta aba, que é o que o Chrome e o Edge exigem para liberar o som dela (tabCapture),
+// e clicar com o painel já aberto não o fecha. O painel fica aberto ao trocar de aba; o som de cada aba nova
+// precisa de um clique no ícone nela. Se havia uma transcrição esperando esse clique, ela começa sozinha.
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+chrome.action.onClicked.addListener((tab) => {
+  // sidePanel.open precisa vir já, ainda dentro do gesto do clique
+  chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => chrome.tabs.create({ url: chrome.runtime.getURL("src/app/app.html?tab=1") }));
+  if (pendingLinks.has(tab.id)) pollLinks();
+});
 
 // ---------------- Persistência ----------------
 async function loadIndex() {
@@ -1369,7 +1378,8 @@ async function handle(msg, sender) {
     case "link-open":
       return openLink(msg.url);
     case "link-pending":
-      return pendingLinks.has(Number(msg.tabId));
+      // "link": vídeo aberto pelo link colado; "web": "Transcrever esta aba" esperando o clique no ícone
+      return pendingLinks.has(Number(msg.tabId)) ? (pendingLinks.get(Number(msg.tabId)).web ? "web" : "link") : false;
     case "recorder-start": {
       // Gravador do computador (Slack e outros apps): a aba do gravador faz o papel da reunião,
       // então fechar a aba encerra a sessão como sair de uma reunião.
@@ -2042,10 +2052,22 @@ async function startWeb(tabId, { streamId, url } = {}) {
     if (live && !live.endedAt && !live.web) throw new Error("Esta aba já tem uma reunião sendo transcrita.");
     if (live && !live.endedAt) return live.id;
   }
+  // O som primeiro: sem o clique no ícone nesta aba o navegador recusa. Aí, em vez de erro, a aba entra na
+  // mesma espera do link colado e a transcrição começa sozinha quando o clique acontecer. Nada é criado antes.
+  if (!streamId) {
+    try {
+      streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
+    } catch {
+      pendingLinks.set(tabId, { url: tabUrl, until: Date.now() + LINK_WAIT_MS, web: true });
+      await savePendingLinks();
+      pollLinks();
+      return { waiting: true };
+    }
+  }
   const now = Date.now();
   const host = (tabUrl ? new URL(tabUrl).hostname : "página da web").replace(/^www\./, "").replace(/^m\./, "");
   const site = /youtube\.com$|youtu\.be$/.test(host) ? "YouTube" : /instagram\.com$/.test(host) ? "Instagram" : host;
-  const cleanTitle = (t) => String(t || "").replace(/^\(\d+\)\s*/, "").replace(/\s*[-–|]\s*(YouTube|Instagram)\s*$/i, "").slice(0, 200);
+  const cleanTitle = (t) => String(t || "").replace(/^\(\d+\+?\)\s*/, "").replace(/\s*[-–|]\s*(YouTube|Instagram)\s*$/i, "").slice(0, 200);
   const looksLikeUrl = (t) => !t || /^(https?:\/\/|[\w.-]+\.[a-z]{2,}(:\d+)?(\/|$))/i.test(t) || /^\d{1,3}(\.\d{1,3}){3}(:\d+)?(\/|$)/.test(t);
   const title = (!looksLikeUrl(tab.title) && cleanTitle(tab.title)) || site;
   const rec = await sessionForTab(tabId, { platform: "web", key: `web:${tabId}:${now}`, title, url: tabUrl });
@@ -2058,6 +2080,8 @@ async function startWeb(tabId, { streamId, url } = {}) {
     await startHq(tabId, { mic: false, streamId });
   } catch (err) {
     await endSession(tabId, "web-error");
+    const left = await getSession(rec.id);
+    if (left && !left.entries.length && !left.asr.length) await deleteSession(rec.id); // não deixa uma sessão vazia na lista
     throw err;
   }
   // Link aberto agora: a página ainda pode estar carregando. Quando o título do vídeo aparecer, troca
@@ -2118,7 +2142,7 @@ function pollLinks() {
       if (!streamId) continue;
       pendingLinks.delete(tabId);
       try {
-        const id = await startWeb(tabId, { streamId, url: p.url });
+        const id = await startWeb(tabId, { streamId, url: p.url || undefined });
         chrome.runtime.sendMessage({ type: "link-started", tabId, id }).catch(() => {});
       } catch (err) {
         chrome.runtime.sendMessage({ type: "link-error", tabId, message: err.message || String(err) }).catch(() => {});
