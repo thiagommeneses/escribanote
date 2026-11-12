@@ -556,3 +556,25 @@ thead th.us { color: var(--rec-deep); }
   .news-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) { .news-list { grid-template-columns: 1fr; } }
+
+/* Pro: comparativo grátis × Pro */
+.plan-compare .cmp-sum { color: var(--ink-3); margin-top: .6rem; }
+.plan-compare .cmp-sum b { color: var(--ink); }
+.plan-table { min-width: 0; }
+.plan-table thead th small { display: block; font-size: .78em; letter-spacing: 0; text-transform: none; font-weight: 500; color: var(--ink-3); margin-top: .2rem; }
+.plan-table tbody th { width: 46%; font-weight: 500; color: var(--ink); }
+.plan-table td { width: 27%; }
+.plan-table tr.grp th { padding-top: 1.8rem; font-size: var(--step--1); letter-spacing: .08em; text-transform: uppercase; color: var(--rec-deep); font-weight: 700; border-bottom: 1px solid var(--ink); width: auto; }
+.plan-table td.yes { font-weight: 700; color: var(--leaf, var(--ink)); font-size: 1.1em; }
+.plan-table td.no { color: var(--ink-3); }
+.plan-table .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cmp-link { display: inline-block; align-self: flex-start; width: auto; margin: .2rem 0 .8rem; }
+.plan-table td.yes span[aria-hidden] { font-size: 1.25em; }
+@media (max-width: 640px) {
+  .plan-table th, .plan-table td { padding: .65rem .45rem; font-size: .88em; line-height: 1.4; }
+  .plan-table tbody th { width: 56%; }
+  .plan-table td { width: 22%; }
+  .plan-table thead th small { display: none; }
+  .plan-table td.yes, .plan-table td.no { text-align: center; }
+  .plan-table thead th:not(:first-child) { text-align: center; }
+}
