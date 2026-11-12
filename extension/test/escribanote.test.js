@@ -1474,3 +1474,16 @@ test("página da web (Transcrever esta aba): o som da aba vira o falante do site
   assert.equal(s.asr[0].speakerId, "outros");
   assert.equal(speakerName(s, "outros"), "YouTube");
 });
+
+test("servidor: fala inventada em silêncio cai, fala real fica e o fim é cortado no pedaço", async () => {
+  const { keepServerSegment } = await import("../src/asr/segmenter.js");
+  const sr = 16000, samples = new Float32Array(sr * 12); // 12 s: silêncio até 5 s, voz (tom) de 5 a 9 s
+  for (let i = 5 * sr; i < 9 * sr; i++) samples[i] = 0.1 * Math.sin(i * 0.17);
+  const off = 600_000;
+  assert.equal(keepServerSegment(samples, off, { start: off, end: off + 29_980, text: "Thank you." }).text, "Thank you."); // trecho inclui voz forte (0,07): fica
+  assert.equal(keepServerSegment(samples, off, { start: off, end: off + 4000, text: "Bom dia a todos." }), null); // silêncio
+  assert.equal(keepServerSegment(samples, off, { start: off, end: off + 4000, text: "Thank you." }), null); // silêncio
+  assert.deepEqual(keepServerSegment(samples, off, { start: off + 5000, end: off + 29_980, text: " Bom dia a todos. " }), { start: off + 5000, end: off + 12_000, text: "Bom dia a todos." });
+  assert.equal(keepServerSegment(samples, off, { start: off + 5000, end: off + 9000, text: "Legendas pela comunidade Amara.org" }), null);
+  assert.equal(keepServerSegment(samples, off, { start: off + 13_000, end: off + 14_000, text: "Fora do pedaço" }), null);
+});
