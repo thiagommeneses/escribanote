@@ -1,5 +1,5 @@
 // Assinatura pela Stripe: Checkout (BRL com cartão e Pix Automático; USD com cartão), Portal e webhooks.
-import { audit } from "./auth.js";
+import { account, audit, emailHash } from "./auth.js";
 import { addMonths, grantCycle } from "./credits.js";
 import { clientIp, fail } from "./http.js";
 
@@ -34,6 +34,29 @@ export function registerBilling(app, { db, config, stripe }) {
     );
     return c.id;
   }
+
+  // Teste grátis do Pro: 48 h (config.trial.hours) sem cartão e alguns créditos de IA, uma vez por e-mail e só para
+  // quem nunca assinou. Não passa pela Stripe: a linha em subscriptions fica com status "trial" até o fim do prazo;
+  // assinar durante o teste troca o status pelo da Stripe (o webhook sobrescreve a linha).
+  app.post("/api/v1/billing/trial", auth, async (req) => {
+    const { hours, credits } = config.trial;
+    const end = await db.tx(async (c) => {
+      const cur = await c.one("SELECT status FROM subscriptions WHERE user_id = $1 FOR UPDATE", [req.user.id]);
+      if (cur && cur.status !== "none") fail(409, "trial_unavailable", "O teste grátis é para quem ainda não assinou nem testou o Pro.");
+      const claim = await c.one("INSERT INTO trial_claims (email_hash) VALUES ($1) ON CONFLICT DO NOTHING RETURNING email_hash", [emailHash(req.user.email)]);
+      if (!claim) fail(409, "trial_used", "Este e-mail já usou o teste grátis do Pro.");
+      const row = await c.one(
+        `INSERT INTO subscriptions (user_id, status, current_period_end) VALUES ($1, 'trial', now() + make_interval(hours => $2::int))
+         ON CONFLICT (user_id) DO UPDATE SET status = 'trial', current_period_end = EXCLUDED.current_period_end, updated_at = now()
+         RETURNING current_period_end`,
+        [req.user.id, hours],
+      );
+      return row.current_period_end;
+    });
+    await grantCycle(db, req.user.id, "trial", end, { perCycle: credits, max: config.credits.max });
+    await audit(db, req.user.id, "trial_start", { hours, credits }, clientIp(req));
+    return account(db, req.user.id, config);
+  });
 
   app.post("/api/v1/billing/checkout", auth, async (req) => {
     need();

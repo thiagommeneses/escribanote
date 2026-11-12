@@ -578,3 +578,6 @@ thead th.us { color: var(--rec-deep); }
   .plan-table td.yes, .plan-table td.no { text-align: center; }
   .plan-table thead th:not(:first-child) { text-align: center; }
 }
+.trial-link { display: inline-block; align-self: flex-start; margin-top: .9rem; }
+.plan-table td.soon { font-style: italic; }
+.final-cta .final-fine { grid-column: 1 / -1; margin-top: -1rem; color: var(--ink-3); }

@@ -89,6 +89,9 @@ faça um backup manual (abaixo).
    Para a transcrição de arquivos no servidor, crie uma chave no console do Groq (console.groq.com) e coloque em
    `GROQ_API_KEY`. Sem ela, a opção "No servidor" responde 503 e o resto segue normal. O plano gratuito do Groq
    limita o volume de áudio por hora (e 25 MB por envio, abaixo dos ~19 MB dos pedaços de 10 min); para uso real, ative o plano Developer.
+   Teste grátis do Pro: `POST /api/v1/billing/trial` dá `TRIAL_HOURS` (48) horas de Pro e `TRIAL_CREDITS` (5) créditos, sem
+   a Stripe (status `trial` em `subscriptions`, vale até `current_period_end`). Uma vez por e-mail: o hash SHA-256 fica em
+   `trial_claims` (migração 006) mesmo depois de apagar a conta. Só para quem nunca assinou.
 4. Rode o script que cria produto, preços (mensal R$ 15 e US$ 3, anual R$ 150 e US$ 30), webhook e portal, e grava os IDs no `pro.env`:
 
 ```bash

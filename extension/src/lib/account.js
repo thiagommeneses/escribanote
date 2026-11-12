@@ -8,6 +8,12 @@ export async function accountBase() {
 }
 
 // { token, email, deviceId, plan, balance, renewsAt, connectedAt, invalid }
+// Conta com o Pro valendo agora. No teste grátis de 48 h, para de valer no fim do prazo mesmo antes da próxima
+// consulta ao servidor (que acontece a cada 30 min).
+export function accountIsPro(a, now = Date.now()) {
+  return !!(a && a.token && a.plan === "pro" && !a.invalid && !(a.trialEndsAt && Date.parse(a.trialEndsAt) <= now));
+}
+
 export async function getAccount() {
   const { account } = await chrome.storage.local.get("account");
   return account && account.token ? account : null;

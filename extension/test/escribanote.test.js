@@ -1496,3 +1496,14 @@ test("link colado: completa https://, recusa vazio e outros esquemas", async () 
   assert.throws(() => normalizeLink("ftp://exemplo.com/a.mp3"), /http/);
   assert.throws(() => normalizeLink("javascript:alert(1)"));
 });
+
+test("conta: o teste grátis do Pro para de valer no fim do prazo, mesmo sem consultar o servidor", async () => {
+  const { accountIsPro } = await import("../src/lib/account.js");
+  const base = { token: "t", plan: "pro" };
+  assert.equal(accountIsPro(base), true);
+  assert.equal(accountIsPro({ ...base, trialEndsAt: new Date(Date.now() + 3600_000).toISOString() }), true);
+  assert.equal(accountIsPro({ ...base, trialEndsAt: new Date(Date.now() - 1000).toISOString() }), false);
+  assert.equal(accountIsPro({ ...base, invalid: true }), false);
+  assert.equal(accountIsPro({ plan: "pro" }), false);
+  assert.equal(accountIsPro(null), false);
+});

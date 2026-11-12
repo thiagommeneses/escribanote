@@ -27,6 +27,7 @@ export function loadConfig(overrides = {}) {
     },
     aiDailyBudgetUsd: num(env.AI_DAILY_BUDGET_USD, 20),
     credits: { perCycle: num(env.CREDITS_PER_CYCLE, 15), max: num(env.CREDITS_MAX, 30) },
+    trial: { hours: num(env.TRIAL_HOURS, 48), credits: num(env.TRIAL_CREDITS, 5) },
     stripe: {
       secretKey: env.STRIPE_SECRET_KEY || "",
       webhookSecret: env.STRIPE_WEBHOOK_SECRET || "",

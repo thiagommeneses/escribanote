@@ -2,6 +2,12 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.74 beta — 2026-11-12
+- **Teste grátis do Pro por 48 horas**: sem cartão e sem cobrança no fim, com tudo do Pro liberado e 5 créditos de IA. Começa em Conta, no app web, e vale uma vez por e-mail. Quando o prazo acaba, a extensão volta para o grátis sozinha, mesmo sem consultar a conta.
+- **Garantia de 7 dias** na assinatura do Pro: desistiu, devolvemos tudo.
+- Página do Pro: teste grátis, garantia e "Em breve: plano Equipe" na tabela Grátis × Pro.
+- Política de privacidade atualizada: senha opcional, teste grátis e o Groq como subprocessador da transcrição no servidor.
+
 ## 0.9.73 beta — 2026-11-12
 - **Datas dentro das pastas**: as reuniões de cada pasta aparecem separadas por dia (Hoje, Ontem, terça-feira, 10 de novembro…), como na lista.
 - **Parar a resposta da IA**: enquanto a IA responde, o botão Enviar vira **Parar**. O que já foi escrito fica na conversa, com a nota "Resposta interrompida por você".
