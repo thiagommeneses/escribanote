@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.77 beta — 2026-11-12
+- Corrigido: **Transcrever esta aba** falhava com "O Chrome só libera o áudio depois que você clica no ícone…" quando o painel lateral tinha sido aberto em outra aba (ele continua aberto ao trocar de aba, mas o navegador só libera o som da aba em que o ícone foi clicado). Agora, sem esse clique, o painel avisa "Falta um clique para liberar o som" e a transcrição começa sozinha assim que você clica no ícone do Escribanote nessa aba (ou Alt+Shift+E).
+- Clicar no ícone com o painel aberto não o fecha mais, e o clique sempre libera o som daquela aba (Chrome e Edge).
+- A tentativa que falha não deixa mais uma sessão vazia na lista, e o contador de notificações "(9+)" não entra no nome da sessão.
+
 ## 0.9.76 beta — 2026-11-12
 - **Fim do teste grátis sem erro de sincronização**: vencido o prazo, a extensão para de enviar reuniões sozinha. Se a conta recusar por falta de plano, isso não aparece como erro; as reuniões ficam na fila e vão quando o Pro voltar.
 - Servidor: e-mail de aviso algumas horas antes do fim do teste (um só), e respostas no thread do Slack só com o Pro ativo.
