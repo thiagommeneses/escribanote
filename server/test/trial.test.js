@@ -66,3 +66,23 @@ test("quem já assina não tem teste", async () => {
   assert.equal(me.trial.available, false);
   assert.equal((await u.post("/api/v1/billing/trial", {})).statusCode, 409);
 });
+
+test("aviso do fim do teste: um e-mail só, nas últimas 6 horas, e nunca para quem assinou", async () => {
+  const { trialReminders } = await import("../src/reminders.js");
+  const a = await login(ctx);
+  const b = await login(ctx);
+  const c = await login(ctx);
+  for (const u of [a, b, c]) assert.equal((await u.post("/api/v1/billing/trial", {})).statusCode, 200);
+  await ctx.db.query("UPDATE subscriptions SET current_period_end = now() + interval '5 hours' WHERE user_id = ANY($1)", [[a.me.id, c.me.id]]);
+  await ctx.db.query("UPDATE subscriptions SET status = 'active' WHERE user_id = $1", [c.me.id]); // assinou durante o teste
+  const before = ctx.mailer.sent.length;
+  assert.equal(await trialReminders(ctx.db, ctx.mailer, ctx.config), 1);
+  const mail = ctx.mailer.sent.at(-1);
+  assert.equal(ctx.mailer.sent.length, before + 1);
+  assert.equal(mail.to, a.email, "só quem está a menos de 6 h do fim (b ainda tem 48 h)");
+  assert.match(mail.subject, /termina em cerca de 5 horas/);
+  assert.match(mail.text, /https:\/\/escribanote\.test\/app\/#\/conta\?plano=anual/);
+  assert.match(mail.html, /começou o teste grátis/);
+  assert.equal(await trialReminders(ctx.db, ctx.mailer, ctx.config), 0, "não repete");
+  assert.equal(ctx.mailer.sent.length, before + 1);
+});

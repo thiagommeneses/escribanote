@@ -1409,7 +1409,7 @@ function subscribeHtml({ interval = "year", currency = "brl" }) {
       <div><b>Seus dados são seus</b><span>Não vendemos, não usamos para treinar IA e você exporta ou apaga tudo quando quiser.</span></div>
       <div><b>Direitos garantidos</b><span>Seguimos a LGPD e respeitamos os direitos do GDPR (União Europeia) e das leis de privacidade dos EUA, como a CCPA. <a href="/privacidade.html#pro">Política</a>.</span></div>
     </div>
-    <p class="small muted">Pagamento processado pela Stripe; o Escribanote não vê o número do seu cartão. A extensão continua grátis e local para sempre: o Pro é opcional.</p>`;
+    <p class="small muted">Ao assinar, você concorda com os <a href="/termos.html">termos de uso</a>. Pagamento processado pela Stripe; o Escribanote não vê o número do seu cartão. A extensão continua grátis e local para sempre: o Pro é opcional.</p>`;
 }
 function pickPlan(el) {
   const box = $("subscribe");

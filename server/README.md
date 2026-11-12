@@ -37,7 +37,7 @@ atas e pode ligar "publicar sozinho". Perguntas no thread da ata chegam por `/ap
 ```bash
 docker run -d --name escribanote-pg-test -e POSTGRES_PASSWORD=teste -e POSTGRES_DB=escribanote_test -p 127.0.0.1:55432:5432 postgres:17-alpine
 npm install
-npm test                                   # 38 testes contra Postgres real (IA e Stripe simuladas; SDKs reais checados pela rede)
+npm test                                   # 64 testes contra Postgres real (IA e Stripe simuladas; SDKs reais checados pela rede)
 node scripts/dev-server.js 8787            # API + site + app em http://127.0.0.1:8787/app/ (e-mail, IA e Stripe simulados)
 CHROME=/caminho/do/chrome node test/e2e-web.mjs [pasta]              # área logada num Chrome real
 CHROME=/caminho/do/chrome node ../extension/test/e2e-account.mjs     # extensão + app + API: conectar, sincronizar, IA da conta
@@ -91,7 +91,9 @@ faça um backup manual (abaixo).
    limita o volume de áudio por hora (e 25 MB por envio, abaixo dos ~19 MB dos pedaços de 10 min); para uso real, ative o plano Developer.
    Teste grátis do Pro: `POST /api/v1/billing/trial` dá `TRIAL_HOURS` (48) horas de Pro e `TRIAL_CREDITS` (5) créditos, sem
    a Stripe (status `trial` em `subscriptions`, vale até `current_period_end`). Uma vez por e-mail: o hash SHA-256 fica em
-   `trial_claims` (migração 006) mesmo depois de apagar a conta. Só para quem nunca assinou.
+   `trial_claims` (migração 006) mesmo depois de apagar a conta. Só para quem nunca assinou. A cada 15 min a API manda um
+   e-mail de aviso a quem está a menos de `TRIAL_REMIND_HOURS` (6) horas do fim do teste, uma vez só
+   (`subscriptions.trial_reminder_at`, migração 007).
 4. Rode o script que cria produto, preços (mensal R$ 15 e US$ 3, anual R$ 150 e US$ 30), webhook e portal, e grava os IDs no `pro.env`:
 
 ```bash

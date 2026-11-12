@@ -7,7 +7,8 @@ import { refund, reserve } from "./credits.js";
 import { newToken } from "./crypto.js";
 import { fail } from "./http.js";
 import { chatRequest, DEFAULT_TAGS, dateLabel, participantNames, PLATFORM } from "./lib.js";
-import { loadDoc, requirePro } from "./meetings.js";
+import { isPro } from "./auth.js";
+import { loadDoc, requirePro, subscriptionOf } from "./meetings.js";
 
 const SCOPES = ["chat:write", "chat:write.public", "channels:read", "groups:read", "channels:history", "groups:history", "app_mentions:read"];
 const SECTION_MAX = 2900; // limite de um bloco de texto do Slack é 3000
@@ -229,6 +230,7 @@ export function registerSlack(app, { db, config, sealer, anthropic, fetchImpl = 
     } catch {
       return reply("Esta reunião não está mais na conta.");
     }
+    if (!isPro(await subscriptionOf(db, post.user_id))) return reply("O Escribanote Pro desta conta não está ativo, então a IA não responde mais neste thread.");
     const id = randomUUID();
     const model = config.models.fast;
     try {
