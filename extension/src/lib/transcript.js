@@ -705,3 +705,42 @@ export function participantNames(session) {
   const ids = [...new Set(effectiveEntries(session).filter((e) => e.kind === "caption").map((e) => e.speakerId))];
   return ids.filter((id) => id !== "desconhecido").map((id) => speakerName(session, id));
 }
+
+// ---------- Vídeo em loop (reels) ----------
+// Reels e vídeos curtos recomeçam sozinhos: sem isso, a transcrição repetiria as mesmas falas até alguém
+// apertar Parar. Compara as últimas palavras com o começo da transcrição, de forma tolerante (o Whisper
+// não corta nem escreve igual nas duas voltas). Devolve o índice da primeira fala da segunda volta, ou -1.
+const loopWords = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+function wordOverlap(a, b) {
+  const pool = new Map();
+  for (const w of b) pool.set(w, (pool.get(w) || 0) + 1);
+  let n = 0;
+  for (const w of a) if (pool.get(w) > 0) { n++; pool.set(w, pool.get(w) - 1); }
+  return n;
+}
+export function loopStart(asr, { tail = 10, minMatch = 8, minLoopWords = 15 } = {}) {
+  const words = [], segOf = [], firstWord = [];
+  (asr || []).forEach((a, i) => {
+    firstWord[i] = words.length;
+    for (const w of loopWords(a.text)) { words.push(w); segOf.push(i); }
+  });
+  const n = words.length;
+  if (n < tail + minLoopWords) return -1;
+  const end = words.slice(n - tail);
+  const head = words.slice(0, tail);
+  for (let p = 0; p <= n - 2 * tail - minLoopWords; p++) {
+    if (wordOverlap(end, words.slice(p, p + tail)) < minMatch) continue;
+    const k = n - tail - p; // onde a segunda volta começaria
+    if (k - p < minLoopWords) continue; // a primeira ocorrência precisa estar na primeira volta
+    // confirma: o trecho em k é o começo da transcrição (com folga de alguns palavras no corte)
+    if (wordOverlap(head, words.slice(Math.max(0, k - 3), k + tail + 3)) < minMatch) continue;
+    // corta na fala que começa mais perto de k
+    let best = -1, dist = Infinity;
+    for (let i = 0; i < firstWord.length; i++) {
+      const d = Math.abs(firstWord[i] - k);
+      if (i > 0 && d < dist) { best = i; dist = d; }
+    }
+    return best > 0 ? best : -1;
+  }
+  return -1;
+}

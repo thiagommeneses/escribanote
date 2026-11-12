@@ -73,6 +73,30 @@ try {
     assert.ok(s.asr.every((a) => a.source === "tab" && a.speakerId === "outros"), "falante: " + JSON.stringify(s.asr.map((a) => [a.source, a.speakerId])));
     console.log("✓ som da aba transcrito:", text.slice(0, 120));
   }
+  if (!s) {
+    // sem som chegando da aba: o painel avisa que o vídeo pode estar mudo ou pausado
+    const w = await waitFor(() => ev(`chrome.runtime.sendMessage({ type: "hq-get", tabId: ${tabId} }).then((h) => h && h.warning)`), "aviso de aba muda", 30000);
+    assert.match(w, /Nenhum som chega desta aba/);
+    console.log("✓ aba sem som: aviso de vídeo mudo ou pausado");
+    // vídeo em loop (reel): as falas da segunda volta chegam como se viessem do Whisper; fica uma volta e a sessão encerra
+    const falas = [
+      "O Banco Central manteve a Selic em dez e meio por cento nesta quarta.",
+      "A decisão foi unânime e o comunicado veio mais duro do que o mercado esperava.",
+      "Para os analistas, o recado é que os juros não caem antes do segundo semestre.",
+      "E isso pesa no crédito, no consumo e na bolsa.",
+      "O Banco Central manteve a Selic em 10,5% nesta quarta. A decisão foi unânime",
+      "e o comunicado veio mais duro do que o mercado esperava. Para os analistas,",
+    ];
+    const t0 = Date.now();
+    for (const [i, text] of falas.entries()) {
+      await ev(`chrome.runtime.sendMessage({ type: "asr-result", tabId: ${tabId}, seg: { start: ${t0 + i * 4000}, end: ${t0 + i * 4000 + 3500}, text: ${JSON.stringify(text)}, source: "tab" } })`);
+    }
+    const looped = await waitFor(async () => { const x = await ev(`chrome.runtime.sendMessage({ type: "get", id: ${JSON.stringify(id)} })`); return x && x.endedAt ? x : null; }, "sessão encerrada no loop", 30000);
+    assert.equal(looped.asr.length, 4, "só a primeira volta: " + JSON.stringify(looped.asr.map((a) => a.text)));
+    assert.ok(looped.report.events.some((e) => e.kind === "web-loop" && e.detail?.dropped === 2), "evento do loop");
+    assert.ok(looped.report.events.some((e) => e.kind === "end" && e.detail?.reason === "web-loop"), "fim pelo loop");
+    console.log("✓ vídeo recomeçou: ficou uma volta (4 falas) e a sessão encerrou sozinha");
+  }
   const ended = await ev(`chrome.runtime.sendMessage({ type: "end-live", id: ${JSON.stringify(id)} })`);
   assert.ok(ended.endedAt, "Parar encerra a sessão");
   const hq = await waitFor(() => ev(`chrome.runtime.sendMessage({ type: "hq-get", tabId: ${tabId} }).then((h) => !h || h.state === "idle" ? "idle" : null)`), "captura parada", 30000);

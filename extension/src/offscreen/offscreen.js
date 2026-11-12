@@ -8,7 +8,35 @@ import { readTrack } from "../lib/audiovault.js";
 import { probeAudio, decodeAudio } from "../asr/decode.js";
 import { keepServerSegment } from "../asr/segmenter.js";
 
-const state = { tabId: null, status: { state: "idle" }, play: null, mic: null, keep: null, retrans: null };
+const state = { tabId: null, status: { state: "idle" }, play: null, mic: null, keep: null, retrans: null, quiet: null };
+
+// Página da web: se nenhum som chegar da aba por QUIET_MS, avisa (vídeo mudo, pausado ou parado). O aviso some
+// quando o som volta. Só para páginas da web: numa reunião, silêncio é normal.
+const QUIET_MS = 10_000;
+const QUIET_RMS = 0.002;
+const QUIET_WARNING = "Nenhum som chega desta aba. Se o vídeo estiver mudo ou pausado, clique nele para ativar o som ou dar play.";
+function watchQuiet(ctx, source) {
+  const an = ctx.createAnalyser();
+  an.fftSize = 2048;
+  source.connect(an);
+  const buf = new Float32Array(an.fftSize);
+  let since = performance.now(), warned = false;
+  const timer = setInterval(() => {
+    an.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (const v of buf) sum += v * v;
+    const now = performance.now();
+    if (Math.sqrt(sum / buf.length) > QUIET_RMS) {
+      since = now;
+      if (warned) { warned = false; report({ warning: null }); logEvent("web-sound", {}); }
+    } else if (!warned && now - since > QUIET_MS) {
+      warned = true;
+      report({ warning: QUIET_WARNING });
+      logEvent("web-quiet", { ms: Math.round(now - since) });
+    }
+  }, 500);
+  return () => clearInterval(timer);
+}
 
 // Relatório de sessão: eventos vão para o service worker, que os guarda na reunião da aba.
 function logEvent(kind, detail) {
@@ -249,11 +277,13 @@ async function stopCapture() {
   if (state.keep) await state.keep.stop().catch(() => {}); // fecha as faixas antes de desligar as fontes
   state.keep = null;
   await pipe.stopCapture();
+  if (state.quiet) state.quiet();
+  state.quiet = null;
   if (state.play) await state.play.close().catch(() => {});
   state.play = null;
 }
 
-async function start({ tabId, streamId, modelKey, lang, mic, echo = true, diarize, keep = null, profiles = null }) {
+async function start({ tabId, streamId, modelKey, lang, mic, echo = true, diarize, keep = null, profiles = null, quietHint = false }) {
   await stopCapture();
   pipe.reset();
   pipe.setEcho(echo);
@@ -266,7 +296,9 @@ async function start({ tabId, streamId, modelKey, lang, mic, echo = true, diariz
   });
   // Capturar a aba silencia o áudio dela: devolve o som para os alto-falantes.
   state.play = new AudioContext();
-  state.play.createMediaStreamSource(tab).connect(state.play.destination);
+  const src = state.play.createMediaStreamSource(tab);
+  src.connect(state.play.destination);
+  if (quietHint) state.quiet = watchQuiet(state.play, src);
   await pipe.addStream(tab, "tab");
 
   if (mic) {

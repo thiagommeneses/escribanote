@@ -3,7 +3,7 @@
 import { commitSummary } from "./lib/diff.js";
 import { mergeSpeakers, dedupeSpeakers, mergeVoices, keepApart, replaceAll,
   createSession, applyEvent, normalize, setBlockTags, toggleLastBlockTag, participantNames, editBlock, undoEdit, splitBlock,
-  addAsrSegment, effectiveEntries, toBlocks, speakerName,
+  addAsrSegment, effectiveEntries, toBlocks, speakerName, loopStart,
 } from "./lib/transcript.js";
 import { getSettings, DEFAULTS, HQ_MODELS, pushSyncedSettings, pullSyncedSettings } from "./lib/settings.js";
 import { getBackupDir, backupPermission, writeSessionFile, removeSessionFile, writeSettingsFile, internalBackupDir, backupFileName, sessionFileText, settingsFileText, SETTINGS_FILE, readBackupFolder, writeMeetingFolder, removeMeetingFolder, meetingManifest } from "./lib/backup.js";
@@ -877,7 +877,9 @@ async function startHq(tabId, { mic, streamId: givenStream } = {}) {
   const keep = settings.audioKeep && hs ? { sessionId: hs.id } : null;
   const diarize = settings.diarize && (await isPro());
   const profiles = diarize && settings.voiceProfiles ? await loadProfiles() : null;
-  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: mic ?? settings.hqMic, echo: settings.echoFilter !== false, diarize, keep, profiles });
+  // Página da web: avisa se a aba ficar muda (reel aberto pelo link começa sem som no Instagram)
+  const quietHint = !!(hs && (await getSession(hs.id))?.web);
+  const r = await toOffscreen({ type: "start", tabId, streamId, modelKey, lang: settings.captionLang, mic: mic ?? settings.hqMic, echo: settings.echoFilter !== false, diarize, keep, profiles, quietHint });
   if (r && r.error) {
     broadcastHq(tabId, { state: "error", message: r.error });
     throw new Error(r.error);
@@ -943,6 +945,21 @@ async function onAsrResult(msg) {
   s.myName = settings.myName || "";
   if (msg.seg && msg.seg.text) msg.seg.text = fixSpelling(s, msg.seg.text);
   if (addAsrSegment(s, msg.seg, meIdFor(s, settings.myName))) {
+    // Página da web (reels, vídeos curtos): o vídeo recomeçou? Fica só uma volta e a sessão encerra sozinha.
+    if (s.web && !s.endedAt && s.asr.length >= 3) {
+      const cut = loopStart(s.asr);
+      if (cut > 0) {
+        const dropped = s.asr.splice(cut).length;
+        noteEvent(s, "web-loop", { kept: s.asr.length, dropped });
+        await changed(s, { now: true });
+        const tabId = sessionTab.get(s.id);
+        if (tabId != null) {
+          chrome.runtime.sendMessage({ type: "web-loop", tabId, id: s.id }).catch(() => {});
+          endSession(tabId, "web-loop").catch(() => {});
+        }
+        return;
+      }
+    }
     await changed(s);
     scheduleReview(s);
   }
