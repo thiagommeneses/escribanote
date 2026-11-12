@@ -2,6 +2,9 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.71 beta — 2026-11-12
+- **Transcrever no servidor (Pro)**: trechos de silêncio não viram mais falas inventadas ("Thank you.", "Legendas pela comunidade…"). O nível de cada fala é medido no próprio áudio e falas em silêncio são descartadas, como já acontecia no Whisper local. O horário final de uma fala também não passa mais do fim do pedaço.
+
 ## 0.9.70 beta — 2026-11-10
 - **Transcrever esta aba**: em qualquer página com som (YouTube, Instagram, aulas, podcasts), abra o painel do Escribanote pelo ícone e clique no botão. O som da aba é transcrito com o Whisper neste computador enquanto toca, sem microfone, numa sessão "Página da web" com o nome do vídeo. **Parar** encerra; fechar a aba também.
 - **Transcrever no servidor (Pro)**: ao importar um arquivo, a opção "No servidor (Pro, rápido)" manda o áudio para a sua conta e transcreve com o Whisper large em poucos minutos, mesmo arquivos de horas. Custa 1 crédito por hora de áudio, arredondado para cima e mostrado antes de começar. Se nada for transcrito, os créditos voltam. Também tem progresso, Cancelar e Continuar de onde parou.

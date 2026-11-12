@@ -23,6 +23,9 @@ nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, aju
 - Servidor (`server/src/asr.js`): Groq `whisper-large-v3-turbo` (`GROQ_API_KEY`), 1 crédito por hora (`asrCredits`),
   `ai_requests.kind = 'asr'` com `audio_ms` (migração 005) e `cost_usd` (US$ 0,04/h, mínimo de 10 s por envio).
   O trabalho não aceita mais áudio que o pago (+2 min). Trechos com `no_speech_prob > 0,6` e `avg_logprob < -0,8` saem.
+- 0.9.71: o Groq devolve `no_speech_prob` 0 e "Thank you." em silêncio puro, então o filtro do servidor não basta.
+  `keepServerSegment(samples, offsetMs, seg)` (segmenter.js) corta o fim no tamanho do pedaço, aplica `cleanTranscript`
+  e descarta a fala se o pico de RMS em quadros de 30 ms ficar abaixo de `MIN_SPEECH_RMS` (ou de 0,02 numa frase pronta).
 
 ## Arquivos longos em fluxo (0.9.69)
 

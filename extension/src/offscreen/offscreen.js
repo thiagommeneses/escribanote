@@ -6,6 +6,7 @@ import { openMic, watchMic } from "../asr/mic.js";
 import { startKeeping } from "../asr/keep.js";
 import { readTrack } from "../lib/audiovault.js";
 import { probeAudio, decodeAudio } from "../asr/decode.js";
+import { keepServerSegment } from "../asr/segmenter.js";
 
 const state = { tabId: null, status: { state: "idle" }, play: null, mic: null, keep: null, retrans: null };
 
@@ -196,7 +197,9 @@ async function serverTranscribe({ r, input, sessionId, startedAt, fromMs, lang, 
     const offsetMs = bufStart;
     buf = []; bufLen = 0; bufStart = null;
     const out = await postChunk(server, wavBytes(all), Math.round(offsetMs), lang);
-    for (const seg of out.segments || []) {
+    for (const raw of out.segments || []) {
+      const seg = keepServerSegment(all, offsetMs, raw);
+      if (!seg) continue;
       r.segments++;
       await chrome.runtime.sendMessage({ type: "asr-result", sessionId, seg: { start: startedAt + seg.start, end: startedAt + seg.end, text: seg.text, source: input.source } }).catch(() => {});
     }

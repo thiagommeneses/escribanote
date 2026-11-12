@@ -207,3 +207,26 @@ export function ownSpeechRatio(seg, segStartMs, otherLevels, { frameMs = 30, aro
   }
   return speech ? own / speech : 1;
 }
+
+// Falas devolvidas pelo servidor (Groq) para um pedaço de áudio: o Whisper de lá também inventa texto em
+// silêncio ("Thank you.") e às vezes estende o fim além do pedaço. Mede o nível do trecho no próprio áudio
+// enviado (pico de quadros de 30 ms), corta o fim no tamanho do pedaço e aplica os mesmos filtros do local.
+// `samples` = áudio do pedaço (16 kHz), `offsetMs` = início do pedaço; seg.start/end em ms do arquivo.
+export function keepServerSegment(samples, offsetMs, seg) {
+  const lenMs = samples.length / 16;
+  const start = Math.max(0, seg.start - offsetMs);
+  const end = Math.min(lenMs, Math.max(start, seg.end - offsetMs));
+  if (end - start < 100) return null;
+  const text = cleanTranscript(seg.text);
+  if (!text) return null;
+  const a = Math.floor(start * 16), b = Math.ceil(end * 16), F = 480;
+  let peak = 0;
+  for (let i = a; i < b; i += F) {
+    let sq = 0, n = 0;
+    for (let j = i; j < Math.min(b, i + F); j++) { sq += samples[j] * samples[j]; n++; }
+    if (n) peak = Math.max(peak, Math.sqrt(sq / n));
+  }
+  if (peak < MIN_SPEECH_RMS) return null;
+  if (isStockPhrase(text) && peak < 0.02) return null;
+  return { start: offsetMs + start, end: offsetMs + end, text };
+}

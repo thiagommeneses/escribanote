@@ -59,7 +59,9 @@ try {
     const h = new DataView(new ArrayBuffer(44)); const w = (o, s) => { for (let i = 0; i < s.length; i++) h.setUint8(o + i, s.charCodeAt(i)); };
     w(0, "RIFF"); h.setUint32(4, 36 + total, true); w(8, "WAVE"); w(12, "fmt "); h.setUint32(16, 16, true); h.setUint16(20, 1, true); h.setUint16(22, 1, true);
     h.setUint32(24, 16000, true); h.setUint32(28, 32000, true); h.setUint16(32, 2, true); h.setUint16(34, 16, true); w(36, "data"); h.setUint32(40, total, true);
-    const file = new File([h, new Uint8Array(total)], "Aula no servidor.wav", { type: "audio/wav" });
+    // tom contínuo (não silêncio): falas em silêncio são descartadas como alucinação
+    const pcm = new Int16Array(total / 2); for (let i = 0; i < pcm.length; i++) pcm[i] = Math.round(3000 * Math.sin(i * 0.17));
+    const file = new File([h, pcm], "Aula no servidor.wav", { type: "audio/wav" });
     const dt = new DataTransfer(); dt.items.add(file);
     const input = document.querySelector("#import-audio"); input.files = dt.files; input.dispatchEvent(new Event("change", { bubbles: true }));
   })()`);
