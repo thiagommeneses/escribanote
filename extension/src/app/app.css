@@ -821,6 +821,7 @@ body.usage-personal .inst { display: none !important; }
 .folder.shut > .lgroup-head .chev svg { transform: rotate(-90deg); }
 .folder > .mcard { margin-left: 10px; width: calc(100% - 10px); }
 .folder-edit { flex: 1; font-size: 13px; }
+.lgroup.folder .day { padding: 8px 8px 2px 28px; font-size: 10.5px; }
 .lgroup-empty { color: var(--muted); font-size: 12px; padding: 6px 12px 10px 28px; }
 .pin-mark svg { width: 13px; height: 13px; color: var(--accent); vertical-align: -2px; margin-right: 3px; }
 .mcard.dragging { opacity: .45; }

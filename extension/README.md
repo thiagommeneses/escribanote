@@ -23,6 +23,11 @@ nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, aju
 - Servidor (`server/src/asr.js`): Groq `whisper-large-v3-turbo` (`GROQ_API_KEY`), 1 crédito por hora (`asrCredits`),
   `ai_requests.kind = 'asr'` com `audio_ms` (migração 005) e `cost_usd` (US$ 0,04/h, mínimo de 10 s por envio).
   O trabalho não aceita mais áudio que o pago (+2 min). Trechos com `no_speech_prob > 0,6` e `avg_logprob < -0,8` saem.
+- 0.9.73, IA em paralelo: `state.jobs[kind]` (`ata`, `review`, `chat`) no lugar de `state.busy`; `runAI(kind, …)` abre uma
+  porta "ai" por tarefa. `blocked(kind)`: sem Pro (`state.multiAi`, vindo de `aiStatus`), uma tarefa por vez; com Pro, só
+  não roda duas do mesmo tipo. Parar (`stopChat`) fecha a porta; o service worker, no `AbortError` com texto parcial,
+  guarda a resposta com `stopped: true` e a nota `STOPPED_BY_USER`. Releitura no meio de uma pergunta não zera
+  `state.chatId`. Pastas usam o mesmo agrupamento por dia (`withDays`). Teste: `test/e2e-ai-jobs.mjs`.
 - 0.9.72, link colado: `link-open {url}` (`normalizeLink` em format.js) abre a aba ativa e guarda `pendingLinks`
   (tabId → url, prazo de 10 min, também em `storage.session`). O Chrome recusa `tabCapture.getMediaStreamId` numa aba
   que a extensão abriu sem um clique no ícone nela ("Extension has not been invoked"), então a cada 1,5 s o service
