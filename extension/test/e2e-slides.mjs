@@ -102,6 +102,23 @@ try {
   assert.match(await ev(`document.querySelector("#pane-slides").textContent`), /Usar as capturas de tela \(1\)/);
   await ev(`document.querySelector('input[name="sl-kind"][value="status"]').click()`);
   await ev(`(() => { const s = document.querySelector("#sl-style"); s.value = "classico"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+  // paleta própria: abre o editor, escolhe as cores, salva com nome; ela fica na lista e pode ser apagada
+  await ev(`document.querySelector('[data-pal-new]').click()`);
+  await waitFor(`!!document.querySelector("#sl-pal-a")`, "editor de paleta");
+  await ev(`(() => { const set = (id, v) => { const i = document.querySelector(id); i.value = v; i.dispatchEvent(new Event("input", { bubbles: true })); }; set("#sl-pal-a", "#123456"); set("#sl-pal-b", "#ff9900"); document.querySelector("#sl-pal-name").value = "Empresa X"; })()`);
+  assert.match(await ev(`document.querySelector(".sl-preview").innerHTML`), /#123456|rgb\(18, 52, 86\)|18,52,86/i, "a prévia já usa a cor escolhida");
+  await ev(`document.querySelector('[data-pal-save]').click()`);
+  await waitFor(`!!document.querySelector('[data-pal="c-123456-FF9900"][aria-checked="true"]')`, "paleta salva e escolhida");
+  assert.match(await ev(`localStorage.getItem("escribanote.slidePalettes")`), /Empresa X/);
+  await shot("01a-paleta-propria");
+  // estilo com cores próprias: a escolha de cores some e explica
+  await ev(`(() => { const s = document.querySelector("#sl-style"); s.value = "institucional"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+  await waitFor(`!!document.querySelector(".sl-pal-fixed")`, "aviso de cores próprias");
+  await shot("01b-institucional");
+  await ev(`(() => { const s = document.querySelector("#sl-style"); s.value = "classico"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+  await waitFor(`!!document.querySelector('[data-pal-del="c-123456-FF9900"]')`, "botão de apagar a paleta");
+  await ev(`document.querySelector('[data-pal-del="c-123456-FF9900"]').click()`);
+  await waitFor(`!document.querySelector('[data-pal="c-123456-FF9900"]')`, "paleta apagada");
   await ev(`document.querySelector('[data-pal="verde"]').click()`);
   await ev(`(() => { const t = document.querySelector("#sl-inst"); t.value = "Foque nos prazos"; t.dispatchEvent(new Event("input", { bubbles: true })); })()`);
   await shot("01-formulario");
