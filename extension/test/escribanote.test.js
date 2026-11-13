@@ -1595,3 +1595,57 @@ test("slides: parseDeck valida a resposta da IA e o .pptx traz slides, notas e a
   assert.match(html, /Plano &lt;Q1&gt;/);
   assert.doesNotMatch(html, /<Q1>/);
 });
+
+test("slides: 8 estilos × claro/escuro desenham todos os layouts dentro do slide, com contraste, e geram .pptx", async () => {
+  const { DECK_STYLES, DECK_PALETTES, deckTheme, deckMeta, slideBoxes, slideHtml, deckToPptx, deckOptions, paletteColors, customPaletteId, contrast, SLIDE_W, SLIDE_H } = await import("../src/lib/slides.js");
+  // paleta própria: as cores vão no id e voltam iguais; id inválido cai na paleta padrão
+  const id = customPaletteId("#12ab34", "#FFCC00");
+  assert.equal(id, "c-12AB34-FFCC00");
+  assert.equal(deckOptions({ palette: id }).palette, id);
+  assert.deepEqual([paletteColors(id).a, paletteColors(id).b, paletteColors(id).custom], ["12AB34", "FFCC00", true]);
+  assert.equal(deckOptions({ palette: "c-12AB3-FFCC00" }).palette, DECK_PALETTES[0].id);
+  assert.equal(deckOptions({ style: "nada" }).style, "moderno");
+  const ids = DECK_STYLES.map((s) => s.id);
+  assert.deepEqual(ids.slice(0, 3), ["minimalista", "classico", "consultoria"]);
+  assert.ok(ids.includes("institucional") && DECK_STYLES.find((s) => s.id === "institucional").fixed);
+
+  const t0 = Date.UTC(2026, 10, 10, 14);
+  const session = { id: "s", title: "Reunião", startedAt: t0, endedAt: t0 + 600_000, speakers: {}, entries: [] };
+  const slides = [
+    { layout: "capa", title: "Título da apresentação" },
+    { layout: "secao", title: "Uma seção" },
+    { layout: "topicos", title: "Três tópicos", bullets: ["Primeiro tópico com algum texto", "Segundo tópico", "Terceiro"] },
+    { layout: "topicos", title: "Quatro tópicos", bullets: ["Um", "Dois: com rótulo", "Três", "Quatro"] },
+    { layout: "topicos", title: "Seis tópicos", bullets: ["a", "b", "c", "d", "e", "f"] },
+    { layout: "acoes", title: "Ações", bullets: ["Ana: revisar o contrato (sexta)", "Bruno: enviar a proposta", "Sem dono definido"] },
+    { layout: "numeros", title: "Números", stats: [{ value: "37%", label: "receita" }, { value: "R$ 1,2 mi", label: "trimestre" }, { value: "2", label: "pessoas" }, { value: "9", label: "dias" }] },
+    { layout: "citacao", title: "", quote: "Frase marcante dita na reunião.", speaker: "Ana" },
+    { layout: "imagem", title: "Imagem", bullets: ["Explica a imagem"], shot: "sh1" },
+    { layout: "encerramento", title: "Fim", bullets: ["Próximo passo"] },
+  ].map((s, i) => ({ id: "s" + i, bullets: [], stats: [], quote: "", speaker: "", notes: "", shot: "", at: t0 + i * 1000, ...s }));
+  for (const style of DECK_STYLES) {
+    for (const mode of ["claro", "escuro"]) {
+      for (const palette of [...DECK_PALETTES.map((p) => p.id), "c-FFEE00-00FFEE", "c-111111-222222"]) {
+        const deck = { title: "T", kind: "resumo", style: style.id, palette, mode, slides };
+        const th = deckTheme(deck);
+        const tag = `${style.id}/${mode}/${palette}`;
+        assert.ok(contrast(th.fg, th.bg) >= 7, `texto ${tag}`);
+        assert.ok(contrast(th.accent, th.bg) >= 4.4, `destaque ${tag}`);
+        assert.ok(contrast(th.onStrong, th.strong) >= 3, `texto sobre a cor ${tag}`);
+        const metas = deckMeta(deck, session, ["sh1"]);
+        slides.forEach((s, i) => {
+          const { boxes } = slideBoxes(deck, s, th, metas[i]);
+          for (const b of boxes.filter((x) => x.type !== "rect")) {
+            assert.ok(b.x >= 0 && b.y >= 0 && b.x + b.w <= SLIDE_W + 0.5 && b.y + b.h <= SLIDE_H + 0.5, `${tag} ${s.layout}: caixa fora do slide ${JSON.stringify([b.x, b.y, b.w, b.h])}`);
+            for (const p of b.paras || []) assert.ok(p.size >= 12 && /^[0-9A-F]{6}$/.test(p.color), `${tag} ${s.layout}: letra ou cor inválida`);
+          }
+          assert.doesNotMatch(slideHtml(deck, s, th, metas[i], {}), /undefined|NaN/, `${tag} ${s.layout}`);
+        });
+      }
+      const blob = deckToPptx({ title: "T", kind: "resumo", style: style.id, palette: "c-FFEE00-00FFEE", mode, slides }, session, {});
+      assert.ok(blob.size > 5000);
+      const xml = new TextDecoder().decode(new Uint8Array(await blob.arrayBuffer()));
+      assert.doesNotMatch(xml, /undefined|NaN/, `${style.id}/${mode} pptx`);
+    }
+  }
+});

@@ -7,8 +7,8 @@ import { DEFAULT_TAGS } from "./lib/settings.js";
 import { computeStats, fmtDuration } from "./lib/stats.js";
 import { normalize, toBlocks, mergeSpeakers, speakerName } from "./lib/transcript.js";
 import { commitSummary, diffDocument, diffStats, diffHtml } from "./lib/diff.js";
-import { DECK_KINDS, DECK_SIZES, DECK_STYLES, DECK_PALETTES, DECK_DEFAULTS, deckOptions, cleanDeck } from "./lib/slides.js";
-import { openDeck, deckThumbHtml, downloadPptx, printDeck } from "./lib/deckview.js";
+import { DECK_KINDS, DECK_SIZES, DECK_STYLES, DECK_DEFAULTS, deckOptions, cleanDeck } from "./lib/slides.js";
+import { openDeck, deckThumbHtml, downloadPptx, printDeck, paletteChooserHtml, paletteClick, paletteInput, slidePreviewHtml } from "./lib/deckview.js";
 import "./lib/icons.js"; // ícones da extensão (duotone): globalThis.EsIcons
 
 const { icon, tagIcon } = globalThis.EsIcons;
@@ -852,8 +852,10 @@ function slidesPane() {
           <label class="field"><span class="small muted">Estilo</span><select class="input" id="sl-style">${DECK_STYLES.map((z) => `<option value="${z.id}" ${o.style === z.id ? "selected" : ""}>${esc(z.label)}</option>`).join("")}</select></label>
           <label class="field"><span class="small muted">Tema</span><select class="input" id="sl-mode"><option value="claro" ${o.mode === "claro" ? "selected" : ""}>Claro</option><option value="escuro" ${o.mode === "escuro" ? "selected" : ""}>Escuro</option></select></label>
         </div>
-        <div class="sl-pal" role="radiogroup" aria-label="Cores">${DECK_PALETTES.map((p) => `<button type="button" role="radio" aria-checked="${o.palette === p.id}" data-act="sl-pal" data-pal="${p.id}" style="--sw:#${p.accent}"><span></span>${esc(p.label)}</button>`).join("")}</div>
-        <div class="sl-preview" aria-hidden="true">${deckThumbHtml({ title: doc.title, ...o, slides: [{ layout: "capa", title: doc.title }] }, doc, {}, 0)}${deckThumbHtml({ title: doc.title, ...o, slides: [{ layout: "capa", title: doc.title }, { layout: "topicos", title: "Assim ficam os tópicos", bullets: ["Cada slide traz o momento da reunião", "Notas do apresentador em todos"], at: doc.startedAt }] }, doc, {}, 1)}</div>
+        <p class="small muted sl-hint">${esc((DECK_STYLES.find((z) => z.id === o.style) || DECK_STYLES[0]).hint)}</p>
+        <p class="small" style="font-weight:700;margin:0">Cores</p>
+        ${paletteChooserHtml(o, { editing: !!slideUi.palEdit, attrs: 'data-act="sl-pal"' })}
+        <div class="sl-preview" aria-hidden="true">${slidePreviewHtml(doc, o)}</div>
         <label class="field"><span class="small muted">Instruções (opcional)</span><textarea class="input" id="sl-inst" rows="2" maxlength="1000" placeholder="Ex.: foque nas decisões de preço; público: diretoria">${esc(slideUi.instructions)}</textarea></label>
         <div class="row"><button class="btn dark" data-act="sl-gen" ${busy || tooShort ? "disabled" : ""}>${busy ? "Montando os slides…" : deck ? "Gerar de novo" : "Gerar slides"} ${busy ? "" : '<span class="cost">1 crédito</span>'}</button>${deck && !busy ? '<button class="btn sm ghost" data-act="sl-cancel">Cancelar</button>' : ""}</div>
         <p class="small muted">${busy ? "Leva até um minuto." : tooShort ? "Slides só a partir de 2 minutos de reunião com falas." : "Estilo, cores e tema também mudam depois, sem gastar crédito."}</p>
@@ -923,7 +925,13 @@ document.addEventListener("change", (e) => {
   slideUi.instructions = $("sl-inst")?.value || slideUi.instructions;
   renderPane();
 });
-document.addEventListener("input", (e) => { if (e.target.id === "sl-inst") slideUi.instructions = e.target.value; });
+document.addEventListener("input", (e) => {
+  if (e.target.id === "sl-inst") slideUi.instructions = e.target.value;
+  else if (state.tab === "sl" && slideUi.opts && paletteInput(e.target, slideUi)) {
+    const pv = document.querySelector("#pane .sl-preview");
+    if (pv) pv.innerHTML = slidePreviewHtml(state.meeting.doc, slideUi.opts);
+  }
+});
 document.addEventListener("keydown", (e) => {
   if ((e.key === "Enter" || e.key === " ") && e.target.closest?.(".sl-cover")) { e.preventDefault(); openSlides(); }
 });
@@ -1875,9 +1883,10 @@ view.addEventListener("click", async (e) => {
       case "sl-pdf":
         return printDeck(cleanDeck(m.doc.slides), m.doc, {});
       case "sl-pal":
-        slideOpts().palette = el.dataset.pal;
+        slideOpts();
         slideUi.instructions = $("sl-inst")?.value || slideUi.instructions;
-        return renderPane();
+        if (paletteClick(el, slideUi)) renderPane();
+        return;
       case "sl-again":
         slideUi.form = true;
         return renderPane();

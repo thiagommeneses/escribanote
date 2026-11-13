@@ -9,8 +9,8 @@ import { diffDocument, diffStats, diffHtml as versionDiffHtml } from "../lib/dif
 import { getBackupDir, setBackupDir, backupPermission, resolveBackupFolder, readBackupFolder } from "../lib/backup.js";
 import { readTrack, writeTrackFile } from "../lib/audiovault.js";
 import { accountIsPro } from "../lib/account.js";
-import { DECK_KINDS, DECK_SIZES, DECK_STYLES, DECK_PALETTES, DECK_DEFAULTS, deckOptions, cleanDeck } from "../lib/slides.js";
-import { openDeck, deckThumbHtml, downloadPptx, printDeck } from "../lib/deckview.js";
+import { DECK_KINDS, DECK_SIZES, DECK_STYLES, DECK_DEFAULTS, deckOptions, cleanDeck } from "../lib/slides.js";
+import { openDeck, deckThumbHtml, downloadPptx, printDeck, paletteChooserHtml, paletteClick, paletteInput, slidePreviewHtml } from "../lib/deckview.js";
 import "../lib/icons.js";
 
 const { icon, tagIcon, TAG_ICONS } = globalThis.EsIcons;
@@ -1453,9 +1453,10 @@ async function renderSlides() {
           <label><span class="sl-label">Estilo</span><select id="sl-style">${DECK_STYLES.map((z) => `<option value="${z.id}" ${o.style === z.id ? "selected" : ""}>${esc(z.label)}</option>`).join("")}</select></label>
           <label><span class="sl-label">Tema</span><select id="sl-mode"><option value="claro" ${o.mode === "claro" ? "selected" : ""}>Claro</option><option value="escuro" ${o.mode === "escuro" ? "selected" : ""}>Escuro</option></select></label>
         </div>
+        <p class="muted tiny sl-hint">${esc((DECK_STYLES.find((z) => z.id === o.style) || DECK_STYLES[0]).hint)}</p>
         <div class="sl-label">Cores</div>
-        <div class="sl-pal" role="radiogroup" aria-label="Cores">${DECK_PALETTES.map((p) => `<button type="button" role="radio" aria-checked="${o.palette === p.id}" data-pal="${p.id}" title="${esc(p.label)}" style="--sw:#${p.accent}"><span></span>${esc(p.label)}</button>`).join("")}</div>
-        <div class="sl-preview" aria-hidden="true">${deckThumbHtml({ title: s.title, subtitle: dateLabel(s.startedAt), ...o, slides: [{ layout: "capa", title: s.title }] }, s, {}, 0)}${deckThumbHtml({ title: s.title, ...o, slides: [{ layout: "capa", title: s.title }, { layout: "topicos", title: "Assim ficam os tópicos", bullets: ["Cada slide traz o momento da reunião", "Notas do apresentador em todos"], at: s.startedAt }] }, s, {}, 1)}</div>
+        ${paletteChooserHtml(o, { editing: !!st.palEdit })}
+        <div class="sl-preview" aria-hidden="true">${slidePreviewHtml(s, o)}</div>
         ${shotsOn ? `<label class="row tiny"><input type="checkbox" id="sl-shots" ${st.shots ? "checked" : ""}> Usar as capturas de tela (${s.shots.length}): a IA escolhe as que mostram conteúdo útil</label>` : ""}
         <label class="sl-label" for="sl-inst">Instruções (opcional)</label>
         <textarea id="sl-inst" rows="2" maxlength="1000" placeholder="Ex.: foque nas decisões de preço; público: diretoria; termine com os riscos">${esc(st.instructions)}</textarea>
@@ -1509,8 +1510,7 @@ async function generateSlidesNow() {
 $("pane-slides").addEventListener("click", async (e) => {
   const s = state.session;
   if (!s) return;
-  const pal = e.target.closest("[data-pal]");
-  if (pal) { state.slidesUi.opts.palette = pal.dataset.pal; return renderSlides(); }
+  if (e.target.closest(".sl-pal, .sl-pal-edit") && paletteClick(e.target, state.slidesUi)) return renderSlides();
   if (e.target.closest("#sl-gen")) return generateSlidesNow();
   const a = e.target.closest("[data-sl]")?.dataset.sl;
   if (!a) return;
@@ -1548,6 +1548,10 @@ $("pane-slides").addEventListener("change", (e) => {
 });
 $("pane-slides").addEventListener("input", (e) => {
   if (e.target.id === "sl-inst") state.slidesUi.instructions = e.target.value;
+  else if (paletteInput(e.target, state.slidesUi)) {
+    const pv = $("pane-slides").querySelector(".sl-preview");
+    if (pv) pv.innerHTML = slidePreviewHtml(state.session, state.slidesUi.opts);
+  }
 });
 
 // ----- Aba IA -----

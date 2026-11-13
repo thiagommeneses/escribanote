@@ -1,9 +1,77 @@
 // Visualizador dos slides (extensão e app web): navegar, apresentar em tela cheia, editar o texto,
 // trocar estilo/paleta/tema sem gastar crédito e baixar .pptx ou PDF. Usa só o DOM, sem dependências.
-import { cleanDeck, deckMeta, deckPrintHtml, deckTheme, deckToPptx, deckFileName, slideHtml, shortClock, DECK_CSS, DECK_STYLES, DECK_PALETTES } from "./slides.js";
+import { cleanDeck, deckMeta, deckPrintHtml, deckTheme, deckToPptx, deckFileName, slideHtml, shortClock, DECK_CSS, DECK_STYLES, DECK_PALETTES, paletteColors, customPaletteId } from "./slides.js";
 
 const LAYOUT_LABEL = { capa: "Capa", secao: "Seção", topicos: "Tópicos", acoes: "Ações", citacao: "Citação", imagem: "Imagem", numeros: "Números", encerramento: "Encerramento" };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+// ----- paletas próprias (salvas neste navegador; o deck guarda as cores no id, então abre igual em qualquer lugar) -----
+const PAL_KEY = "escribanote.slidePalettes";
+export function savedPalettes() {
+  try {
+    const list = JSON.parse(localStorage.getItem(PAL_KEY) || "[]");
+    return Array.isArray(list) ? list.filter((p) => p && paletteColors(p.id).custom).map((p) => ({ ...paletteColors(p.id), label: String(p.label || "Minha paleta").slice(0, 30) })).slice(0, 12) : [];
+  } catch { return []; }
+}
+function storePalettes(list) { try { localStorage.setItem(PAL_KEY, JSON.stringify(list.map((p) => ({ id: p.id, label: p.label })))); } catch {} }
+export function savePalette(label, a, b) {
+  const id = customPaletteId(a, b);
+  const list = savedPalettes().filter((p) => p.id !== id);
+  list.unshift({ id, label: String(label || "").trim().slice(0, 30) || "Minha paleta" });
+  storePalettes(list.slice(0, 12));
+  return id;
+}
+export function removePalette(id) { storePalettes(savedPalettes().filter((p) => p.id !== id)); }
+// Todas as paletas que podem ser escolhidas agora (prontas, salvas e a do deck, se for própria e não estiver salva).
+export function paletteList(current) {
+  const list = [...DECK_PALETTES, ...savedPalettes()];
+  const cur = paletteColors(current);
+  if (cur.custom && !list.some((p) => p.id === cur.id)) list.push(cur);
+  return list;
+}
+const swatch = (p) => `linear-gradient(135deg,#${p.a} 0 55%,#${p.b} 55% 100%)`;
+
+// Escolha de cores do formulário (extensão e app web). attrs: atributos extras de cada botão (ex.: data-act do app web).
+// Botões: [data-pal] escolhe, [data-pal-del] apaga uma própria, [data-pal-new] abre o editor, [data-pal-save] salva.
+export function paletteChooserHtml(o, { editing = false, attrs = "" } = {}) {
+  const style = DECK_STYLES.find((z) => z.id === o.style);
+  if (style?.fixed) return `<p class="sl-pal-fixed">O estilo ${esc(style.label)} tem cores próprias (${esc(style.colorsLabel || "fixas")}).</p>`;
+  const saved = savedPalettes();
+  const btn = (p, own) => `<button type="button" role="radio" aria-checked="${o.palette === p.id}" data-pal="${p.id}" ${attrs} title="${esc(p.label)}" style="--sw:${swatch(p)}"><span></span>${esc(p.label)}${own ? `<i data-pal-del="${p.id}" ${attrs} role="button" aria-label="Apagar a paleta ${esc(p.label)}" title="Apagar">×</i>` : ""}</button>`;
+  const cur = paletteColors(o.palette);
+  const extra = cur.custom && !saved.some((p) => p.id === cur.id) ? btn(cur, false) : "";
+  const ed = paletteColors(editing && cur.custom ? cur.id : "c-1E3A5F-C9A227");
+  return `<div class="sl-pal" role="radiogroup" aria-label="Cores">${DECK_PALETTES.map((p) => btn(p, false)).join("")}${saved.map((p) => btn(p, true)).join("")}${extra}<button type="button" class="sl-pal-new" data-pal-new ${attrs} aria-expanded="${editing}">+ Criar paleta</button></div>
+    ${editing ? `<div class="sl-pal-edit">
+      <label>Principal <input type="color" id="sl-pal-a" value="#${ed.a.toLowerCase()}"></label>
+      <label>Apoio <input type="color" id="sl-pal-b" value="#${ed.b.toLowerCase()}"></label>
+      <label class="grow">Nome <input type="text" id="sl-pal-name" maxlength="30" placeholder="Ex.: Cores da empresa"></label>
+      <button type="button" data-pal-save ${attrs}>Salvar paleta</button>
+    </div>` : ""}`;
+}
+// Trata um clique da escolha de cores. ui: objeto com opts e palEdit. Devolve true quando algo mudou (redesenhar).
+export function paletteClick(target, ui) {
+  const del = target.closest("[data-pal-del]");
+  if (del) { removePalette(del.dataset.palDel); if (ui.opts.palette === del.dataset.palDel) ui.opts.palette = DECK_PALETTES[0].id; return true; }
+  const pal = target.closest("[data-pal]");
+  if (pal) { ui.opts.palette = pal.dataset.pal; return true; }
+  if (target.closest("[data-pal-new]")) { ui.palEdit = !ui.palEdit; return true; }
+  if (target.closest("[data-pal-save]")) {
+    const root = target.closest(".sl-pal-edit");
+    const v = (id) => root?.querySelector(`#${id}`)?.value || "";
+    ui.opts.palette = savePalette(v("sl-pal-name"), v("sl-pal-a"), v("sl-pal-b"));
+    ui.palEdit = false;
+    return true;
+  }
+  return false;
+}
+// Ao mexer nas cores do editor, a prévia já mostra a paleta (sem salvar).
+export function paletteInput(target, ui) {
+  if (target.id !== "sl-pal-a" && target.id !== "sl-pal-b") return false;
+  const root = target.closest(".sl-pal-edit");
+  ui.opts.palette = customPaletteId(root.querySelector("#sl-pal-a").value, root.querySelector("#sl-pal-b").value);
+  return true;
+}
 
 const VIEW_CSS = `
 .esv{position:fixed;inset:0;z-index:2147483000;background:#0b1020;color:#e2e8f0;display:grid;grid-template-rows:auto 1fr;font:14px/1.4 system-ui,-apple-system,'Segoe UI',sans-serif}
@@ -90,6 +158,16 @@ export function deckThumbHtml(deck, session, shotUrls = {}, index = 0) {
   return slideHtml(d, d.slides[index], deckTheme(d), metas[index], shotUrls, { links: false });
 }
 
+// Prévia do formulário: capa e um slide de tópicos com o estilo, as cores e o tema escolhidos.
+export function slidePreviewHtml(session, o) {
+  const s = session || {};
+  const deck = { title: s.title || "Reunião", subtitle: "Prévia do visual", ...o, slides: [
+    { layout: "capa", title: s.title || "Reunião" },
+    { layout: "topicos", title: "Assim ficam os tópicos", bullets: ["Cada slide traz o momento da reunião", "Notas do apresentador em todos", "Edite o texto antes de baixar"], at: s.startedAt },
+  ] };
+  return deckThumbHtml(deck, s, {}, 0) + deckThumbHtml(deck, s, {}, 1);
+}
+
 // Abre o visualizador. onSave(deck) grava (edição e tema); onJump(msRelativo) leva à fala da reunião.
 export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index = 0, present = false, editable = true, onRegenerate }) {
   injectCss();
@@ -121,7 +199,7 @@ export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index =
       <div class="esv-bar">
         <h2 title="${esc(d.title)}">${esc(d.title)}</h2>
         <select data-k="style" aria-label="Estilo" ${editable ? "" : "disabled"}>${opt(DECK_STYLES, d.style)}</select>
-        <select data-k="palette" aria-label="Paleta de cores" ${editable ? "" : "disabled"}>${opt(DECK_PALETTES, d.palette)}</select>
+        <select data-k="palette" aria-label="Paleta de cores" ${editable && !DECK_STYLES.find((z) => z.id === d.style)?.fixed ? "" : "disabled"} title="${DECK_STYLES.find((z) => z.id === d.style)?.fixed ? "Este estilo tem cores próprias" : "Paleta de cores"}">${opt(paletteList(d.palette), d.palette)}</select>
         <select data-k="mode" aria-label="Tema" ${editable ? "" : "disabled"}><option value="claro" ${d.mode === "claro" ? "selected" : ""}>Claro</option><option value="escuro" ${d.mode === "escuro" ? "selected" : ""}>Escuro</option></select>
         <span class="esv-status" aria-live="polite"></span>
         ${editable ? `<button type="button" class="esv-btn" data-a="edit" aria-pressed="${editing}">Editar texto</button>` : ""}
@@ -254,7 +332,7 @@ export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index =
   });
   root.addEventListener("change", (e) => {
     const k = e.target.dataset.k;
-    if (k) { d[k] = e.target.value; draw(); save(); return; }
+    if (k) { d[k] = e.target.value; if (k === "style") frame(); else draw(); save(); return; }
     if (e.target.dataset.f === "layout") { applyField("layout", e.target.value); draw(); save(); }
   });
   root.addEventListener("input", (e) => {
