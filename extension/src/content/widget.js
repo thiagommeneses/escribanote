@@ -51,6 +51,8 @@
   const alive = () => !!chrome.runtime?.id;
   const send = (msg) => (alive() ? chrome.runtime.sendMessage(msg) : Promise.reject(new Error("Extensão atualizada: recarregue a página")));
   const store = (obj) => alive() && chrome.storage.local.set(obj).catch(() => {});
+  // Para os botões: a falha (extensão atualizada, service worker reiniciando) vira aviso no widget, nunca erro solto.
+  const act = (msg) => send(msg).then((r) => r ?? {}, (err) => ({ error: err?.message || String(err) }));
 
   // ---------- Montagem ----------
   const hostEl = document.createElement("escribanote-widget");
@@ -228,7 +230,7 @@
   }
 
   // ---------- Posição (arrastar) ----------
-  chrome.storage.local.get(["widgetPos", "widgetMin"]).then(({ widgetPos, widgetMin }) => {
+  (alive() ? chrome.storage.local.get(["widgetPos", "widgetMin"]) : Promise.resolve({})).catch(() => ({})).then(({ widgetPos, widgetMin }) => {
     if (widgetPos) Object.assign(hostEl.style, { right: widgetPos.right + "px", bottom: widgetPos.bottom + "px" });
     minimized = !!widgetMin;
     render();
@@ -569,7 +571,8 @@
       const current = JSON.parse(blk.dataset.tags);
       const tag = tagBtn.dataset.tag;
       const next = current.includes(tag) ? current.filter((x) => x !== tag) : [...current, tag];
-      await send({ type: "tag-block", id: session.id, ids, tags: next });
+      const r = await act({ type: "tag-block", id: session.id, ids, tags: next });
+      if (r.error) return toast(r.error);
       refresh();
     }
   });
@@ -577,8 +580,9 @@
   $("pause").addEventListener("click", async () => {
     if (!session) return;
     pauseSeq++;
-    const r = await send({ type: "pause", id: session.id, paused: !state.paused });
+    const r = await act({ type: "pause", id: session.id, paused: !state.paused });
     pauseSeq++;
+    if (r.error || typeof r.paused !== "boolean") return toast(r.error || "Não foi possível pausar. Tente de novo.");
     state.paused = r.paused;
     refresh();
     toast(state.paused ? "Transcrição pausada" : "Transcrição retomada");
@@ -605,7 +609,8 @@
   });
 
   $("hl").addEventListener("click", async () => {
-    const r = await send({ type: "highlight-last", tagId: "importante" });
+    const r = await act({ type: "highlight-last", tagId: "importante" });
+    if (r.error) return toast(r.error);
     toast(r && r.tags && r.tags.includes("importante") ? "Último bloco destacado" : r ? "Destaque removido" : "Nada para destacar ainda");
   });
 
@@ -620,7 +625,8 @@
   const saveNote = async () => {
     const text = $("note-input").value.trim();
     if (!text || !session) return;
-    await send({ type: "add-note", id: session.id, text });
+    const r = await act({ type: "add-note", id: session.id, text });
+    if (r.error) return toast(r.error); // o texto fica no campo para tentar de novo
     $("note-input").value = "";
     toast("Nota salva");
   };
@@ -651,7 +657,9 @@
     if (aiPort) aiPort.disconnect();
     $("ai-input").value = "";
     $("ai-answer").innerHTML = '<span class="thinking" role="status">Pensando<i>.</i><i>.</i><i>.</i></span>';
-    const port = (aiPort = chrome.runtime.connect({ name: "ai" }));
+    if (!alive()) { $("ai-answer").textContent = "Extensão atualizada: recarregue a página para perguntar à IA."; return; }
+    let port;
+    try { port = aiPort = chrome.runtime.connect({ name: "ai" }); } catch (err) { $("ai-answer").textContent = err?.message || String(err); return; }
     // Sem sinal por 60 s (o service worker manda um a cada 15 s) ou com a conexão caída, mostra o erro.
     let quiet;
     const fail = (msg) => {
@@ -767,5 +775,8 @@
     else toast("Não foi possível enviar nem copiar o aviso");
   });
 
-  $("open").addEventListener("click", () => send({ type: "open-app", id: session && session.id }));
+  $("open").addEventListener("click", async () => {
+    const r = await act({ type: "open-app", id: session && session.id });
+    if (r.error) toast(r.error);
+  });
 })();

@@ -1033,7 +1033,17 @@ try {
     await sleep(7000); // vários ciclos de 1,5 s, o diagnóstico de 5 s e a fila
     const invalid = errs.filter((e) => /context invalidated/i.test(e));
     assert.equal(invalid.length, 0, "erros na aba órfã: " + JSON.stringify(invalid.slice(0, 3)));
-    step("extensão recarregada no meio da reunião: aviso no widget e nenhum erro na aba");
+    // Os botões do widget órfão avisam em vez de estourar erro (que ia para a lista de erros da extensão).
+    const before = errs.length;
+    for (const sel of ["#hl", "#pause", "#open", "#caps", "#shot"]) await click(meetO, sel).catch(() => {});
+    await widgetCall(meetO, "#note-input", "function(v){ this.value = v; return true }", "nota no widget órfão");
+    await click(meetO, "#note-send");
+    await widgetCall(meetO, "#ai-input", "function(v){ this.value = v; return true }", "pergunta no widget órfão");
+    await click(meetO, "#ai-send");
+    await click(meetO, "[data-tag]").catch(() => {});
+    await sleep(1500);
+    assert.deepEqual(errs.slice(before), [], "botões do widget órfão geraram erros");
+    step("extensão recarregada no meio da reunião: aviso no widget, botões sem erro e nenhum erro na aba");
   }
 
   console.log("\nE2E OK");

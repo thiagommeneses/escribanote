@@ -2,6 +2,10 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.81 beta — 2026-11-13
+- Corrigido: depois de atualizar a extensão com uma reunião aberta, os botões do widget (destacar, pausar, nota, marcar trecho, abrir o painel, legendas e perguntar à IA) geravam erros na página de extensões ("Extensão atualizada: recarregue a página"). Agora cada botão só mostra o aviso no próprio widget; basta recarregar a aba da reunião.
+- Pausar não quebra mais quando a extensão não responde a tempo: o widget avisa e você tenta de novo.
+
 ## 0.9.80 beta — 2026-11-13
 - **Slides mais profissionais, em 8 estilos** do mais simples ao mais elaborado: **Minimalista**, **Clássico** (serifa e fios finos), **Consultoria** (título que diz a conclusão, ações em tabela com responsável), **Institucional** (vermelho e rosa, letra leve e balões arredondados), **Corporativo** (faixa de título, tópicos em cartões, linha do tempo), **Moderno** (capa colorida com círculos, tópicos numerados), **Geométrico** (formas inclinadas, setas, números em anéis) e **Palco** (letra grande com brilho de cor, para telão). Todos no claro e no escuro.
 - **Elementos gráficos de verdade**: formas, cartões com sombra, gradientes, linha do tempo, tabela de ações e números em destaque, iguais no visualizador, no PDF e no .pptx (editáveis no PowerPoint).
