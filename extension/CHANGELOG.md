@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.82 beta — 2026-11-13
+- **Horário do slide abre um balão com a fala**: clicar no horário de um slide não tira mais você dos slides. Aparece um balão, estilo conversa, com quem falou e o que disse naquele momento (e a fala seguinte), e o botão **Ver na transcrição completa** para ir até lá. Funciona também no modo Apresentar; Esc ou um clique fora fecha.
+- **Parar a pergunta à IA**: no widget da reunião e no app web (Pergunte à IA e Perguntar às reuniões), o botão vira **Parar** enquanto a resposta chega. O que já foi escrito fica na conversa, marcado como interrompido.
+- Corrigido: no Pro, parar uma resposta no meio continuava gerando no servidor e gastava o crédito. Agora o servidor corta a resposta e devolve o crédito.
+
 ## 0.9.81 beta — 2026-11-13
 - Corrigido: depois de atualizar a extensão com uma reunião aberta, os botões do widget (destacar, pausar, nota, marcar trecho, abrir o painel, legendas e perguntar à IA) geravam erros na página de extensões ("Extensão atualizada: recarregue a página"). Agora cada botão só mostra o aviso no próprio widget; basta recarregar a aba da reunião.
 - Pausar não quebra mais quando a extensão não responde a tempo: o widget avisa e você tenta de novo.

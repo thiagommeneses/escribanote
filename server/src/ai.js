@@ -151,9 +151,13 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
     let stream;
     let text = "";
     let closed = false;
-    req.raw.on("close", () => {
-      if (!res.writableEnded) (closed = true), stream?.abort();
-    });
+    // Quem perguntou desistiu (Parar, aba fechada): a resposta é cortada e o crédito volta (failed → refund).
+    // O "close" do pedido não chega quando a conexão cai no meio da resposta; o da resposta chega.
+    const onClose = () => {
+      if (!res.writableEnded && !closed) (closed = true), stream?.abort();
+    };
+    req.raw.on("close", onClose);
+    res.on("close", onClose);
     try {
       // Com a pesquisa na web, a resposta pode pausar (pause_turn): continua com o que já veio, até 4 vezes.
       const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, web_search_requests: 0 };

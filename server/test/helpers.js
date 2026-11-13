@@ -28,14 +28,20 @@ export function fakeAnthropic() {
         // fake.finals: respostas em sequência ({ text, stop_reason, content, usage, fail }), uma por chamada.
         const next = fake.finals?.shift();
         const parts = (next?.text ?? fake.text).match(/.{1,12}/gs) || [];
+        let aborted = false;
         return {
           async *[Symbol.asyncIterator]() {
             if (fake.failWith) throw fake.failWith;
             if (next?.fail) throw next.fail;
-            for (const p of parts) yield { type: "content_block_delta", delta: { type: "text_delta", text: p } };
+            for (const p of parts) {
+              // fake.delayMs: resposta devagar, para testar o Parar no meio
+              if (fake.delayMs) await new Promise((r) => setTimeout(r, fake.delayMs));
+              if (aborted) throw Object.assign(new Error("Request was aborted."), { name: "APIUserAbortError" });
+              yield { type: "content_block_delta", delta: { type: "text_delta", text: p } };
+            }
           },
           finalMessage: async () => (next ? { stop_reason: next.stop_reason || "end_turn", content: next.content || [], usage: next.usage || fake.usage } : { stop_reason: fake.stopReason, usage: fake.usage }),
-          abort() {},
+          abort() { aborted = true; },
         };
       },
       async create(params) {

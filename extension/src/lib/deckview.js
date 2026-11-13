@@ -1,5 +1,6 @@
 // Visualizador dos slides (extensão e app web): navegar, apresentar em tela cheia, editar o texto,
 // trocar estilo/paleta/tema sem gastar crédito e baixar .pptx ou PDF. Usa só o DOM, sem dependências.
+import { toBlocks } from "./transcript.js";
 import { cleanDeck, deckMeta, deckPrintHtml, deckTheme, deckToPptx, deckFileName, slideHtml, shortClock, DECK_CSS, DECK_STYLES, DECK_PALETTES, paletteColors, customPaletteId } from "./slides.js";
 
 const LAYOUT_LABEL = { capa: "Capa", secao: "Seção", topicos: "Tópicos", acoes: "Ações", citacao: "Citação", imagem: "Imagem", numeros: "Números", encerramento: "Encerramento" };
@@ -108,6 +109,20 @@ const VIEW_CSS = `
 .esv-present:hover{cursor:default}
 .esv-present .esv-exit{font:inherit;font-size:13px;color:#e2e8f0;background:#1e293bcc;border:1px solid #334155;border-radius:8px;padding:6px 10px;cursor:pointer;position:fixed;right:12px;top:10px;opacity:0;transition:opacity .2s}
 .esv-present:hover .esv-exit{opacity:1}
+.esv-pop{position:fixed;z-index:2147483002;width:min(380px,calc(100vw - 24px));background:#f8fafc;color:#0f172a;border-radius:14px;box-shadow:0 12px 40px #0009;padding:12px 14px 10px;font:13.5px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif;cursor:default;text-align:left}
+.esv-pop::after{content:"";position:absolute;left:var(--ax,50%);bottom:-7px;width:14px;height:14px;background:#f8fafc;transform:translateX(-50%) rotate(45deg);border-radius:2px}
+.esv-pop.below::after{bottom:auto;top:-7px}
+.esv-pop-h{display:flex;align-items:center;gap:8px;font-size:12px;color:#475569;margin-bottom:6px}
+.esv-pop-h b{color:#1d4ed8;font-weight:700}
+.esv-pop .esv-x{margin-left:auto;border:0;background:none;color:#64748b;font-size:18px;line-height:1;cursor:pointer;padding:0 2px}
+.esv-pop-msgs{display:flex;flex-direction:column;gap:6px;max-height:min(260px,45vh);overflow:auto}
+.esv-pop .esv-pop-msg{background:#e2e8f0;border-radius:12px 12px 12px 4px;padding:6px 10px;margin:0;color:#0f172a;font-size:13.5px}
+.esv-pop .esv-pop-msg.main{background:#dbeafe}
+.esv-pop-msg .who{display:block;font-size:11.5px;font-weight:700;color:#334155}
+.esv-pop-msg .who time{font-weight:400;color:#64748b;margin-left:6px}
+.esv-pop-acts{display:flex;justify-content:flex-end;margin-top:8px}
+.esv-pop-acts button{font:inherit;font-size:12.5px;font-weight:600;border:0;border-radius:8px;padding:6px 10px;background:#1d4ed8;color:#fff;cursor:pointer}
+.esv-pop-acts button:hover{background:#1e40af}
 @media (max-width:760px){.esv-body,.esv.editing .esv-body{grid-template-columns:1fr}.esv-thumbs{display:none}.esv-edit{border-left:0;border-top:1px solid #1e293b}.esv-bar h2{flex-basis:100%}}
 `;
 
@@ -265,7 +280,53 @@ export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index =
     else s[k] = v;
   }
 
-  const go = (i) => { cur = Math.min(Math.max(0, i), d.slides.length - 1); draw(); };
+  const go = (i) => { closePop(); cur = Math.min(Math.max(0, i), d.slides.length - 1); draw(); };
+
+  // ----- balão com a fala do momento (clique no horário do slide) -----
+  // Mostra a fala daquele horário e a seguinte, sem sair dos slides; "Ver na transcrição completa" leva à fala.
+  let blocksCache = null;
+  function excerpt(rel) {
+    if (!session?.startedAt) return [];
+    blocksCache ||= toBlocks(session, { includeChat: false });
+    const abs = session.startedAt + rel;
+    let i = blocksCache.findLastIndex((b) => b.startAt <= abs + 2000);
+    if (i < 0) i = 0;
+    return blocksCache.slice(i, i + 2).map((b, k) => {
+      const t = b.texts.join(" ").replace(/\s+/g, " ").trim();
+      return { main: k === 0, who: b.speaker || "Participante", at: shortClock(Math.max(0, b.startAt - session.startedAt)), text: t.length > 420 ? t.slice(0, 417).trimEnd() + "…" : t };
+    });
+  }
+  function closePop() { document.querySelector(".esv-pop")?.remove(); }
+  function openPop(link) {
+    closePop();
+    const rel = Number(link.dataset.at);
+    const msgs = excerpt(rel);
+    const pop = document.createElement("div");
+    pop.className = "esv-pop";
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", "Fala deste momento da reunião");
+    pop.innerHTML = `<div class="esv-pop-h"><b>▶ ${esc(shortClock(rel))}</b> na reunião<button type="button" class="esv-x" data-pop="close" aria-label="Fechar">×</button></div>
+      <div class="esv-pop-msgs">${msgs.length ? msgs.map((m) => `<p class="esv-pop-msg${m.main ? " main" : ""}"><span class="who">${esc(m.who)}<time>${esc(m.at)}</time></span>${esc(m.text)}</p>`).join("") : '<p class="esv-pop-msg">Sem falas registradas neste horário.</p>'}</div>
+      ${onJump ? `<div class="esv-pop-acts"><button type="button" data-pop="jump">Ver na transcrição completa</button></div>` : ""}`;
+    pop.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const a = e.target.closest("[data-pop]")?.dataset.pop;
+      if (a === "close") closePop();
+      else if (a === "jump") { closePop(); close(); onJump(rel); }
+    });
+    // dentro da tela cheia, o balão precisa estar no elemento em tela cheia para aparecer
+    (document.querySelector(".esv-present") || root).appendChild(pop);
+    const r = link.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    const cx = r.left + r.width / 2;
+    const left = Math.min(Math.max(12, cx - pw / 2), innerWidth - pw - 12);
+    const below = r.top - ph - 12 < 8;
+    pop.classList.toggle("below", below);
+    pop.style.left = `${left}px`;
+    pop.style.top = `${below ? r.bottom + 12 : r.top - ph - 12}px`;
+    pop.style.setProperty("--ax", `${Math.min(Math.max(18, cx - left), pw - 18)}px`);
+    (pop.querySelector("[data-pop=jump]") || pop.querySelector("[data-pop=close]"))?.focus();
+  }
 
   function presentMode() {
     const p = document.createElement("div");
@@ -274,7 +335,8 @@ export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index =
     p.addEventListener("click", (e) => {
       if (e.target.closest("[data-a=exit]")) return exitPresent();
       const at = e.target.closest(".esd-at");
-      if (at) return;
+      if (at) return openPop(at);
+      if (document.querySelector(".esv-pop")) return closePop();
       go(cur + (e.clientX < innerWidth / 3 ? -1 : 1));
     });
     document.body.appendChild(p);
@@ -285,6 +347,7 @@ export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index =
     document.addEventListener("fullscreenchange", onFs);
   }
   function exitPresent() {
+    closePop();
     const p = document.querySelector(".esv-present");
     if (!p) return;
     document.removeEventListener("fullscreenchange", p._onFs);
@@ -292,6 +355,7 @@ export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index =
     p.remove();
   }
   function close() {
+    closePop();
     exitPresent();
     if (saveTimer && onSave && editable) { clearTimeout(saveTimer); saveTimer = null; onSave(structuredClone(d)).catch(() => {}); }
     document.removeEventListener("keydown", onKey, true);
@@ -301,18 +365,20 @@ export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index =
 
   function onKey(e) {
     if (e.target.closest?.("input, textarea, select")) { if (e.key === "Escape") e.target.blur(); return; }
+    if (e.target.closest?.(".esv-pop") && e.key !== "Escape") return; // Enter/espaço nos botões do balão
     if (e.key === "Enter" && e.target.closest?.(".esv-thumb")) { e.preventDefault(); return go(Number(e.target.closest(".esv-thumb").dataset.i)); }
     if (["ArrowRight", "PageDown", " ", "ArrowDown"].includes(e.key)) { e.preventDefault(); go(cur + 1); }
     else if (["ArrowLeft", "PageUp", "ArrowUp"].includes(e.key)) { e.preventDefault(); go(cur - 1); }
     else if (e.key === "Home") go(0);
     else if (e.key === "End") go(d.slides.length - 1);
-    else if (e.key === "Escape") { e.preventDefault(); if (document.querySelector(".esv-present")) exitPresent(); else close(); }
+    else if (e.key === "Escape") { e.preventDefault(); if (document.querySelector(".esv-pop")) closePop(); else if (document.querySelector(".esv-present")) exitPresent(); else close(); }
     else if (e.key.toLowerCase() === "f" || e.key === "F5") { e.preventDefault(); if (!document.querySelector(".esv-present")) presentMode(); }
   }
 
   root.addEventListener("click", (e) => {
     const at = e.target.closest(".esd-at");
-    if (at && onJump) { close(); onJump(Number(at.dataset.at)); return; }
+    if (at) return openPop(at);
+    if (!e.target.closest(".esv-pop")) closePop();
     const th = e.target.closest(".esv-thumb");
     if (th) return go(Number(th.dataset.i));
     const a = e.target.closest("[data-a]")?.dataset.a;
@@ -348,6 +414,7 @@ export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index =
     save();
   });
   document.addEventListener("keydown", onKey, true);
+  root.addEventListener("scroll", closePop, true); // o balão fica preso ao horário: rolou, fecha
   document.body.appendChild(root);
   frame();
   root.querySelector("[data-a=present]").focus();
