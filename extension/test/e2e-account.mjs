@@ -105,7 +105,7 @@ try {
 
   // 1) Login no app web e Pro
   const web = await open(`${srv.url}/app/`);
-  await evalIn(web, `document.getElementById("login-email").value = "ana@exemplo.com"; document.querySelector("#login-form button").click(); true`);
+  await evalIn(web, `document.getElementById("login-email").value = "ana@exemplo.com"; document.querySelector('[data-act="magic"]').click(); true`);
   await sleep(800);
   const mail = await (await fetch(`${srv.url}/__test/mail`)).json();
   await evalIn(web, `location.href = ${JSON.stringify(mail.text.match(/https?:\/\/\S+#\/entrar\/[\w-]+/)[0])}; true`);
