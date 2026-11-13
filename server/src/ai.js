@@ -134,7 +134,7 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
       "content-type": "text/event-stream; charset=utf-8",
       "cache-control": "no-store",
       "x-accel-buffering": "no",
-      ...(req.headers.origin === config.extensionOrigin ? { "access-control-allow-origin": config.extensionOrigin } : {}),
+      ...(config.extensionOrigins.includes(req.headers.origin) ? { "access-control-allow-origin": req.headers.origin } : {}),
     });
     const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     send("start", { balance: call.balance, credits });

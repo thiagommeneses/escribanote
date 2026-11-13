@@ -13,7 +13,8 @@ import "./lib/icons.js"; // ícones da extensão (duotone): globalThis.EsIcons
 
 const { icon, tagIcon } = globalThis.EsIcons;
 
-const EXTENSION_ID = "ohbnmfogdcbgegnpcaphidkjinplednd";
+// IDs da extensão: instalação pelo zip do site e pela Chrome Web Store (o primeiro que responder vale).
+const EXTENSION_IDS = ["ohbnmfogdcbgegnpcaphidkjinplednd"];
 const PALETTE = ["#c2410c", "#0f766e", "#7c3aed", "#b45309", "#be185d", "#1d4ed8", "#4d7c0f", "#9f1239"];
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -1630,12 +1631,12 @@ async function sendLocal(btn) {
   renderLocalNotice();
 }
 
-function sendToExtension(message) {
+function sendToExtensionId(id, message) {
   return new Promise((resolve) => {
     const rt = globalThis.chrome?.runtime;
     if (!rt?.sendMessage) return resolve({ ok: false, reason: "no-runtime" });
     try {
-      rt.sendMessage(EXTENSION_ID, message, (reply) => {
+      rt.sendMessage(id, message, (reply) => {
         if (rt.lastError || !reply) resolve({ ok: false, reason: rt.lastError?.message || "sem resposta" });
         else resolve(reply);
       });
@@ -1643,6 +1644,19 @@ function sendToExtension(message) {
       resolve({ ok: false, reason: err.message });
     }
   });
+}
+let extensionIdFound = null;
+async function sendToExtension(message) {
+  let last = { ok: false, reason: "no-runtime" };
+  for (const id of extensionIdFound ? [extensionIdFound] : EXTENSION_IDS) {
+    const r = await sendToExtensionId(id, message);
+    if (r.ok !== false || r.reason !== "no-runtime" && !/Could not establish|Receiving end|Invalid extension id|sem resposta/i.test(r.reason || "")) {
+      extensionIdFound = id;
+      return r;
+    }
+    last = r;
+  }
+  return last;
 }
 
 async function connectExtension() {

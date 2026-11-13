@@ -12,6 +12,8 @@ export function loadConfig(overrides = {}) {
     databaseUrl: env.DATABASE_URL || "",
     dataKey: env.DATA_KEY || "", // base64 de 32 bytes (AES-256)
     extensionId: env.EXTENSION_ID || "ohbnmfogdcbgegnpcaphidkjinplednd",
+    // IDs extras aceitos (ex.: o da Chrome Web Store), separados por vírgula.
+    extraExtensionIds: env.EXTENSION_IDS || "",
     smtp: {
       host: env.SMTP_HOST || "",
       port: num(env.SMTP_PORT, 465),
@@ -51,5 +53,7 @@ export function loadConfig(overrides = {}) {
   config.origin = new URL(config.publicUrl).origin;
   config.origins = new Set([config.origin, ...config.legacyOrigins.map((u) => new URL(u).origin)]);
   config.extensionOrigin = `chrome-extension://${config.extensionId}`;
+  // Mais de um ID aceito (instalação pelo zip e pela Chrome Web Store): EXTENSION_IDS="id1,id2".
+  config.extensionOrigins = [...new Set([config.extensionId, ...String(config.extraExtensionIds || "").split(",").map((x) => x.trim()).filter((x) => /^[a-p]{32}$/.test(x))])].map((id) => `chrome-extension://${id}`);
   return config;
 }
