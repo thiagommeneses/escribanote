@@ -76,11 +76,11 @@
     emitState();
     if (state.consent) flush();
   }
-  loadSettings();
+  loadSettings().catch(() => {});
   chrome.storage.onChanged.addListener((ch) => {
     if (ch.settings) {
       if (ch.settings.newValue?.mode !== ch.settings.oldValue?.mode) state.consent = null;
-      loadSettings();
+      loadSettings().catch(() => {});
     }
   });
 
@@ -88,9 +88,11 @@
     state.consent = value;
     const key = meetingKey();
     if (key) await toWorker({ type: "consent-set", key, value }).catch(() => {});
-    if (remember) {
-      const { settings = {} } = await chrome.storage.local.get("settings");
-      await chrome.storage.local.set({ settings: { ...settings, mode: value ? "always" : "off" } });
+    if (remember && alive()) {
+      try {
+        const { settings = {} } = await chrome.storage.local.get("settings");
+        await chrome.storage.local.set({ settings: { ...settings, mode: value ? "always" : "off" } });
+      } catch {} // extensão atualizada no meio: a escolha vale só para esta reunião
     }
     if (!value) pending = [];
     applyCaptionVisibility();
@@ -410,8 +412,10 @@
   timers.push(setInterval(() => alive() || goOrphan(), 3000));
   bus.setCaptionsHidden = async (hidden) => {
     if (!alive()) return goOrphan();
-    const { settings = {} } = await chrome.storage.local.get("settings");
-    await chrome.storage.local.set({ settings: { ...settings, hideCaptions: hidden } });
+    try {
+      const { settings = {} } = await chrome.storage.local.get("settings");
+      await chrome.storage.local.set({ settings: { ...settings, hideCaptions: hidden } });
+    } catch { goOrphan(); }
   };
 
   // Estágio: entrou na chamada / saiu (Meet pelo botão de sair; Slack pelo áudio do huddle). Sair não descarrega a página, então sem isto a
