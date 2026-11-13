@@ -35,7 +35,7 @@ const swatch = (p) => `linear-gradient(135deg,#${p.a} 0 55%,#${p.b} 55% 100%)`;
 // Botões: [data-pal] escolhe, [data-pal-del] apaga uma própria, [data-pal-new] abre o editor, [data-pal-save] salva.
 export function paletteChooserHtml(o, { editing = false, attrs = "" } = {}) {
   const style = DECK_STYLES.find((z) => z.id === o.style);
-  if (style?.fixed) return `<p class="sl-pal-fixed">O estilo ${esc(style.label)} tem cores próprias (${esc(style.hint.split(":")[1]?.split(",")[0]?.trim() || "fixas")}).</p>`;
+  if (style?.fixed) return `<p class="sl-pal-fixed">O estilo ${esc(style.label)} tem cores próprias (${esc(style.colorsLabel || "fixas")}).</p>`;
   const saved = savedPalettes();
   const btn = (p, own) => `<button type="button" role="radio" aria-checked="${o.palette === p.id}" data-pal="${p.id}" ${attrs} title="${esc(p.label)}" style="--sw:${swatch(p)}"><span></span>${esc(p.label)}${own ? `<i data-pal-del="${p.id}" ${attrs} role="button" aria-label="Apagar a paleta ${esc(p.label)}" title="Apagar">×</i>` : ""}</button>`;
   const cur = paletteColors(o.palette);

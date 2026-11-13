@@ -105,11 +105,11 @@ const index = [
 // Slides gerados pela IA para a reunião do Q4 (com a captura do gráfico num slide de imagem).
 const sl = (o) => ({ id: Math.random().toString(36).slice(2, 8), layout: "topicos", title: "", bullets: [], stats: [], quote: "", speaker: "", notes: "", at: null, shot: "", ...o });
 sessao.slides = {
-  title: "Orçamento do Q4 aprovado", subtitle: "Mídia, cronograma e responsáveis", kind: "resumo", style: "moderno", palette: "azul", mode: "claro", by: "pro", createdAt: T + 45 * MIN,
+  title: "Orçamento do Q4 aprovado", subtitle: "Mídia, cronograma e responsáveis", kind: "resumo", style: "geometrico", palette: "petroleo", mode: "claro", by: "pro", createdAt: T + 45 * MIN,
   slides: [
     sl({ layout: "capa", title: "Orçamento do Q4 aprovado", at: T + 0.5 * MIN }),
     sl({ layout: "imagem", title: "Pico de custo em dezembro", bullets: ["Dezembro concentra 41% do custo de mídia", "Agência nova entra só no segundo mês"], shot: "s1", at: T + 13 * MIN, notes: "Mostre o gráfico que a Ana apresentou: dezembro é o mês mais caro, R$ 74 mil. Por isso a agência nova entra só no segundo mês." }),
-    sl({ layout: "numeros", title: "Mídia aprovada dentro do combinado", stats: [{ value: "R$ 180 mil", label: "verba de mídia aprovada" }, { value: "R$ 74 mil", label: "pico em dezembro" }, { value: "sexta", label: "entrega do cronograma" }], at: T + 21.6 * MIN }),
+    sl({ layout: "numeros", title: "Mídia aprovada dentro do combinado", stats: [{ value: "R$ 180 mil", label: "verba de mídia aprovada" }, { value: "R$ 74 mil", label: "pico em dezembro" }, { value: "sexta", label: "entrega do cronograma" }], at: T + 21.6 * MIN, notes: "O Bruno aprovou os R$ 180 mil de mídia sem estourar o orçamento. Dezembro é o pico, com R$ 74 mil, e a Paula entrega o cronograma por semana na sexta." }),
     sl({ layout: "acoes", title: "Próximos passos", bullets: ["Ana: frente de mídia", "Bruno: confirmar a verba com o financeiro (hoje)", "Paula: cronograma por semana (sexta)"], at: T + 4.1 * MIN }),
     sl({ layout: "citacao", quote: "Eu aprovo a mídia de 180 mil, com revisão em dezembro.", speaker: "Bruno Lima", at: T + 21.6 * MIN }),
     sl({ layout: "encerramento", title: "Orçamento fechado hoje", bullets: ["Revisão da mídia em dezembro", "Ata no canal do projeto"], at: T + 22.3 * MIN }),
@@ -192,12 +192,12 @@ await shot("app-ia-material");
 await tab("ata");
 await shot("app-ata");
 
-// 3b) Slides: o visualizador com a captura do gráfico num slide e as notas do apresentador
+// 3b) Slides: o visualizador no estilo Geométrico (números em anéis) com as notas do apresentador
 await tab("slides");
 await sleep(500);
 await ev(`document.querySelector('[data-sl="open"]').click(); true`);
 await sleep(900);
-await ev(`document.querySelector('.esv-thumb[data-i="1"]').click(); true`);
+await ev(`document.querySelector('.esv-thumb[data-i="2"]').click(); true`);
 await sleep(500);
 await shot("app-slides");
 await ev(`document.querySelector('.esv [data-a="close"]').click(); true`);

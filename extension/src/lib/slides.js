@@ -37,12 +37,12 @@ export const DECK_STYLES = [
   { id: "consultoria", label: "Consultoria", hint: "Título que diz a conclusão, fios e tabela de ações",
     title: font("Georgia, 'Times New Roman', serif", "Georgia"), body: font("Arial, 'Helvetica Neue', sans-serif", "Arial"), cw: 0.52,
     cover: "split", head: "tracker", list: "square", stats: "topline", actions: "rows", quote: "band", foot: "source", closing: "list", radius: 0 },
-  { id: "institucional", label: "Institucional", hint: "Cores próprias: azul-marinho e dourado, sóbrio e formal", fixed: true,
-    title: font("Georgia, 'Times New Roman', serif", "Georgia", 700), body: font(SANS, "Segoe UI"), cw: 0.52,
-    cover: "frame", head: "rule2", list: "square", stats: "topline", actions: "rows", quote: "side", foot: "stripe", closing: "frame", radius: 4,
-    colors: { a: "0B2545", b: "C9A227" },
-    claro: { bg: "FFFFFF", fg: "0B1B33", muted: "5A6B82", surface: "F2F5F9", line: "DCE3EC" },
-    escuro: { bg: "081526", fg: "EEF2F7", muted: "9DB0C8", surface: "0F2038", line: "1E3554", strong: "0B2545" } },
+  { id: "institucional", label: "Institucional", hint: "Vermelho e rosa sobre branco, letra leve e balões arredondados", fixed: true, colorsLabel: "vermelho e rosa",
+    title: font("'Nunito Sans', 'Segoe UI Light', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif", "Segoe UI Light", 300), body: font("'Nunito Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif", "Segoe UI"), cw: 0.5,
+    cover: "bubble", head: "bubble", list: "index", stats: "topline", actions: "rows", quote: "side", foot: "plain", closing: "bubble", radius: 12,
+    colors: { a: "CC2240", b: "E07A8C", soft: "FFD1DC" },
+    claro: { bg: "FFFFFF", fg: "09090B", muted: "6B6B73", surface: "FFF3F6", line: "F1D3DB" },
+    escuro: { bg: "09090B", fg: "F4F4F5", muted: "A1A1AA", surface: "17171A", line: "2A2A2F", strong: "CC2240" } },
   { id: "corporativo", label: "Corporativo", hint: "Faixa de título, cartões e linha do tempo",
     title: font(SANS, "Calibri", 700), body: font(SANS, "Calibri"), cw: 0.49,
     cover: "band", head: "band", list: "cards", stats: "cards", actions: "timeline", quote: "band", foot: "stripe", closing: "strong", radius: 10, shadow: true },
@@ -143,6 +143,7 @@ export function deckTheme(deck) {
     onStrong,
     onStrongMuted: mixColor(onStrong, strong, 0.28),
     strong2: readable(pal.b, strong, 3),
+    soft: pal.soft || mixColor(pal.b, n.bg, 0.55), // tom claro das formas de enfeite
   };
 }
 
@@ -368,6 +369,12 @@ export function slideBoxes(deck, slide, th, meta) {
   const shape = (o) => boxes.push({ type: "rect", shape: "rect", ...o });
   const tx = (o) => boxes.push(text(o));
   const R = th.radius ?? 12;
+  // balão do Institucional: dois quadrados arredondados vazados, um sobre o outro (como no símbolo da marca)
+  const bubble = (x, y, size, color, lw, alpha = 1, rot = 0) => {
+    const r = size * 0.24, o = size * 0.2;
+    shape({ shape: "round", r, x, y: y + o, w: size, h: size, fill: color, alpha: 0, line: { color, w: lw, alpha }, rot });
+    shape({ shape: "round", r, x: x + o, y, w: size, h: size, fill: color, alpha: 0, line: { color, w: lw, alpha }, rot });
+  };
   let layout = slide.layout;
   if (layout === "imagem" && !meta.hasShot(slide.shot)) layout = slide.bullets.length ? "topicos" : "secao";
   const W = SLIDE_W - PAD * 2;
@@ -381,13 +388,12 @@ export function slideBoxes(deck, slide, th, meta) {
     const atC = rightStrong ? th.onStrong : th.accent;
     let y = SLIDE_H - 52;
     let x0 = footX, x1 = SLIDE_W - PAD;
-    if (onStrong && st.cover === "frame") { y = SLIDE_H - 96; x0 = 96; x1 = SLIDE_W - 96; }
     if (st.foot === "stripe" && !onStrong) {
       shape({ x: 0, y: SLIDE_H - 8, w: SLIDE_W, h: 8, fill: th.fill, grad: { to: th.fill2, ang: 0 } });
       y = SLIDE_H - 50;
     }
     const left = st.foot === "source" ? `Fonte: ${[meta.meetingTitle, meta.date].filter(Boolean).join(", ")}` : meta.meetingTitle;
-    tx({ x: x0, y, w: 700, h: 24, paras: [para(left, 13, c, B)] });
+    tx({ x: x0, y, w: Math.min(700, x1 - 360 - x0), h: 24, paras: [para(left, 13, c, B)] });
     tx({ x: x1 - 120, y, w: 120, h: 24, align: "r", paras: [para(`${meta.index + 1} / ${meta.total}`, 13, rc, B)] });
     if (meta.at != null) tx({ x: x1 - 340, y, w: 200, h: 24, align: "r", at: meta.at, paras: [para(`▶ ${shortClock(meta.at)} na reunião`, 13, atC, B)] });
   };
@@ -410,12 +416,11 @@ export function slideBoxes(deck, slide, th, meta) {
         shape({ x: PAD, y: 184, w: W, h: 2, fill: th.fg });
         return 214;
       }
-      case "rule2": {
-        tx({ x: PAD, y: 54, w: W, h, valign: "b", field: "title", paras: [para(title, fitT([title], W, h, max, 24), th.fg, T)] });
-        shape({ x: PAD, y: 54 + h + 16, w: 72, h: 4, fill: th.fill2 });
-        shape({ x: PAD + 84, y: 54 + h + 17.5, w: W - 84, h: 1, fill: th.line });
-        shape({ shape: "diamond", x: SLIDE_W - PAD - 14, y: 30, w: 14, h: 14, fill: th.fill2 });
-        return 54 + h + 46;
+      case "bubble": {
+        bubble(SLIDE_W - 150, -64, 190, th.soft, 14, th.dark ? 0.35 : 1);
+        tx({ x: PAD, y: 56, w: W - 120, h, valign: "b", field: "title", paras: [para(title, fitT([title], W - 120, h, max, 26), th.fg, T)] });
+        shape({ x: PAD, y: 56 + h + 18, w: 64, h: 3, fill: th.fill });
+        return 56 + h + 46;
       }
       case "bar": {
         shape({ x: 0, y: 0, w: 14, h: SLIDE_H, fill: th.fill, grad: { to: th.fill2, ang: 90 } });
@@ -491,6 +496,17 @@ export function slideBoxes(deck, slide, th, meta) {
       });
       return;
     }
+    if (kind === "index" && n <= 5) { // como um sumário: texto, número grande à direita e fio embaixo
+      const slot = Math.min(h / n, 104);
+      const size = Math.min(...items.map((b) => fitB([b], w - 150, slot - 24, 30, 15, { gap: 0 })));
+      items.forEach((b, i) => {
+        const yy = y + i * slot;
+        tx({ x, y: yy, w: w - 150, h: slot - 14, valign: "ctr", field: "bullets", paras: [para(b, size, th.fg, { ...B, runs: leadRuns(b, th.fg, th.accent) })] });
+        tx({ x: x + w - 140, y: yy, w: 140, h: slot - 14, align: "r", valign: "ctr", paras: [para(two(i + 1), Math.min(54, slot * 0.55), th.accent, { ...T, bold: false })] });
+        shape({ x, y: yy + slot - 8, w, h: 1.5, fill: th.line });
+      });
+      return;
+    }
     if (kind === "badges" && n <= 6) {
       const slot = Math.min(h / n, 132);
       const size = Math.min(...items.map((b) => fitB([b], w - 84, slot - 14, 32, 16, { gap: 0 })));
@@ -550,7 +566,7 @@ export function slideBoxes(deck, slide, th, meta) {
     const kicker = kind === "cover" ? meta.kindLabel : kind === "section" ? `Parte ${two(meta.section)}` : "";
     const info = kind === "cover" ? [meta.date, meta.people].filter(Boolean).join(" · ") : "";
     const sub = kind === "cover" ? deck.subtitle : "";
-    const center = v === "glow" || v === "frame";
+    const center = v === "glow" || (v === "bubble" && kind !== "section");
     let fg = th.fg, soft = th.muted, kc = th.accent, onStrong = false;
     let area = { x: PAD, w: W };
     const useStrong = () => { bg = th.strong; fg = th.onStrong; soft = th.onStrongMuted; kc = th.strong2; onStrong = true; };
@@ -581,23 +597,32 @@ export function slideBoxes(deck, slide, th, meta) {
       shape({ shape: "parallelogram", x: 760, y: 0, w: 700, h: SLIDE_H, fill: th.strong });
       shape({ shape: "triangle", x: 1000, y: 430, w: 280, h: 290, fill: th.fill2, flipH: true });
       shape({ shape: "ellipse", x: 700, y: 96, w: 92, h: 92, fill: th.fill2 });
-      shape({ shape: "chevron", x: PAD, y: 104, w: 36, h: 40, fill: th.fill });
-      shape({ shape: "chevron", x: PAD + 30, y: 104, w: 36, h: 40, fill: th.fill2 });
+      const cy = kind === "closing" ? 44 : 104; // no encerramento o título sobe, então as setas também
+      shape({ shape: "chevron", x: PAD, y: cy, w: 36, h: 40, fill: th.fill });
+      shape({ shape: "chevron", x: PAD + 30, y: cy, w: 36, h: 40, fill: th.fill2 });
       area = { x: PAD, w: 590 };
       if (kind === "section") tx({ x: 860, y: 140, w: 360, h: 260, align: "ctr", valign: "ctr", paras: [para(two(meta.section), 180, th.onStrong, { ...T, bold: true })] });
     } else if (v === "glow") {
       shape({ shape: "ellipse", x: -260, y: -320, w: 900, h: 900, fill: th.fill, glow: th.dark ? 0.55 : 0.28 });
       shape({ shape: "ellipse", x: 700, y: 260, w: 860, h: 860, fill: th.fill2, glow: th.dark ? 0.45 : 0.25 });
       if (kind === "section") tx({ x: 0, y: 40, w: SLIDE_W, h: 300, align: "ctr", valign: "ctr", paras: [para(two(meta.section), 240, th.accent, { ...T, bold: true })] });
-    } else if (v === "frame") {
-      useStrong();
-      kc = th.fill2;
-      for (const [x, y, w, h] of [[40, 40, SLIDE_W - 80, 1.5], [40, SLIDE_H - 41.5, SLIDE_W - 80, 1.5], [40, 40, 1.5, SLIDE_H - 80], [SLIDE_W - 41.5, 40, 1.5, SLIDE_H - 80]]) shape({ x, y, w, h, fill: th.fill2 });
-      for (const [x, y, w, h] of [[52, 52, SLIDE_W - 104, 1], [52, SLIDE_H - 53, SLIDE_W - 104, 1], [52, 52, 1, SLIDE_H - 104], [SLIDE_W - 53, 52, 1, SLIDE_H - 104]]) shape({ x, y, w, h, fill: th.fill2, alpha: 0.45 });
-      shape({ shape: "diamond", x: SLIDE_W / 2 - 16, y: 108, w: 32, h: 32, fill: th.fill2 });
-      shape({ x: SLIDE_W / 2 - 120, y: 123, w: 88, h: 1.5, fill: th.fill2 });
-      shape({ x: SLIDE_W / 2 + 32, y: 123, w: 88, h: 1.5, fill: th.fill2 });
-      area = { x: 160, w: SLIDE_W - 320 };
+    } else if (v === "bubble") {
+      const k = th.dark ? 0.55 : 1;
+      if (kind === "section") {
+        bubble(-170, 40, 520, th.fill, 30, 1, -30);
+        bubble(-60, 380, 330, th.soft, 22, k, -30);
+        area = { x: 600, w: SLIDE_W - 600 - PAD };
+        tx({ x: area.x, y: 120, w: area.w, h: 200, align: "r", valign: "b", paras: [para(two(meta.section), 150, th.accent, { ...T, bold: false })] });
+      } else {
+        bubble(-110, -170, 300, th.soft, 20, k);
+        bubble(SLIDE_W - 230, -110, 320, th.fill2, 24, k);
+        if (kind === "cover") { // no encerramento, os cantos de baixo ficam livres para o rodapé
+          bubble(-140, 500, 320, th.fill2, 24, k);
+          bubble(SLIDE_W - 170, 540, 280, th.soft, 20, k);
+          bubble(SLIDE_W / 2 - 26, 80, 44, th.fill, 5);
+        }
+        area = { x: 200, w: SLIDE_W - 400 };
+      }
     }
     const al = center ? "ctr" : "l";
 
@@ -621,6 +646,11 @@ export function slideBoxes(deck, slide, th, meta) {
         tx({ x: PAD, y: 536, w: W, h: 110, field: "title", paras: [para(slide.title, fitT([slide.title], W, 110, 54, 28), th.onStrong, T)] });
         footer(true);
         return true;
+      } else if (v === "bubble") {
+        tx({ x: area.x, y: 350, w: area.w, h: 30, align: "r", paras: [para(kicker, 16, th.accent, { ...B, bold: true, caps: true, ls: 0.12 })] });
+        tx({ x: area.x, y: 392, w: area.w, h: 170, align: "r", field: "title", paras: [para(slide.title, fitT([slide.title], area.w, 170, 58, 30), fg, T)] });
+        shape({ x: area.x, y: 580, w: area.w, h: 1.5, fill: th.line });
+        footX = area.x;
       } else {
         tx({ x: area.x, y: ky, w: area.w, h: 32, align: al, paras: [para(kicker, 18, kc, { ...B, bold: true, caps: true, ls: 0.12 })] });
         tx({ x: area.x, y: ky + 46, w: area.w, h: 200, align: al, field: "title", paras: [para(slide.title, fitT([slide.title], area.w, 200, 60, 32), fg, T)] });
@@ -789,7 +819,7 @@ function shapeHtml(b) {
   if (clip) css += `clip-path:${clip};`;
   if (b.line) css += `border:${cq(b.line.w)} solid ${rgba(b.line.color, b.line.alpha ?? 1)};`;
   if (b.shadow) css += `box-shadow:0 ${cq(4)} ${cq(18)} rgba(15,23,42,.12);`;
-  if (b.flipH || b.flipV) css += `transform:scale(${b.flipH ? -1 : 1},${b.flipV ? -1 : 1});`;
+  if (b.flipH || b.flipV || b.rot) css += `transform:${b.rot ? `rotate(${b.rot}deg) ` : ""}scale(${b.flipH ? -1 : 1},${b.flipV ? -1 : 1});`;
   return `<div class="esd-rect" style="${css}"></div>`;
 }
 
@@ -902,7 +932,7 @@ function pptxShape(b, id) {
   else if (a <= 0) fill = "<a:noFill/>";
   else fill = `<a:solidFill>${clr(b.fill, a)}</a:solidFill>`;
   const ln = b.line ? `<a:ln w="${Math.round(b.line.w * EMU)}"><a:solidFill>${clr(b.line.color, b.line.alpha ?? 1)}</a:solidFill></a:ln>` : "<a:ln><a:noFill/></a:ln>";
-  const flip = `${b.flipH ? ' flipH="1"' : ""}${b.flipV ? ' flipV="1"' : ""}`;
+  const flip = `${b.rot ? ` rot="${Math.round((((b.rot % 360) + 360) % 360) * 60000)}"` : ""}${b.flipH ? ' flipH="1"' : ""}${b.flipV ? ' flipV="1"' : ""}`;
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Forma ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(b.x, b.y, b.w, b.h).replace("<a:xfrm>", `<a:xfrm${flip}>`)}<a:prstGeom prst="${geom}"><a:avLst>${av}</a:avLst></a:prstGeom>${fill}${ln}${b.shadow ? SHADOW : ""}</p:spPr></p:sp>`;
 }
 

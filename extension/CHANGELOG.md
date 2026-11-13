@@ -2,6 +2,12 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.80 beta — 2026-11-13
+- **Slides mais profissionais, em 8 estilos** do mais simples ao mais elaborado: **Minimalista**, **Clássico** (serifa e fios finos), **Consultoria** (título que diz a conclusão, ações em tabela com responsável), **Institucional** (vermelho e rosa, letra leve e balões arredondados), **Corporativo** (faixa de título, tópicos em cartões, linha do tempo), **Moderno** (capa colorida com círculos, tópicos numerados), **Geométrico** (formas inclinadas, setas, números em anéis) e **Palco** (letra grande com brilho de cor, para telão). Todos no claro e no escuro.
+- **Elementos gráficos de verdade**: formas, cartões com sombra, gradientes, linha do tempo, tabela de ações e números em destaque, iguais no visualizador, no PDF e no .pptx (editáveis no PowerPoint).
+- **Crie e salve a sua paleta**: em Cores › **+ Criar paleta**, escolha a cor principal e a de apoio, dê um nome e salve. A prévia muda enquanto você escolhe, a paleta fica disponível nas próximas apresentações e pode ser apagada. As paletas prontas agora têm duas cores (8 opções).
+- No tema escuro, as cores clareiam sozinhas para o texto continuar legível. Estilo, cores e tema seguem trocáveis depois, sem gastar crédito.
+
 ## 0.9.79 beta — 2026-11-13
 - **Slides a partir da reunião**: nova aba **Slides** (na extensão e no app web). A IA monta a apresentação com o que foi dito e, se houver, com as capturas de tela da reunião (ela escolhe as que mostram gráficos, telas e slides, nunca rostos). Escolha o tipo (resumo executivo, aula ou treinamento, status de projeto ou reunião comercial), o tamanho, o estilo (moderno, clássico ou minimalista), as cores e o tema claro ou escuro, e diga o foco em instruções opcionais.
 - **Cada slide aponta o momento da reunião** de onde saiu: clique no horário e a transcrição vai direto à fala. Todos os slides vêm com **notas do apresentador** tiradas do que foi falado.

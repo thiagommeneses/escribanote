@@ -35,6 +35,7 @@ nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, aju
   gesto) e o clique conta como invocação para o `tabCapture` daquela aba. `startWeb` pede o `streamId` antes de criar a
   sessão; sem ele, a aba entra em `pendingLinks` com `web: true` e `web-start` responde `{ waiting: true }` (o painel mostra
   "Falta um clique…"; `link-pending` responde `"web"` ou `"link"`). Teste: `test/e2e-link.mjs`.
+- 0.9.80, estilos dos slides: `DECK_STYLES` descreve cada estilo por partes (capa/seção/encerramento, cabeçalho, lista, números, ações, citação, rodapé); `slideBoxes` monta formas (`rect` com `shape` ellipse/round/chevron/pentagon/parallelogram/triangle/diamond, transparência, gradiente linear, brilho radial, contorno, sombra, rotação) e textos com trechos em negrito (`runs`), desenhados igual em HTML (clip-path) e no .pptx (prstGeom). Paletas com duas cores; paleta própria no id (`c-RRGGBB-RRGGBB`), salva em `localStorage` (`escribanote.slidePalettes`, `deckview.js`). `deckTheme` garante contraste (destaque ≥ 4,5:1 sobre o fundo). O estilo Institucional tem cores próprias (`fixed`).
 - 0.9.79, slides: `lib/slides.js` (sem DOM; extensão, app web e servidor) tem o pedido à IA (`slidesRequest`, esquema JSON
   com 8 layouts: capa, secao, topicos, acoes, citacao, imagem, numeros, encerramento), a validação (`parseDeck`: horário
   colado no início da fala mais próxima, captura só se enviada e uma vez, layout inválido vira tópicos) e o desenho:
