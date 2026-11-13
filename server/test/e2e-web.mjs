@@ -186,6 +186,48 @@ try {
   await evalIn(p, `document.querySelector('#pw-panel [data-act="pw-open"]').click(); document.getElementById("pw-change-new").value = "ana senha forte"; document.querySelector('#pw-change [type="submit"]').click(); true`);
   await waitFor(p, `document.getElementById("pw-panel")?.textContent.includes("Alterar senha")`, "senha definida na conta");
 
+  // 11b) Slides: gerar (1 crédito), abrir o visualizador, editar, ir à fala pelo horário
+  {
+    const t0 = Date.UTC(2026, 9, 20, 14);
+    const falas = ["Bom dia, vamos falar do lançamento do produto novo e do que mudou.", "O lançamento foi adiado para março porque os testes ainda falham.", "A receita do trimestre subiu 37 por cento.", "Precisamos fechar o contrato com o fornecedor até sexta.", "O cliente pediu integração com o Slack e relatórios semanais.", "Então ficamos assim: nova data em março e revisão na segunda."];
+    const entries = falas.map((text, i) => ({ text: `${text} Isso foi discutido com calma e todos concordaram com os próximos passos.` })).map(({ text }, i) => ({ id: "l" + i, at: t0 + (i + 1) * 60_000, updatedAt: t0 + (i + 1) * 60_000 + 5000, speakerId: i % 2 ? "b" : "a", text, kind: "caption" }));
+    await put(sampleMeeting("mt-3", { title: "Lançamento Q1", startedAt: t0, updatedAt: t0 + 8 * 60_000, endedAt: t0 + 8 * 60_000, entries, highlights: {} }));
+    const sl = (o) => ({ layout: "topicos", title: "", bullets: [], stats: [], quote: "", speaker: "", notes: "", at: "00:00", shot: "", ...o });
+    srv.anthropic.reviewText = JSON.stringify({ title: "Lançamento adiado para março", subtitle: "Planejamento do Q1", slides: [
+      sl({ layout: "capa", title: "Lançamento adiado para março" }),
+      sl({ title: "Testes ainda falham", bullets: ["Nova data em março", "Revisão na segunda"], notes: "Explique o atraso.", at: "00:02:00" }),
+      sl({ layout: "numeros", title: "Trimestre forte", stats: [{ value: "37%", label: "receita" }, { value: "6", label: "falas" }], at: "00:03:00" }),
+      sl({ layout: "acoes", title: "Próximos passos", bullets: ["Fechar o contrato (sexta)", "Plano do Slack"], at: "00:04:00" }),
+    ] });
+    await go("#/r/mt-3");
+    await waitFor(p, `document.querySelectorAll("#tx .blk").length > 0`, "reunião dos slides");
+    await evalIn(p, `document.querySelector('[data-act="tab"][data-tab="sl"]').click(); true`);
+    await waitFor(p, `!!document.querySelector('[data-act="sl-gen"]')`, "formulário dos slides");
+    await evalIn(p, `document.querySelector('input[name="sl-kind"][value="aula"]').click(); true`);
+    await evalIn(p, `document.querySelector('[data-act="sl-pal"][data-pal="roxo"]').click(); true`);
+    await shot(p, "web-6b-slides-form.png");
+    await evalIn(p, `document.querySelector('[data-act="sl-gen"]').click(); true`);
+    await waitFor(p, `!!document.querySelector(".esv .esv-thumb")`, "visualizador dos slides", 10000);
+    check(await evalIn(p, `document.querySelectorAll(".esv-thumb").length`) === 4, "quatro slides no visualizador");
+    check(await evalIn(p, `document.getElementById("credits").textContent.includes("10")`), "slides custaram 1 crédito");
+    const reqSl = srv.anthropic.calls.at(-1).params;
+    check(/Aula ou treinamento/.test(reqSl.system) && reqSl.output_config.format.type === "json_schema", "pedido com o tipo escolhido e esquema JSON");
+    await evalIn(p, `document.querySelector('.esv-thumb[data-i="1"]').click(); true`);
+    await shot(p, "web-6c-slides-visualizador.png");
+    await evalIn(p, `document.querySelector('.esv [data-a="edit"]').click(); true`);
+    await evalIn(p, `(() => { const i = document.querySelector('.esv-edit [data-f="title"]'); i.value = "Testes falham em dois ambientes"; i.dispatchEvent(new Event("input", { bubbles: true })); return true; })()`);
+    await sleep(1500);
+    const savedSl = await evalIn(p, `fetch("/api/v1/meetings/mt-3").then((r) => r.json()).then((d) => d.doc.slides)`);
+    check(savedSl?.slides?.[1]?.title === "Testes falham em dois ambientes" && savedSl.palette === "roxo" && savedSl.kind === "aula", "edição salva na reunião da conta");
+    await evalIn(p, `document.querySelector(".esv-main .esd-at").click(); true`);
+    await sleep(500);
+    check(await evalIn(p, `!document.querySelector(".esv") && !!document.querySelector("#tx .blk.flash")`), "horário do slide leva à fala");
+    await evalIn(p, `document.querySelector('[data-act="tab"][data-tab="sl"]').click(); true`);
+    await waitFor(p, `!!document.querySelector(".sl-deck .sl-cover")`, "cartão dos slides");
+    await shot(p, "web-6d-slides-cartao.png");
+    srv.anthropic.reviewText = null;
+  }
+
   // 12) Paleta de comandos
   await go("#/");
   await waitFor(p, `!!document.getElementById("list")`, "lista");

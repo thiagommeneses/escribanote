@@ -7,6 +7,8 @@ import { DEFAULT_TAGS } from "./lib/settings.js";
 import { computeStats, fmtDuration } from "./lib/stats.js";
 import { normalize, toBlocks, mergeSpeakers, speakerName } from "./lib/transcript.js";
 import { commitSummary, diffDocument, diffStats, diffHtml } from "./lib/diff.js";
+import { DECK_KINDS, DECK_SIZES, DECK_STYLES, DECK_PALETTES, DECK_DEFAULTS, deckOptions, cleanDeck } from "./lib/slides.js";
+import { openDeck, deckThumbHtml, downloadPptx, printDeck } from "./lib/deckview.js";
 import "./lib/icons.js"; // ícones da extensão (duotone): globalThis.EsIcons
 
 const { icon, tagIcon } = globalThis.EsIcons;
@@ -593,7 +595,7 @@ function renderMeeting() {
       <article class="tx" id="tx" aria-label="Transcrição"></article>
       <aside class="aside" aria-label="Ata e IA">
         <div class="tabs" role="tablist">
-          ${[["tx", "Transcrição", "tab-tx"], ["ata", "Ata"], ["ia", "Pergunte à IA"], ["hl", "Destaques"], ["an", "Análise"]]
+          ${[["tx", "Transcrição", "tab-tx"], ["ata", "Ata"], ["ia", "Pergunte à IA"], ["sl", "Slides"], ["hl", "Destaques"], ["an", "Análise"]]
             .map(([k, l, cls]) => `<button role="tab" class="${cls || ""}" data-act="tab" data-tab="${k}" aria-selected="${state.tab === k}">${l}</button>`)
             .join("")}
         </div>
@@ -663,6 +665,7 @@ function renderPane() {
   const tab = state.tab === "tx" ? "ata" : state.tab;
   if (tab === "ata") pane.innerHTML = ataPane();
   else if (tab === "ia") pane.innerHTML = iaPane();
+  else if (tab === "sl") pane.innerHTML = slidesPane();
   else if (tab === "hl") pane.innerHTML = hlPane();
   else pane.innerHTML = analysisPane();
   // Contagem e custo: pergunta com mais de 2.000 caracteres custa 2 créditos.
@@ -810,6 +813,120 @@ function iaPane() {
     <div class="ask-box"><textarea class="input" id="ask-input" maxlength="${QUESTION_MAX}" placeholder="Pergunte qualquer coisa sobre esta reunião…" aria-label="Pergunta"></textarea>
       <div class="row"><button class="btn dark" data-act="ask">Perguntar <span class="cost" id="ask-cost">1 crédito</span></button><span class="small muted"><span id="ask-count">0/${QUESTION_MAX.toLocaleString("pt-BR")}</span> · Ctrl+Enter envia</span></div></div>`;
 }
+
+// ---------------- slides ----------------
+// Mesma biblioteca da extensão: a IA monta a apresentação (1 crédito) e os slides ficam salvos na reunião.
+// Estilo, cores e tema mudam depois sem gastar crédito. As capturas de tela ficam no computador, então aqui
+// os slides de imagem aparecem só com o texto.
+const SLIDE_OPTS_KEY = "escribanote.slideOpts";
+const slideUi = { form: false, instructions: "", opts: null };
+function slideOpts() {
+  if (slideUi.opts) return slideUi.opts;
+  try { slideUi.opts = deckOptions({ ...DECK_DEFAULTS, ...JSON.parse(localStorage.getItem(SLIDE_OPTS_KEY) || "{}") }); } catch { slideUi.opts = deckOptions(DECK_DEFAULTS); }
+  return slideUi.opts;
+}
+function slidesPane() {
+  const doc = state.meeting.doc;
+  const deck = cleanDeck(doc.slides);
+  if (!isPro() && !deck) return upsell("Os slides com IA");
+  const busy = state.slidesBusy === state.meeting.id;
+  const o = slideOpts();
+  const words = toBlocks(doc).reduce((n, b) => n + b.text.length, 0);
+  const tooShort = (doc.endedAt || doc.updatedAt) - doc.startedAt < 2 * 60_000 || words < 400;
+  const card = deck
+    ? `<div class="sl-deck">
+        <div class="sl-cover" role="button" tabindex="0" data-act="sl-open" aria-label="Abrir os slides">${deckThumbHtml(deck, doc, {}, 0)}</div>
+        <p class="small" style="margin:8px 0 2px"><b>${esc(deck.title)}</b></p>
+        <p class="small muted" style="margin:0 0 8px">${deck.slides.length} slides · ${esc((DECK_KINDS.find((k) => k.id === deck.kind) || DECK_KINDS[0]).label)} · ${new Date(deck.createdAt || Date.now()).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p>
+        <div class="row"><button class="btn sm primary" data-act="sl-present">Apresentar</button><button class="btn sm" data-act="sl-open">Ver e editar</button><button class="btn sm" data-act="sl-pptx">.pptx</button><button class="btn sm" data-act="sl-pdf">PDF</button></div>
+        <p class="small muted">Clique no horário de um slide para ir à fala de onde ele saiu. O .pptx abre no PowerPoint e no Google Slides, com as notas do apresentador.${deck.slides.some((x) => x.shot) ? " As capturas de tela ficam no computador: abra pela extensão para vê-las nos slides." : ""}</p>
+        ${isPro() && !slideUi.form && !busy ? `<div class="row"><button class="btn sm ghost" data-act="sl-again">Gerar outra versão</button><button class="btn sm ghost danger" data-act="sl-clear">Apagar slides</button></div>` : ""}
+      </div>`
+    : `<div class="empty-pane small"><p><b>Slides a partir desta reunião</b></p><p class="muted">A IA monta a apresentação com o que foi dito: cada slide aponta o momento da reunião de onde saiu e vem com notas do apresentador.</p></div>`;
+  const form = isPro() && (!deck || slideUi.form || busy)
+    ? `<div class="sl-form">
+        <p class="small" style="font-weight:700;margin:0">Tipo de apresentação</p>
+        <div class="sl-kinds">${DECK_KINDS.map((k) => `<label class="sl-kind ${o.kind === k.id ? "on" : ""}"><input type="radio" name="sl-kind" value="${k.id}" ${o.kind === k.id ? "checked" : ""}><b>${esc(k.label)}</b><span>${esc(k.hint)}</span></label>`).join("")}</div>
+        <div class="sl-grid">
+          <label class="field"><span class="small muted">Tamanho</span><select class="input" id="sl-size">${DECK_SIZES.map((z) => `<option value="${z.id}" ${o.size === z.id ? "selected" : ""}>${esc(z.label)}</option>`).join("")}</select></label>
+          <label class="field"><span class="small muted">Estilo</span><select class="input" id="sl-style">${DECK_STYLES.map((z) => `<option value="${z.id}" ${o.style === z.id ? "selected" : ""}>${esc(z.label)}</option>`).join("")}</select></label>
+          <label class="field"><span class="small muted">Tema</span><select class="input" id="sl-mode"><option value="claro" ${o.mode === "claro" ? "selected" : ""}>Claro</option><option value="escuro" ${o.mode === "escuro" ? "selected" : ""}>Escuro</option></select></label>
+        </div>
+        <div class="sl-pal" role="radiogroup" aria-label="Cores">${DECK_PALETTES.map((p) => `<button type="button" role="radio" aria-checked="${o.palette === p.id}" data-act="sl-pal" data-pal="${p.id}" style="--sw:#${p.accent}"><span></span>${esc(p.label)}</button>`).join("")}</div>
+        <div class="sl-preview" aria-hidden="true">${deckThumbHtml({ title: doc.title, ...o, slides: [{ layout: "capa", title: doc.title }] }, doc, {}, 0)}${deckThumbHtml({ title: doc.title, ...o, slides: [{ layout: "capa", title: doc.title }, { layout: "topicos", title: "Assim ficam os tópicos", bullets: ["Cada slide traz o momento da reunião", "Notas do apresentador em todos"], at: doc.startedAt }] }, doc, {}, 1)}</div>
+        <label class="field"><span class="small muted">Instruções (opcional)</span><textarea class="input" id="sl-inst" rows="2" maxlength="1000" placeholder="Ex.: foque nas decisões de preço; público: diretoria">${esc(slideUi.instructions)}</textarea></label>
+        <div class="row"><button class="btn dark" data-act="sl-gen" ${busy || tooShort ? "disabled" : ""}>${busy ? "Montando os slides…" : deck ? "Gerar de novo" : "Gerar slides"} ${busy ? "" : '<span class="cost">1 crédito</span>'}</button>${deck && !busy ? '<button class="btn sm ghost" data-act="sl-cancel">Cancelar</button>' : ""}</div>
+        <p class="small muted">${busy ? "Leva até um minuto." : tooShort ? "Slides só a partir de 2 minutos de reunião com falas." : "Estilo, cores e tema também mudam depois, sem gastar crédito."}</p>
+      </div>`
+    : "";
+  return card + form;
+}
+async function generateSlides() {
+  const m = state.meeting;
+  if (state.slidesBusy) return;
+  const options = { ...slideOpts(), instructions: $("sl-inst")?.value || "" };
+  try { localStorage.setItem(SLIDE_OPTS_KEY, JSON.stringify({ kind: options.kind, size: options.size, style: options.style, palette: options.palette, mode: options.mode })); } catch {}
+  state.slidesBusy = m.id;
+  renderPane();
+  try {
+    const r = await api.post("/ai/slides", { meetingId: m.id, options });
+    setCredits(r.balance);
+    if (state.meeting?.id === m.id) {
+      m.doc.slides = r.deck;
+      if (r.version) m.version = r.version;
+    }
+    slideUi.form = false;
+    slideUi.instructions = "";
+    toast(`${r.deck.slides.length} slides prontos`);
+    state.slidesBusy = null;
+    if (state.meeting?.id === m.id && state.tab === "sl") { renderPane(); openSlides(); }
+  } catch (err) {
+    handleError(err);
+  }
+  state.slidesBusy = null;
+  if (state.tab === "sl") renderPane();
+}
+function openSlides({ present = false } = {}) {
+  const m = state.meeting;
+  const deck = cleanDeck(m.doc.slides);
+  if (!deck) return;
+  openDeck({
+    deck,
+    session: m.doc,
+    present,
+    editable: isPro(),
+    onSave: async (d) => {
+      if (state.meeting?.id !== m.id) return;
+      const ok = await saveDoc((doc) => { doc.slides = d; });
+      if (!ok) throw new Error("Não salvou");
+      if (state.tab === "sl") renderPane();
+    },
+    onJump: (rel) => {
+      if (state.meeting?.id !== m.id) return;
+      const at = m.doc.startedAt + rel;
+      const blocks = toBlocks(m.doc).filter((b) => b.kind !== "chat");
+      const b = blocks.filter((x) => x.startAt <= at + 2000).pop() || blocks[0];
+      if (b) jumpTo(b.ids[0]);
+    },
+    onRegenerate: isPro() ? () => { slideUi.form = true; state.tab = "sl"; renderPane(); } : null,
+  });
+}
+document.addEventListener("change", (e) => {
+  if (!e.target.closest?.("#pane") || state.tab !== "sl") return;
+  const o = slideOpts();
+  const t = e.target;
+  if (t.name === "sl-kind") o.kind = t.value;
+  else if (t.id === "sl-size") o.size = t.value;
+  else if (t.id === "sl-style") o.style = t.value;
+  else if (t.id === "sl-mode") o.mode = t.value;
+  else return;
+  slideUi.instructions = $("sl-inst")?.value || slideUi.instructions;
+  renderPane();
+});
+document.addEventListener("input", (e) => { if (e.target.id === "sl-inst") slideUi.instructions = e.target.value; });
+document.addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.closest?.(".sl-cover")) { e.preventDefault(); openSlides(); }
+});
 
 function hlPane() {
   const blocks = toBlocks(state.meeting.doc).filter((b) => b.tags.length);
@@ -1747,6 +1864,30 @@ view.addEventListener("click", async (e) => {
       case "tpl-cancel":
         state.tplEdit = null;
         return renderDrawer();
+      case "sl-gen":
+        return generateSlides();
+      case "sl-open":
+        return openSlides();
+      case "sl-present":
+        return openSlides({ present: true });
+      case "sl-pptx":
+        return downloadPptx(cleanDeck(m.doc.slides), m.doc, {});
+      case "sl-pdf":
+        return printDeck(cleanDeck(m.doc.slides), m.doc, {});
+      case "sl-pal":
+        slideOpts().palette = el.dataset.pal;
+        slideUi.instructions = $("sl-inst")?.value || slideUi.instructions;
+        return renderPane();
+      case "sl-again":
+        slideUi.form = true;
+        return renderPane();
+      case "sl-cancel":
+        slideUi.form = false;
+        return renderPane();
+      case "sl-clear":
+        if (!confirm("Apagar os slides desta reunião? A transcrição e a ata continuam.")) return;
+        await saveDoc((doc) => { doc.slides = null; });
+        return renderPane();
       case "quick":
         return askMeeting(el.dataset.q);
       case "ask":

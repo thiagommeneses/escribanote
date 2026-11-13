@@ -15,6 +15,12 @@ Todas em `/api/v1` (mais `/s/{token}` para os links públicos). Tabela completa 
 endpoints". Autenticação: cookie `rs` (app web, com o cabeçalho `X-Escribanote: 1` nas escritas) ou
 `Authorization: Bearer` (extensão).
 
+## Slides
+
+`POST /api/v1/ai/slides` (1 crédito, `config.models.strong`, esquema JSON): monta a apresentação de uma reunião com a
+biblioteca da extensão (`extension/src/lib/slides.js`). Pelo app web (`meetingId`) o deck fica salvo em `doc.slides`; a
+extensão manda a reunião e até 12 capturas de tela com id, que não ficam no servidor. Falha da IA devolve o crédito.
+
 ## Slack (opcional)
 
 Crie o app uma vez em https://api.slack.com/apps › *Create New App* › *From a manifest*, colando
@@ -37,7 +43,7 @@ atas e pode ligar "publicar sozinho". Perguntas no thread da ata chegam por `/ap
 ```bash
 docker run -d --name escribanote-pg-test -e POSTGRES_PASSWORD=teste -e POSTGRES_DB=escribanote_test -p 127.0.0.1:55432:5432 postgres:17-alpine
 npm install
-npm test                                   # 64 testes contra Postgres real (IA e Stripe simuladas; SDKs reais checados pela rede)
+npm test                                   # 65 testes contra Postgres real (IA e Stripe simuladas; SDKs reais checados pela rede)
 node scripts/dev-server.js 8787            # API + site + app em http://127.0.0.1:8787/app/ (e-mail, IA e Stripe simulados)
 CHROME=/caminho/do/chrome node test/e2e-web.mjs [pasta]              # área logada num Chrome real
 CHROME=/caminho/do/chrome node ../extension/test/e2e-account.mjs     # extensão + app + API: conectar, sincronizar, IA da conta

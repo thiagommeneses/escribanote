@@ -4,3 +4,4 @@ export { toText, mdToHtml, dateLabel, clock, PLATFORM } from "../../extension/sr
 export { ataRequest, chatRequest, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, REVIEW_SCHEMA, QUICK_PROMPTS, chaptersRequest, parseChapters, CHAPTERS_MIN_MS, QUESTION_MAX, ANSWER_MAX_TOKENS, questionCredits, isHeavyQuestion, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, SHOTS_MAX, withSources, phaseOf, continuation, MAX_CONTINUES, CUT_NOTE, stoppedNote } from "../../extension/src/lib/ai.js";
 export { DEFAULT_TAGS } from "../../extension/src/lib/settings.js";
 export { commitSummary, diffDocument, diffStats } from "../../extension/src/lib/diff.js";
+export { slidesRequest, parseDeck, cleanDeck, SLIDES_SHOTS_MAX, SLIDES_MIN_MS } from "../../extension/src/lib/slides.js";
