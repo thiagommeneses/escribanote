@@ -114,6 +114,11 @@ function setCredits(balance) {
   state.me.credits.balance = balance;
   renderCredits();
 }
+// O servidor devolve o crédito quando a resposta é interrompida; o saldo é relido um instante depois.
+const STOPPED_NOTE = "_(Resposta interrompida por você.)_";
+function refreshCredits() {
+  setTimeout(() => api.get("/me").then((me) => { state.me = me; renderCredits(); }).catch(() => {}), 1500);
+}
 function renderCredits() {
   const el = $("credits");
   const c = state.me?.credits;
@@ -811,7 +816,7 @@ function iaPane() {
   return `<div class="qa" id="qa">${qa.map((x) => `<div class="q">${esc(x.q)}</div><div class="a">${x.a ? mdToHtml(x.a) : thinkingHtml(x.t0)}</div>`).join("")}</div>
     <div class="quick">${quick.map((p) => `<button class="chip" data-act="quick" data-q="${esc(p.text)}">${esc(p.label)}</button>`).join("")}</div>
     <div class="ask-box"><textarea class="input" id="ask-input" maxlength="${QUESTION_MAX}" placeholder="Pergunte qualquer coisa sobre esta reunião…" aria-label="Pergunta"></textarea>
-      <div class="row"><button class="btn dark" data-act="ask">Perguntar <span class="cost" id="ask-cost">1 crédito</span></button><span class="small muted"><span id="ask-count">0/${QUESTION_MAX.toLocaleString("pt-BR")}</span> · Ctrl+Enter envia</span></div></div>`;
+      <div class="row">${state.aiStop ? '<button class="btn danger" data-act="ai-stop" title="Interromper a resposta (o que já veio fica na conversa)">Parar</button>' : '<button class="btn dark" data-act="ask">Perguntar <span class="cost" id="ask-cost">1 crédito</span></button>'}<span class="small muted"><span id="ask-count">0/${QUESTION_MAX.toLocaleString("pt-BR")}</span> · Ctrl+Enter envia</span></div></div>`;
 }
 
 // ---------------- slides ----------------
@@ -1205,8 +1210,11 @@ async function askMeeting(question) {
   state.tab = "ia";
   renderPane();
   const answerEl = () => [...$("qa").querySelectorAll(".a")].at(-1);
+  const stop = (state.aiStop = new AbortController());
+  renderPane();
   try {
     const done = await stream("/ai/ask", { meetingId: id, history: [...history, { role: "user", text: question }] }, {
+      signal: stop.signal,
       onStart: (d) => setCredits(d.balance),
       onDelta: (text) => {
         item.a = text;
@@ -1225,11 +1233,22 @@ async function askMeeting(question) {
       d.chats.push({ id: `web-${Date.now().toString(36)}`, createdAt: Date.now(), messages: [{ role: "user", text: question, at: Date.now() }, { role: "assistant", text: done.text, at: Date.now() }] });
     });
   } catch (err) {
-    qa.pop();
-    handleError(err);
+    if (stop.signal.aborted && item.a.trim()) {
+      // Parar: o que já veio fica na conversa, marcado; o servidor devolve o crédito da resposta cortada.
+      item.a += `\n\n${STOPPED_NOTE}`;
+      await saveDoc((d) => {
+        d.chats = d.chats || [];
+        d.chats.push({ id: `web-${Date.now().toString(36)}`, createdAt: Date.now(), messages: [{ role: "user", text: question, at: Date.now() }, { role: "assistant", text: item.a, at: Date.now() }] });
+      }).catch(() => {});
+    } else {
+      qa.pop();
+      if (!stop.signal.aborted) handleError(err);
+    }
   }
+  if (state.aiStop === stop) state.aiStop = null;
   state.busy = false;
   renderPane();
+  if (stop.signal.aborted) refreshCredits();
 }
 
 function renderDrawer() {
@@ -1328,7 +1347,7 @@ function renderAskAll() {
     <div class="panel ask-box">
       <textarea class="input" id="askall-input" placeholder="Ex.: O que decidimos sobre o orçamento de mídia este mês?" ${isPro() ? "" : "disabled"}></textarea>
       <div class="row"><label class="row small">Período <select class="input" id="askall-days" style="width:auto"><option value="7">7 dias</option><option value="30" selected>30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option></select></label>
-      <button class="btn dark" data-act="askall" ${isPro() ? "" : "disabled"}>Perguntar <span class="cost">2 créditos</span></button></div>
+      ${state.aiStop ? '<button class="btn danger" data-act="ai-stop" title="Interromper a resposta">Parar</button>' : `<button class="btn dark" data-act="askall" ${isPro() ? "" : "disabled"}>Perguntar <span class="cost">2 créditos</span></button>`}</div>
     </div></section>`;
 }
 
@@ -1339,9 +1358,12 @@ async function askAll() {
   const item = { q: question, a: "", t0: Date.now() };
   state.askAll.push(item);
   const history = state.askAll.slice(-6).flatMap((x) => [{ role: "user", text: x.q }, ...(x.a ? [{ role: "assistant", text: x.a }] : [])]);
+  const stop = (state.aiStop = new AbortController());
+  const days = Number($("askall-days").value);
   renderAskAll();
   try {
-    const done = await stream("/ai/ask_all", { history, days: Number($("askall-days").value) }, {
+    const done = await stream("/ai/ask_all", { history, days }, {
+      signal: stop.signal,
       onStart: (d) => setCredits(d.balance),
       onDelta: (text) => {
         item.a = text;
@@ -1351,11 +1373,16 @@ async function askAll() {
     item.a = done.text;
     setCredits(done.balance);
   } catch (err) {
-    state.askAll.pop();
-    handleError(err);
+    if (stop.signal.aborted && item.a.trim()) item.a += `\n\n${STOPPED_NOTE}`;
+    else {
+      state.askAll.pop();
+      if (!stop.signal.aborted) handleError(err);
+    }
   }
+  if (state.aiStop === stop) state.aiStop = null;
   state.busy = false;
   renderAskAll();
+  if (stop.signal.aborted) refreshCredits();
 }
 
 // ---------------- conta ----------------
@@ -1903,6 +1930,9 @@ view.addEventListener("click", async (e) => {
         return askMeeting($("ask-input").value);
       case "askall":
         return askAll();
+      case "ai-stop":
+        state.aiStop?.abort();
+        return;
       case "export": {
         const f = FORMATS[el.dataset.f];
         return download(fileName(m.doc, el.dataset.f), f.render(m.doc, { tags: DEFAULT_TAGS }), f.mime);

@@ -86,6 +86,8 @@
     button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
     .ib { width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; color: var(--w-fg2); }
     .ib:hover { background: var(--w-hover); color: var(--w-strong); }
+    .ib.stop { color: #fff; background: #dc2626; }
+    .ib.stop:hover { background: #b91c1c; color: #fff; }
     .ib.due { color: var(--w-warn); position: relative; }
     .ib.due::after { content: ""; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--w-warn); animation: due 1.6s ease-in-out infinite; }
     @keyframes due { 50% { opacity: .25; } }
@@ -648,13 +650,31 @@
     const b = e.target.closest("[data-q]");
     if (b) ask(b.dataset.q);
   });
-  $("ai-send").addEventListener("click", () => ask($("ai-input").value));
+  // Enquanto a IA responde, o botão vira Parar: corta a resposta e o que já veio fica na tela.
+  const aiButton = (running) => {
+    const b = $("ai-send");
+    b.innerHTML = svg(running ? "stop" : "send");
+    b.title = running ? "Parar a resposta" : "Perguntar";
+    b.setAttribute("aria-label", b.title);
+    b.classList.toggle("stop", running);
+  };
+  function stopAsk() {
+    const port = aiPort;
+    if (!port) return;
+    aiPort = null;
+    try { port.disconnect(); } catch {}
+    const el = $("ai-answer");
+    const partial = el.querySelector(".thinking") ? "" : el.textContent.trim();
+    el.textContent = partial ? `${partial}\n\n(Resposta interrompida.)` : "Pergunta cancelada.";
+    aiButton(false);
+  }
+  $("ai-send").addEventListener("click", () => (aiPort ? stopAsk() : ask($("ai-input").value)));
   $("ai-input").addEventListener("keydown", (e) => e.key === "Enter" && ask($("ai-input").value));
 
   function ask(question) {
     question = (question || "").trim();
     if (!question || !session) return;
-    if (aiPort) aiPort.disconnect();
+    if (aiPort) { const old = aiPort; aiPort = null; try { old.disconnect(); } catch {} }
     $("ai-input").value = "";
     $("ai-answer").innerHTML = '<span class="thinking" role="status">Pensando<i>.</i><i>.</i><i>.</i></span>';
     if (!alive()) { $("ai-answer").textContent = "Extensão atualizada: recarregue a página para perguntar à IA."; return; }
@@ -668,6 +688,7 @@
       $("ai-answer").textContent = msg;
       try { port.disconnect(); } catch {}
       aiPort = null;
+      aiButton(false);
     };
     const arm = () => { clearTimeout(quiet); quiet = setTimeout(() => fail("A IA ficou mais de 1 minuto sem dar sinal. Tente de novo."), 60_000); };
     arm();
@@ -680,10 +701,11 @@
       if (m.type === "done" || m.type === "error") {
         clearTimeout(quiet);
         port.disconnect();
-        if (aiPort === port) aiPort = null;
+        if (aiPort === port) { aiPort = null; aiButton(false); }
       }
     });
     aiPort.postMessage({ action: "chat", id: session.id, chatId, question });
+    aiButton(true);
   }
 
   $("caps").addEventListener("click", async () => {

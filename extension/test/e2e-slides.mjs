@@ -170,7 +170,20 @@ try {
   assert.equal(await ev(`!!document.querySelector(".esv-present")`), false);
 
   // 6. O horário do slide leva à fala na transcrição.
+  // Primeiro abre um balão com a fala daquele momento, sem sair dos slides; Esc fecha só o balão.
   await ev(`document.querySelector(".esv-main .esd-at").click()`);
+  await waitFor(`!!document.querySelector(".esv-pop .esv-pop-msg.main")`, "balão com a fala");
+  assert.equal(await ev(`!!document.querySelector(".esv")`), true, "o visualizador continua aberto");
+  assert.ok((await ev(`document.querySelector(".esv-pop").textContent`)).length > 20);
+  await shot("05-balao-horario");
+  await ev(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
+  await sleep(200);
+  assert.equal(await ev(`!!document.querySelector(".esv-pop")`), false, "Esc fecha o balão");
+  assert.equal(await ev(`!!document.querySelector(".esv")`), true, "e não fecha os slides");
+  // "Ver na transcrição completa" leva à fala.
+  await ev(`document.querySelector(".esv-main .esd-at").click()`);
+  await waitFor(`!!document.querySelector('.esv-pop [data-pop="jump"]')`, "botão da transcrição");
+  await ev(`document.querySelector('.esv-pop [data-pop="jump"]').click()`);
   await sleep(600);
   assert.equal(await ev(`!!document.querySelector(".esv")`), false, "o visualizador fecha");
   assert.equal(await ev(`document.querySelector('.subtabs [aria-selected="true"]').dataset.tab`), "transcript");

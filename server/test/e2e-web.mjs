@@ -148,6 +148,21 @@ try {
   check(chats === 1, "conversa salva na reunião");
   await shot(p, "web-4-pergunta.png");
 
+  // 6b) Parar a resposta no meio: o que veio fica na conversa, marcado, e o crédito volta
+  const credBefore = await evalIn(p, `document.getElementById("credits").textContent`);
+  srv.anthropic.text = "Resposta longa que vai sendo escrita aos poucos. ".repeat(20);
+  srv.anthropic.delayMs = 120;
+  await evalIn(p, `document.getElementById("ask-input").value = "Explique tudo em detalhes"; document.querySelector('[data-act="ask"]').click(); true`);
+  await waitFor(p, `!!document.querySelector('[data-act="ai-stop"]') && ([...document.querySelectorAll("#qa .a")].at(-1)?.textContent || "").includes("aos poucos")`, "resposta começando e botão Parar");
+  await shot(p, "web-4b-parar.png");
+  await evalIn(p, `document.querySelector('[data-act="ai-stop"]').click(); true`);
+  await waitFor(p, `([...document.querySelectorAll("#qa .a")].at(-1)?.textContent || "").includes("interrompida") && !!document.querySelector('[data-act="ask"]')`, "resposta interrompida");
+  srv.anthropic.delayMs = 0;
+  await sleep(2500);
+  check(await evalIn(p, `document.getElementById("credits").textContent`) === credBefore, "parar devolve o crédito");
+  const chats2 = await evalIn(p, `fetch("/api/v1/meetings/mt-1").then((r) => r.json()).then((d) => d.doc.chats.length)`);
+  check(chats2 === 2, "resposta interrompida fica salva na conversa");
+
   // 7) Renomear participante
   await evalIn(p, `document.querySelector('.spk[data-spk="b"]').click(); true`);
   await sleep(200);
@@ -220,6 +235,10 @@ try {
     const savedSl = await evalIn(p, `fetch("/api/v1/meetings/mt-3").then((r) => r.json()).then((d) => d.doc.slides)`);
     check(savedSl?.slides?.[1]?.title === "Testes falham em dois ambientes" && savedSl.palette === "roxo" && savedSl.kind === "aula", "edição salva na reunião da conta");
     await evalIn(p, `document.querySelector(".esv-main .esd-at").click(); true`);
+    await waitFor(p, `!!document.querySelector(".esv-pop .esv-pop-msg.main")`, "balão com a fala do horário");
+    check(await evalIn(p, `!!document.querySelector(".esv") && /Bruno|Ana/.test(document.querySelector(".esv-pop").textContent)`), "horário do slide abre o balão com a fala, sem sair dos slides");
+    await shot(p, "web-6c2-slides-balao.png");
+    await evalIn(p, `document.querySelector('.esv-pop [data-pop="jump"]').click(); true`);
     await sleep(500);
     check(await evalIn(p, `!document.querySelector(".esv") && !!document.querySelector("#tx .blk.flash")`), "horário do slide leva à fala");
     await evalIn(p, `document.querySelector('[data-act="tab"][data-tab="sl"]').click(); true`);
