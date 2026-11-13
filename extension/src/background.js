@@ -12,6 +12,7 @@ import { learnProfiles, loadProfiles, saveProfiles } from "./lib/voiceprofiles.j
 import { readTrack } from "./lib/audiovault.js";
 import { accountBase, accountFetch, accountStream, getAccount, setAccount, AccountError, accountIsPro } from "./lib/account.js";
 import { mergeDocs, sameContent } from "./lib/sync.js";
+import { slidesRequest, parseDeck, cleanDeck, SLIDES_SHOTS_MAX, SLIDES_MIN_MS } from "./lib/slides.js";
 import { streamClaude, ataRequest, chatRequest, previousContext, reviewRequest, parseReview, templateFromPdfRequest, templateFromTextRequest, API_ORIGIN, chaptersRequest, chaptersQuestion, parseChapters, CHAPTERS_MIN_MS, ANSWER_MAX_TOKENS, chatModel, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, sampleShots, withSources, EmptyAnswer } from "./lib/ai.js";
 import { captionLanguageIssue } from "./lib/lang.js";
 import { compileGlossary, applyGlossary, glossaryForPrompt, fuzzyTargets, applyFuzzy } from "./lib/glossary.js";
@@ -563,6 +564,54 @@ async function generateChapters(s) {
   await changed(s, { now: true });
   return s;
 }
+// Slides por IA: chave própria (esquema JSON) ou conta Pro (/ai/slides, 1 crédito). As capturas de tela
+// vão com id, para a IA escolher as que entram nos slides; ficam no computador como sempre.
+async function slideShots(s, use) {
+  if (!use || !s.shots.length) return [];
+  const pick = sampleShots(s.shots, SLIDES_SHOTS_MAX);
+  const got = await chrome.storage.local.get(pick.map((x) => `shot:${s.id}:${x.id}`));
+  return pick
+    .map((x) => {
+      const m = /^data:(image\/(?:jpeg|png));base64,(.*)$/.exec(got[`shot:${s.id}:${x.id}`] || "");
+      return m ? { id: x.id, at: clock(x.at - s.startedAt), mime: m[1], data: m[2] } : null;
+    })
+    .filter(Boolean);
+}
+async function generateSlides(s, options = {}) {
+  const dur = (s.endedAt || s.updatedAt) - s.startedAt;
+  if (dur < SLIDES_MIN_MS || toBlocks(s, { includeChat: false }).reduce((n, b) => n + b.text.length, 0) < 400) throw new Error("Slides só a partir de 2 minutos de reunião com falas.");
+  const settings = await getSettings();
+  const ai = await aiProvider();
+  if (!ai) throw new Error(NO_AI);
+  const shots = await slideShots(s, options.shots !== false);
+  let deck;
+  if (ai.kind === "key") {
+    const req = slidesRequest(s, options, shots);
+    let r;
+    try {
+      r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...req, maxTokens: 24000 });
+    } catch (err) {
+      if (!(err instanceof EmptyAnswer)) throw err;
+      const { format, ...plain } = req;
+      r = await streamClaude({ apiKey: ai.apiKey, model: settings.aiModel, ...plain, system: `${plain.system}\nResponda só com o JSON, sem texto antes ou depois.`, maxTokens: 24000 });
+    }
+    deck = parseDeck(r.text, s, options, shots.map((x) => x.id));
+    if (!deck) throw new Error("A IA não conseguiu montar os slides desta reunião. Tente de novo.");
+    deck.by = settings.aiModel;
+  } else {
+    const r = await accountCall(() => accountFetch("/ai/slides", { method: "POST", body: { meeting: forAccount(s), options, shots } }));
+    deck = cleanDeck(r.deck);
+    if (!deck) throw new Error("A IA não conseguiu montar os slides desta reunião. Tente de novo.");
+    deck.by = "pro";
+  }
+  // a reunião pode ter mudado durante a geração: grava na versão mais nova
+  const fresh = (await getSession(s.id)) || s;
+  fresh.slides = deck;
+  noteEvent(fresh, "slides", { count: deck.slides.length, by: deck.by, kind: deck.kind, shots: shots.length });
+  await changed(fresh, { now: true });
+  return fresh;
+}
+
 async function maybeAutoChapters(s) {
   const settings = await getSettings();
   if (!settings.chaptersAuto || (s.chapters && s.chapters.length)) return;
@@ -1291,6 +1340,24 @@ async function handle(msg, sender) {
     case "chapters": {
       if (!s) throw new Error("Reunião não encontrada.");
       return generateChapters(s);
+    }
+    case "slides": {
+      if (!s) throw new Error("Reunião não encontrada.");
+      return generateSlides(s, msg.options || {});
+    }
+    case "slides-save": {
+      if (!s) throw new Error("Reunião não encontrada.");
+      const deck = cleanDeck(msg.deck);
+      if (!deck) throw new Error("Slides inválidos.");
+      s.slides = deck;
+      await changed(s, { now: true });
+      return s;
+    }
+    case "slides-clear": {
+      if (!s) return null;
+      s.slides = null;
+      await changed(s, { now: true });
+      return s;
     }
     case "chapters-clear": {
       if (!s) return null;

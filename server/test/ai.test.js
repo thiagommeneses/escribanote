@@ -225,6 +225,65 @@ test("capítulos: endpoint próprio com esquema, 1 crédito, ajustados às falas
   ctx.anthropic.reviewText = null;
 });
 
+test("slides: 1 crédito, esquema JSON, horários colados nas falas, capturas validadas e salvos na reunião da conta", async () => {
+  const t0 = Date.UTC(2026, 9, 21, 13, 0);
+  const entries = Array.from({ length: 8 }, (_, i) => ({ id: `s${i}`, at: t0 + (i + 1) * 60_000, updatedAt: t0 + (i + 1) * 60_000 + 4000, speakerId: i % 2 ? "b" : "a", text: `Ponto ${i}: a receita do trimestre subiu e o lançamento foi adiado para março por causa dos testes.`, kind: "caption" }));
+  await u.put("/api/v1/meetings/mt-sl", { doc: sampleMeeting("mt-sl", { startedAt: t0, updatedAt: t0 + 9 * 60_000, endedAt: t0 + 9 * 60_000, entries, highlights: {} }) });
+  await ctx.db.query("UPDATE credit_balances SET balance = 10 WHERE user_id = $1", [u.me.id]);
+  const slide = (o) => ({ layout: "topicos", title: "", bullets: [], stats: [], quote: "", speaker: "", notes: "", at: "00:00", shot: "", ...o });
+  ctx.anthropic.reviewText = JSON.stringify({
+    title: "Lançamento adiado", subtitle: "Planejamento",
+    slides: [
+      slide({ layout: "capa", title: "Lançamento adiado", at: "00:00:10" }),
+      slide({ title: "Receita subiu", bullets: ["Trimestre forte", ""], at: "00:03:05", notes: "Diga o número." }),
+      slide({ layout: "imagem", title: "Painel", bullets: ["Gráfico"], shot: "inexistente", at: "00:05:00" }),
+      slide({ layout: "numeros", title: "Só um número", stats: [{ value: "37%", label: "receita" }] }),
+    ],
+  });
+  const before = await balance();
+  const r = await u.post("/api/v1/ai/slides", { meetingId: "mt-sl", options: { kind: "aula", style: "classico", palette: "verde", mode: "escuro", size: "curto" } });
+  assert.equal(r.statusCode, 200, r.body);
+  const deck = r.json().deck;
+  assert.equal(r.json().credits, 1);
+  assert.equal(await balance(), before - 1);
+  assert.deepEqual([deck.kind, deck.style, deck.palette, deck.mode, deck.by], ["aula", "classico", "verde", "escuro", "pro"]);
+  assert.deepEqual(deck.slides.map((s) => s.layout), ["capa", "topicos", "topicos", "topicos"], "imagem sem captura e números com um só viram tópicos");
+  assert.deepEqual(deck.slides.map((s) => s.at - t0), [60_000, 180_000, 300_000, 60_000]);
+  assert.deepEqual(deck.slides[1].bullets, ["Trimestre forte"]);
+  const p = ctx.anthropic.calls[0].params;
+  assert.equal(p.model, "claude-sonnet-5-5");
+  assert.equal(p.output_config.format.type, "json_schema");
+  assert.match(p.system, /Aula ou treinamento/);
+  assert.match(p.system, /de 5 a 7 slides/);
+  assert.match(p.messages[0].content[0].text, /\[00:03:00\] Ana: Ponto 2/);
+  const saved = (await u.get("/api/v1/meetings/mt-sl")).json().doc;
+  assert.equal(saved.slides.title, "Lançamento adiado");
+  // a extensão manda a reunião e capturas com id; id inválido é recusado antes de cobrar
+  ctx.anthropic.calls.length = 0;
+  const badShot = await u.post("/api/v1/ai/slides", { meetingId: "mt-sl", shots: [{ id: "a b", data: "AAAA" }] });
+  assert.equal(badShot.statusCode, 400);
+  assert.equal(ctx.anthropic.calls.length, 0);
+  const withShot = await u.post("/api/v1/ai/slides", { meetingId: "mt-sl", shots: [{ id: "sh1", at: "00:02:00", mime: "image/jpeg", data: "AAAA" }] });
+  assert.equal(withShot.statusCode, 200, withShot.body);
+  const content = ctx.anthropic.calls[0].params.messages[0].content;
+  assert.ok(content.some((c) => c.type === "image"));
+  assert.match(content.find((c) => /captura id="sh1"/.test(c.text || "")).text, /horario="00:02:00"/);
+  // reunião curta: recusa antes de cobrar
+  ctx.anthropic.calls.length = 0;
+  const short = await u.post("/api/v1/ai/slides", { meetingId: "mt-1" });
+  assert.equal(short.statusCode, 400);
+  assert.equal(short.json().error, "too_short");
+  assert.equal(ctx.anthropic.calls.length, 0);
+  // resposta inválida: crédito devolvido
+  const mid = await balance();
+  ctx.anthropic.reviewText = '{"slides":[]}';
+  const bad = await u.post("/api/v1/ai/slides", { meetingId: "mt-sl" });
+  assert.equal(bad.statusCode, 502);
+  assert.match(bad.json().message, /crédito foi devolvido/);
+  assert.equal(await balance(), mid);
+  ctx.anthropic.reviewText = null;
+});
+
 test("sem créditos: 402 com a data da renovação e sem chamar a IA", async () => {
   await ctx.db.query("UPDATE credit_balances SET balance = 0 WHERE user_id = $1", [u.me.id]);
   const r = await u.post("/api/v1/ai/ask", { meetingId: "mt-1", history: [{ role: "user", text: "Resumo?" }] });

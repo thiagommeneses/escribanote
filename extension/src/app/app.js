@@ -9,6 +9,8 @@ import { diffDocument, diffStats, diffHtml as versionDiffHtml } from "../lib/dif
 import { getBackupDir, setBackupDir, backupPermission, resolveBackupFolder, readBackupFolder } from "../lib/backup.js";
 import { readTrack, writeTrackFile } from "../lib/audiovault.js";
 import { accountIsPro } from "../lib/account.js";
+import { DECK_KINDS, DECK_SIZES, DECK_STYLES, DECK_PALETTES, DECK_DEFAULTS, deckOptions, cleanDeck } from "../lib/slides.js";
+import { openDeck, deckThumbHtml, downloadPptx, printDeck } from "../lib/deckview.js";
 import "../lib/icons.js";
 
 const { icon, tagIcon, TAG_ICONS } = globalThis.EsIcons;
@@ -360,9 +362,9 @@ function renderMeeting() {
   for (const b of document.querySelectorAll(".subtabs button")) b.setAttribute("aria-selected", b.dataset.tab === state.tab);
   const nv = (s.summaryHistory || []).length;
   $("c-ata").textContent = nv > 1 ? `v${nv}` : "";
-  for (const p of ["transcript", "highlights", "notes", "ata", "ai", "stats", "diag"]) $(`pane-${p}`).hidden = p !== state.tab;
+  for (const p of ["transcript", "highlights", "notes", "ata", "ai", "slides", "stats", "diag"]) $(`pane-${p}`).hidden = p !== state.tab;
 
-  ({ transcript: renderTranscript, highlights: renderHighlights, notes: renderNotes, ata: renderAta, ai: renderAI, stats: renderStats, diag: renderDiag })[state.tab]();
+  ({ transcript: renderTranscript, highlights: renderHighlights, notes: renderNotes, ata: renderAta, ai: renderAI, slides: renderSlides, stats: renderStats, diag: renderDiag })[state.tab]();
 }
 
 function renderHqButton() {
@@ -832,7 +834,10 @@ document.addEventListener("click", (e) => {
   const c = e.target.closest("[data-cite]");
   if (!c || !state.session) return;
   e.preventDefault();
-  const at = state.session.startedAt + citeMs(c.dataset.cite);
+  jumpToMs(state.session.startedAt + citeMs(c.dataset.cite));
+});
+// Leva a transcrição ao instante (ms absolutos): citações da ata e da IA, horário dos slides.
+function jumpToMs(at) {
   if (state.query) { $("t-search").value = ""; state.query = ""; } // um filtro de busca esconderia o trecho
   state.tab = "transcript";
   state.follow = false;
@@ -844,7 +849,7 @@ document.addEventListener("click", (e) => {
   el.scrollIntoView({ block: "center", behavior: "smooth" });
   el.classList.add("flash");
   setTimeout(() => el.classList.remove("flash"), 1600);
-});
+}
 
 // ----- Localizar e substituir (usa o texto da busca como "o que trocar") -----
 function replaceOpts() {
@@ -1394,6 +1399,156 @@ async function renderAta() {
   $("ata-versions-btn").classList.toggle("has-history", hist.length > 1);
   if (!$("ata-versions").hidden) renderVersions();
 }
+
+// ----- Slides -----
+// A IA monta a apresentação (chave própria ou 1 crédito do Pro); estilo, cores e tema mudam depois sem custo.
+const SLIDE_OPTS_KEY = "escribanote.slideOpts";
+function slideOpts() {
+  try { return deckOptions({ ...DECK_DEFAULTS, ...JSON.parse(localStorage.getItem(SLIDE_OPTS_KEY) || "{}") }); } catch { return deckOptions(DECK_DEFAULTS); }
+}
+function saveSlideOpts(o) {
+  try { localStorage.setItem(SLIDE_OPTS_KEY, JSON.stringify({ kind: o.kind, size: o.size, style: o.style, palette: o.palette, mode: o.mode })); } catch {}
+}
+async function slideShotUrls(s) {
+  return s.shots.length ? (await send({ type: "get-shots", id: s.id })) || {} : {};
+}
+async function renderSlides() {
+  const s = state.session;
+  const pane = $("pane-slides");
+  const st = (state.slidesUi ||= { form: false, instructions: "", shots: true });
+  const deck = cleanDeck(s.slides);
+  const busy = state.slidesBusy === s.id;
+  const ai = await aiStatus();
+  if (state.session !== s || state.tab !== "slides") return;
+  const o = st.opts || (st.opts = slideOpts());
+  const cost = ai.kind === "pro" ? "1 crédito" : ai.kind === "key" ? "com a sua chave" : "";
+  const words = toBlocks(s, { includeChat: false }).reduce((n, b) => n + b.text.length, 0);
+  const tooShort = (s.endedAt || s.updatedAt) - s.startedAt < 2 * 60_000 || words < 400;
+  const shotsOn = s.shots.length > 0;
+  const shotUrls = deck ? await slideShotUrls(s) : {};
+  if (state.session !== s || state.tab !== "slides") return;
+
+  const card = deck
+    ? `<div class="card sl-deck">
+        <div class="sl-cover" role="button" tabindex="0" data-sl="open" aria-label="Abrir os slides">${deckThumbHtml(deck, s, shotUrls, 0)}</div>
+        <div class="sl-info"><b>${esc(deck.title)}</b><span class="muted tiny">${deck.slides.length} slides · ${esc((DECK_KINDS.find((k) => k.id === deck.kind) || DECK_KINDS[0]).label)} · ${deck.by === "pro" ? "Escribanote Pro" : "sua chave"} · ${fmtWhen(deck.createdAt)}</span></div>
+        <div class="row wrap sl-acts">
+          <button class="btn sm primary" data-sl="present">${icon("tocar")}Apresentar</button>
+          <button class="btn sm" data-sl="open">${icon("editar")}Ver e editar</button>
+          <button class="btn sm" data-sl="pptx">${icon("baixar")}.pptx</button>
+          <button class="btn sm" data-sl="pdf">${icon("pdf")}PDF</button>
+          ${IS_TAB ? "" : `<button class="btn sm ghost" data-sl="tab" title="Mais espaço para ver e apresentar">${icon("abrir")}Abrir em uma aba</button>`}
+        </div>
+        <p class="muted tiny" style="margin:6px 0 0">Clique no horário de um slide para ir à fala de onde ele saiu. O .pptx abre no PowerPoint e no Google Slides, com as notas do apresentador.</p>
+        ${st.form || busy ? "" : `<div class="row wrap" style="margin-top:8px"><button class="btn sm ghost" data-sl="again">${icon("refazer")}Gerar outra versão</button><button class="btn sm ghost" data-sl="clear">${icon("apagar")}Apagar slides</button></div>`}
+      </div>`
+    : `<div class="ata-empty"><div class="ico">${icon("slides")}</div><b>Slides a partir desta reunião</b><p>A IA monta a apresentação com o que foi dito${shotsOn ? " e com as capturas de tela" : ""}: cada slide aponta o momento da reunião de onde saiu e vem com notas do apresentador.</p></div>`;
+
+  const form = !deck || st.form || busy
+    ? `<div class="card sl-form">
+        <div class="sl-label">Tipo de apresentação</div>
+        <div class="sl-kinds">${DECK_KINDS.map((k) => `<label class="sl-kind ${o.kind === k.id ? "on" : ""}"><input type="radio" name="sl-kind" value="${k.id}" ${o.kind === k.id ? "checked" : ""}><b>${esc(k.label)}</b><span>${esc(k.hint)}</span></label>`).join("")}</div>
+        <div class="sl-grid">
+          <label><span class="sl-label">Tamanho</span><select id="sl-size">${DECK_SIZES.map((z) => `<option value="${z.id}" ${o.size === z.id ? "selected" : ""}>${esc(z.label)}</option>`).join("")}</select></label>
+          <label><span class="sl-label">Estilo</span><select id="sl-style">${DECK_STYLES.map((z) => `<option value="${z.id}" ${o.style === z.id ? "selected" : ""}>${esc(z.label)}</option>`).join("")}</select></label>
+          <label><span class="sl-label">Tema</span><select id="sl-mode"><option value="claro" ${o.mode === "claro" ? "selected" : ""}>Claro</option><option value="escuro" ${o.mode === "escuro" ? "selected" : ""}>Escuro</option></select></label>
+        </div>
+        <div class="sl-label">Cores</div>
+        <div class="sl-pal" role="radiogroup" aria-label="Cores">${DECK_PALETTES.map((p) => `<button type="button" role="radio" aria-checked="${o.palette === p.id}" data-pal="${p.id}" title="${esc(p.label)}" style="--sw:#${p.accent}"><span></span>${esc(p.label)}</button>`).join("")}</div>
+        <div class="sl-preview" aria-hidden="true">${deckThumbHtml({ title: s.title, subtitle: dateLabel(s.startedAt), ...o, slides: [{ layout: "capa", title: s.title }] }, s, {}, 0)}${deckThumbHtml({ title: s.title, ...o, slides: [{ layout: "capa", title: s.title }, { layout: "topicos", title: "Assim ficam os tópicos", bullets: ["Cada slide traz o momento da reunião", "Notas do apresentador em todos"], at: s.startedAt }] }, s, {}, 1)}</div>
+        ${shotsOn ? `<label class="row tiny"><input type="checkbox" id="sl-shots" ${st.shots ? "checked" : ""}> Usar as capturas de tela (${s.shots.length}): a IA escolhe as que mostram conteúdo útil</label>` : ""}
+        <label class="sl-label" for="sl-inst">Instruções (opcional)</label>
+        <textarea id="sl-inst" rows="2" maxlength="1000" placeholder="Ex.: foque nas decisões de preço; público: diretoria; termine com os riscos">${esc(st.instructions)}</textarea>
+        <div class="row wrap" style="margin-top:8px">
+          <button class="btn primary" id="sl-gen" ${busy || !ai.ok || tooShort ? "disabled" : ""}>${busy ? icon("aguarde") + "Montando os slides…" : icon("slides") + (deck ? "Gerar de novo" : "Gerar slides")}${cost && !busy ? ` <span class="cost">${cost}</span>` : ""}</button>
+          ${deck && !busy ? `<button class="btn ghost" data-sl="cancel-form">Cancelar</button>` : ""}
+        </div>
+        <p class="muted tiny" style="margin:6px 0 0">${busy ? "Leva até um minuto. Pode continuar usando o Escribanote." : !ai.ok ? esc(ai.hint) : tooShort ? "Slides só a partir de 2 minutos de reunião com falas." : "Estilo, cores e tema também mudam depois, sem gastar crédito."}</p>
+      </div>`
+    : "";
+  pane.innerHTML = card + form;
+}
+async function openSlides({ present = false } = {}) {
+  const s = state.session;
+  const deck = cleanDeck(s.slides);
+  if (!deck) return;
+  openDeck({
+    deck,
+    session: s,
+    shotUrls: await slideShotUrls(s),
+    present,
+    onSave: async (d) => {
+      const r = normalize(await send({ type: "slides-save", id: s.id, deck: d }));
+      if (state.session?.id === s.id) state.session = r;
+    },
+    onJump: (rel) => { if (state.session?.id === s.id) jumpToMs(s.startedAt + rel); },
+    onRegenerate: () => { state.slidesUi.form = true; state.tab = "slides"; renderMeeting(); },
+  });
+}
+async function generateSlidesNow() {
+  const s = state.session;
+  const st = state.slidesUi;
+  const opts = { ...st.opts, instructions: $("sl-inst")?.value || "", shots: !!st.shots };
+  saveSlideOpts(opts);
+  state.slidesBusy = s.id;
+  renderSlides();
+  try {
+    const r = normalize(await send({ type: "slides", id: s.id, options: opts }));
+    st.form = false;
+    st.instructions = "";
+    if (state.session?.id === r.id) state.session = r;
+    toast(`${r.slides.slides.length} slides prontos`);
+    if (state.session?.id === r.id && state.tab === "slides") openSlides();
+  } catch (err) {
+    toast(err.message || String(err));
+  } finally {
+    state.slidesBusy = null;
+    if (state.tab === "slides") renderSlides();
+  }
+}
+$("pane-slides").addEventListener("click", async (e) => {
+  const s = state.session;
+  if (!s) return;
+  const pal = e.target.closest("[data-pal]");
+  if (pal) { state.slidesUi.opts.palette = pal.dataset.pal; return renderSlides(); }
+  if (e.target.closest("#sl-gen")) return generateSlidesNow();
+  const a = e.target.closest("[data-sl]")?.dataset.sl;
+  if (!a) return;
+  if (a === "open") openSlides();
+  else if (a === "present") openSlides({ present: true });
+  else if (a === "pptx" || a === "pdf") {
+    const deck = cleanDeck(s.slides);
+    const urls = await slideShotUrls(s);
+    if (a === "pptx") downloadPptx(deck, s, urls);
+    else printDeck(deck, s, urls);
+  } else if (a === "tab") chrome.tabs.create({ url: chrome.runtime.getURL(`src/app/app.html?tab=1&id=${encodeURIComponent(s.id)}&slides=1`) });
+  else if (a === "again") { state.slidesUi.form = true; renderSlides(); }
+  else if (a === "cancel-form") { state.slidesUi.form = false; renderSlides(); }
+  else if (a === "clear") {
+    const ok = await askChoice(e.target.closest("button"), { title: "Apagar os slides?", text: "A transcrição e a ata continuam. Para ter slides de novo, gere outra vez.", choices: [{ key: "yes", label: "Apagar", primary: true }, { key: "no", label: "Cancelar" }] });
+    if (ok !== "yes") return;
+    state.session = normalize(await send({ type: "slides-clear", id: s.id }));
+    renderSlides();
+  }
+});
+$("pane-slides").addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.closest(".sl-cover")) { e.preventDefault(); openSlides(); }
+});
+$("pane-slides").addEventListener("change", (e) => {
+  const st = state.slidesUi;
+  if (!st) return;
+  const t = e.target;
+  if (t.name === "sl-kind") st.opts.kind = t.value;
+  else if (t.id === "sl-size") st.opts.size = t.value;
+  else if (t.id === "sl-style") st.opts.style = t.value;
+  else if (t.id === "sl-mode") st.opts.mode = t.value;
+  else if (t.id === "sl-shots") { st.shots = t.checked; return; }
+  else return;
+  renderSlides();
+});
+$("pane-slides").addEventListener("input", (e) => {
+  if (e.target.id === "sl-inst") state.slidesUi.instructions = e.target.value;
+});
 
 // ----- Aba IA -----
 async function renderAI() {
@@ -4046,7 +4201,7 @@ if (!IS_TAB) {
   chrome.tabs.onActivated.addListener(() => !state.pinned && state.view === "meeting" && followCurrent());
   chrome.tabs.onUpdated.addListener((id, info) => id === state.tabId && info.status === "complete" && !state.pinned && followCurrent());
 }
-setInterval(() => isLive(state.session) && state.view === "meeting" && state.tab !== "ai" && state.tab !== "ata" && renderMeeting(), 20_000);
+setInterval(() => isLive(state.session) && state.view === "meeting" && state.tab !== "ai" && state.tab !== "ata" && state.tab !== "slides" && renderMeeting(), 20_000);
 
 // ---------------- Início ----------------
 if (params.get("perm") === "mic") {
@@ -4074,6 +4229,11 @@ if (params.get("perm") === "mic") {
   const id = params.get("id");
   if (id) await openSession(id, true);
   else await followCurrent();
+  if (id && params.get("slides") && state.session?.slides) {
+    state.tab = "slides";
+    renderMeeting();
+    openSlides();
+  }
   if (params.get("view") === "settings") {
     state.view = "settings";
     render();

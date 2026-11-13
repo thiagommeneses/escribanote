@@ -4,6 +4,7 @@ import { refund, reserve } from "./credits.js";
 import { fail } from "./http.js";
 import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, isHeavyQuestion, SUPPORT_LIMITS, SUPPORT_IMAGE_TYPES, SHOTS_MAX, withSources, phaseOf, continuation, MAX_CONTINUES, CUT_NOTE, stoppedNote, ataRequest, CHAPTERS_MIN_MS, chaptersRequest, chatRequest, commitSummary, DEFAULT_TAGS, normalize, parseChapters, parseReview, reviewRequest, templateFromPdfRequest, templateFromTextRequest, toText } from "./lib.js";
 import { cleanDoc, loadDoc, requirePro, saveMeeting } from "./meetings.js";
+import { slidesRequest, parseDeck, SLIDES_SHOTS_MAX, SLIDES_MIN_MS } from "./lib.js";
 
 // US$ por milhão de tokens (entrada, saída, leitura de cache, escrita de cache de 5 min).
 const PRICES = {
@@ -366,6 +367,56 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
       version = (await saveMeeting(db, sealer, req.user.id, cur.doc, cur.version)).version;
     }
     return { chapters, model: "pro", balance: call.balance, credits: 1, ...(version ? { version } : {}) };
+  });
+
+  // Slides (sem streaming): 1 crédito, modelo forte com esquema JSON. A extensão manda a reunião e até
+  // SLIDES_SHOTS_MAX capturas (com id) para a IA escolher as imagens; o app web manda só o id e os slides
+  // ficam salvos na reunião da conta.
+  app.post("/api/v1/ai/slides", { ...auth, bodyLimit: 20 * 1024 * 1024 }, async (req) => {
+    await guard(req);
+    const doc = normalize(await meetingFrom(req));
+    const textLen = toText(doc, { tags: DEFAULT_TAGS }).length;
+    if ((doc.endedAt || doc.updatedAt) - doc.startedAt < SLIDES_MIN_MS || textLen < 400) fail(400, "too_short", "Slides só a partir de 2 minutos de reunião com falas.");
+    const raw = Array.isArray(req.body?.shots) ? req.body.shots.slice(0, SLIDES_SHOTS_MAX) : [];
+    let total = 0;
+    const shots = raw.map((it) => {
+      const data = typeof it?.data === "string" ? it.data : "";
+      const id = String(it?.id || "").slice(0, 40);
+      if (!id || !/^[\w-]+$/.test(id) || !data || !/^[A-Za-z0-9+/=]+$/.test(data.slice(0, 4000))) fail(400, "bad_request", "Captura de tela inválida.");
+      total += Math.floor((data.length * 3) / 4);
+      if (total > 12 * 1024 * 1024) fail(413, "too_large", "Capturas de tela grandes demais (até 12 MB no total).");
+      return { id, at: String(it.at || "").slice(0, 12), mime: it.mime === "image/png" ? "image/png" : "image/jpeg", data };
+    });
+    const options = req.body?.options && typeof req.body.options === "object" ? req.body.options : {};
+    const model = config.models.strong;
+    const call = { ...(await start(req, "slides", model, 1, doc.id)), model };
+    const r = slidesRequest(doc, options, shots);
+    let deck;
+    try {
+      const msg = await anthropic.messages.create({
+        model,
+        max_tokens: 24000,
+        system: r.system,
+        messages: r.messages,
+        output_config: { effort: r.effort, format: r.format },
+      });
+      if (msg.stop_reason === "refusal") throw new Error("O modelo recusou esta solicitação.");
+      deck = parseDeck(msg.content.filter((b) => b.type === "text").map((b) => b.text).join(""), doc, options, shots.map((s) => s.id));
+      if (!deck) throw new Error("A IA não conseguiu montar os slides desta reunião");
+      await finish(call.id, model, msg.usage || {});
+    } catch (err) {
+      const balance = await failed(req, call, 1, err);
+      fail(502, "ai_failed", friendly(err), { balance });
+    }
+    deck.by = "pro";
+    let version;
+    if (!req.body?.meeting) {
+      const cur = await loadDoc(db, sealer, req.user.id, doc.id);
+      cur.doc.slides = deck;
+      cur.doc.updatedAt = Date.now();
+      version = (await saveMeeting(db, sealer, req.user.id, cur.doc, cur.version)).version;
+    }
+    return { deck, balance: call.balance, credits: 1, ...(version ? { version } : {}) };
   });
 
   // Revisão (sem streaming): 1 crédito por reunião a cada 24 h, porque a extensão revisa em lotes.

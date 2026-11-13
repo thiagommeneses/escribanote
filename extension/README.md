@@ -35,6 +35,15 @@ nome para Escribanote: o ID da extensão continua o mesmo, então reuniões, aju
   gesto) e o clique conta como invocação para o `tabCapture` daquela aba. `startWeb` pede o `streamId` antes de criar a
   sessão; sem ele, a aba entra em `pendingLinks` com `web: true` e `web-start` responde `{ waiting: true }` (o painel mostra
   "Falta um clique…"; `link-pending` responde `"web"` ou `"link"`). Teste: `test/e2e-link.mjs`.
+- 0.9.79, slides: `lib/slides.js` (sem DOM; extensão, app web e servidor) tem o pedido à IA (`slidesRequest`, esquema JSON
+  com 8 layouts: capa, secao, topicos, acoes, citacao, imagem, numeros, encerramento), a validação (`parseDeck`: horário
+  colado no início da fala mais próxima, captura só se enviada e uma vez, layout inválido vira tópicos) e o desenho:
+  `slideBoxes` devolve caixas numa tela de 1280×720 que viram o HTML (`slideHtml`, letras em `cqw`), o PDF
+  (`deckPrintHtml`, impressão do navegador) e o .pptx (`deckToPptx`, OOXML escrito à mão sobre `zipFiles`, com notas e as
+  capturas em `ppt/media`). `lib/deckview.js` é o visualizador (miniaturas, edição, tema, apresentar, baixar). O service
+  worker manda até 12 capturas com id (`slideShots`); com chave própria usa `streamClaude` com o esquema, no Pro chama
+  `POST /api/v1/ai/slides` (1 crédito, modelo forte; pelo app web salva `doc.slides` na reunião). O deck fica em `s.slides`
+  (mensagens `slides`, `slides-save`, `slides-clear`). Testes: unitário de slides e `test/e2e-slides.mjs`.
 - 0.9.78, loop e aba muda: `loopStart(asr)` (lib/transcript.js) compara as 10 últimas palavras com o começo da transcrição
   (contagem tolerante, ≥ 8 de 10) e devolve a primeira fala da segunda volta; em sessão `web`, o service worker corta
   dali, registra `web-loop`, avisa o painel e encerra. No offscreen, `quietHint` (só páginas da web) liga um

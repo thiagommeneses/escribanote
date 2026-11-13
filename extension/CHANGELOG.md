@@ -2,6 +2,13 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.79 beta — 2026-11-13
+- **Slides a partir da reunião**: nova aba **Slides** (na extensão e no app web). A IA monta a apresentação com o que foi dito e, se houver, com as capturas de tela da reunião (ela escolhe as que mostram gráficos, telas e slides, nunca rostos). Escolha o tipo (resumo executivo, aula ou treinamento, status de projeto ou reunião comercial), o tamanho, o estilo (moderno, clássico ou minimalista), as cores e o tema claro ou escuro, e diga o foco em instruções opcionais.
+- **Cada slide aponta o momento da reunião** de onde saiu: clique no horário e a transcrição vai direto à fala. Todos os slides vêm com **notas do apresentador** tiradas do que foi falado.
+- **Ver, editar e apresentar**: troque títulos, tópicos, números, citações e notas, mude a ordem, duplique ou apague slides e troque estilo, cores e tema a qualquer momento, sem gastar crédito. **Apresentar** abre em tela cheia (setas, espaço, Esc).
+- **Baixar .pptx** (abre no PowerPoint, no Keynote e no Google Slides, editável e com as notas) ou **PDF** (um slide por página).
+- Custa 1 crédito no Escribanote Pro, ou usa a sua própria chave de API.
+
 ## 0.9.78 beta — 2026-11-12
 - **Reels e vídeos em loop param sozinhos**: quando o vídeo recomeça, o Escribanote percebe que as falas estão se repetindo, guarda só uma volta e encerra a transcrição, com o aviso "O vídeo recomeçou". Cole o link do reel, clique no ícone e o texto fica pronto sem precisar apertar Parar.
 - **Aviso de vídeo mudo**: em "Transcrever esta aba" e no link colado, se nenhum som chegar da aba por 10 segundos, o painel avisa para clicar no vídeo e ativar o som ou dar play (o Instagram costuma abrir o reel mudo). O aviso some quando o som volta. Em reuniões, onde silêncio é normal, não aparece.

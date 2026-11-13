@@ -31,7 +31,7 @@
   </header>
   <main>
     <section class="legal">
-      <p class="eyebrow">Atualizada em 12 de novembro de 2026</p>
+      <p class="eyebrow">Atualizada em 13 de novembro de 2026</p>
       <h1>Política de privacidade</h1>
       <p>O Escribanote é uma extensão de navegador da meneseslabs que transcreve reuniões do Google Meet, Microsoft Teams e
         Zoom e, pelo gravador do computador, huddles do Slack e outros apps. A versão grátis foi projetada para que nós
@@ -53,8 +53,8 @@
 
       <h2>Quando algo sai do seu computador</h2>
       <ul>
-        <li><b>IA opcional:</b> se você cadastrar uma chave da API do Claude e pedir uma ata, uma pergunta ou uma revisão,
-          o texto da transcrição daquela reunião é enviado diretamente do seu navegador para a Anthropic
+        <li><b>IA opcional:</b> se você cadastrar uma chave da API do Claude e pedir uma ata, uma pergunta, uma revisão ou slides,
+          o texto da transcrição daquela reunião (e as capturas de tela, quando você escolhe incluí-las) é enviado diretamente do seu navegador para a Anthropic
           (<code>api.anthropic.com</code>), sob os termos da sua conta na Anthropic. Nada é enviado sem a sua ação ou sem
           você ativar a ata/revisão automática.</li>
         <li><b>Modelo de reconhecimento:</b> ao ativar o modo de alta precisão, os arquivos do modelo Whisper são baixados
@@ -72,9 +72,10 @@
           Algumas horas antes do fim do teste mandamos um único e-mail de aviso para o endereço da conta.</li>
         <li><b>Reuniões:</b> depois que você autoriza na extensão, as reuniões (transcrição, nomes dos participantes, destaques,
           notas, atas e conversas com a IA) são enviadas para a sua conta, no servidor da meneseslabs. Ficam criptografadas
-          (AES-256) no banco de dados; um índice de palavras permite a busca. Capturas de tela e áudio nunca são enviados.</li>
-        <li><b>IA inclusa:</b> quando você pede uma ata, revisão ou resposta, o texto da reunião é enviado pelo nosso servidor à
-          Anthropic (Claude), que processa o pedido e, pelos termos da API, não usa esses dados para treinar modelos. Registramos
+          (AES-256) no banco de dados; um índice de palavras permite a busca. Capturas de tela e áudio nunca ficam guardados no servidor.</li>
+        <li><b>IA inclusa:</b> quando você pede uma ata, revisão, resposta ou slides, o texto da reunião (e as capturas de tela da
+          reunião, quando você escolhe incluí-las) é enviado pelo nosso servidor à Anthropic (Claude), que processa o pedido e, pelos
+          termos da API, não usa esses dados para treinar modelos. As capturas passam só para esse pedido e não ficam no servidor. Registramos
           quantos créditos e tokens cada pedido usou, sem guardar o texto do pedido fora da reunião.</li>
         <li><b>Transcrição de arquivos no servidor:</b> se você escolher "No servidor" ao transcrever um arquivo, o áudio vai em
           pedaços de 10 minutos pelo nosso servidor ao Groq, que transcreve com o Whisper e devolve o texto. O áudio não é

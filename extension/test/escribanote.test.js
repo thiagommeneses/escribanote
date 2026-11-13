@@ -1538,3 +1538,60 @@ test("loopStart: reel que recomeça é cortado na segunda volta; aula longa e fr
   assert.equal(loopStart(aula), -1, "frase repetida no meio da aula não é loop");
   assert.equal(loopStart([]), -1);
 });
+
+test("slides: parseDeck valida a resposta da IA e o .pptx traz slides, notas e a captura", async () => {
+  const { parseDeck, deckToPptx, slidesRequest, imageSize, deckPrintHtml, cleanDeck } = await import("../src/lib/slides.js");
+  const t0 = Date.UTC(2026, 10, 10, 14);
+  const entries = Array.from({ length: 6 }, (_, i) => ({ id: "e" + i, kind: "caption", speakerId: i % 2 ? "b" : "a", text: `Fala ${i} sobre o lançamento & <metas> do trimestre.`, at: t0 + i * 60_000, updatedAt: t0 + i * 60_000 + 3000 }));
+  const session = { id: "m", title: "Plano <Q1>", startedAt: t0, endedAt: t0 + 6 * 60_000, speakers: { a: "Ana", b: "Bruno" }, entries };
+  const s = (o) => ({ layout: "topicos", title: "", bullets: [], stats: [], quote: "", speaker: "", notes: "", at: "00:00", shot: "", ...o });
+  const ai = JSON.stringify({ title: "Plano Q1", subtitle: "Resumo", slides: [
+    s({ layout: "topicos", title: "Metas & prazos", bullets: ["Meta <alta>", "  "], notes: "Linha 1\nLinha 2", at: "00:02:10" }),
+    s({ layout: "imagem", title: "Painel", bullets: ["Gráfico"], shot: "sh1", at: "03:00" }),
+    s({ layout: "imagem", title: "Mesma captura de novo", shot: "sh1" }),
+    s({ layout: "citacao", quote: "", title: "Sem citação" }),
+    s({ layout: "inventado", title: "Layout desconhecido", bullets: ["x"] }),
+  ] });
+  const deck = parseDeck("Aqui está:\n" + ai + "\nfim", session, { style: "nao-existe", palette: "roxo", mode: "escuro" }, ["sh1"]);
+  assert.deepEqual(deck.slides.map((x) => x.layout), ["capa", "topicos", "imagem", "topicos", "topicos", "topicos"], "capa no início; captura repetida, citação vazia e layout desconhecido viram tópicos");
+  assert.deepEqual([deck.style, deck.palette, deck.mode], ["moderno", "roxo", "escuro"]);
+  assert.equal(deck.slides[1].at, t0 + 120_000, "horário colado no início da fala mais próxima");
+  assert.deepEqual(deck.slides[1].bullets, ["Meta <alta>"]);
+  assert.equal(deck.slides[3].shot, "", "a mesma captura não entra duas vezes");
+  assert.equal(parseDeck("sem json", session), null);
+  assert.equal(cleanDeck({ slides: [] }), null);
+
+  const req = slidesRequest(session, { kind: "status", size: "longo", instructions: "Foque nos prazos" }, [{ id: "sh1", at: "00:03:00", mime: "image/png", data: "AAAA" }]);
+  assert.match(req.system, /Status de projeto/);
+  assert.match(req.system, /de 13 a 18 slides/);
+  assert.match(req.system, /Foque nos prazos/);
+  assert.match(req.messages[0].content[0].text, /\[00:01:00\] Bruno: Fala 1/);
+  assert.equal(req.messages[0].content.filter((c) => c.type === "image").length, 1);
+
+  // PNG 3×2 de verdade
+  const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAAEklEQVR4nGP4z8DAwMDAxAADAB0EAf8uBWiNAAAAAElFTkSuQmCC", "base64"));
+  assert.deepEqual(imageSize(png), { w: 3, h: 2, ext: "png" });
+  const blob = deckToPptx(deck, session, { sh1: "data:image/png;base64," + Buffer.from(png).toString("base64") });
+  const bytes = Buffer.from(await blob.arrayBuffer());
+  const names = [];
+  for (let i = 0; i + 30 < bytes.length && bytes.readUInt32LE(i) === 0x04034b50; ) {
+    const size = bytes.readUInt32LE(i + 18), nlen = bytes.readUInt16LE(i + 26);
+    const name = bytes.subarray(i + 30, i + 30 + nlen).toString();
+    names.push([name, bytes.subarray(i + 30 + nlen, i + 30 + nlen + size)]);
+    i += 30 + nlen + size;
+  }
+  const files = Object.fromEntries(names);
+  assert.equal(names[0][0], "[Content_Types].xml");
+  for (let i = 1; i <= 6; i++) { assert.ok(files[`ppt/slides/slide${i}.xml`]); assert.ok(files[`ppt/notesSlides/notesSlide${i}.xml`]); }
+  assert.ok(files["ppt/media/image1.png"], "a captura vai para o .pptx");
+  assert.match(files["ppt/slides/_rels/slide3.xml.rels"].toString(), /media\/image1\.png/);
+  const s2 = files["ppt/slides/slide2.xml"].toString();
+  assert.match(s2, /Metas &amp; prazos/);
+  assert.match(s2, /Meta &lt;alta&gt;/);
+  assert.doesNotMatch(s2, /<alta>/);
+  assert.match(files["ppt/notesSlides/notesSlide2.xml"].toString(), /Linha 2.*Momento na reunião: 02:00/s);
+  assert.match(files["[Content_Types].xml"].toString(), /Extension="png"/);
+  const html = deckPrintHtml(deck, session, {});
+  assert.match(html, /Plano &lt;Q1&gt;/);
+  assert.doesNotMatch(html, /<Q1>/);
+});
