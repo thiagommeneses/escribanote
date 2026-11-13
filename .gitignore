@@ -12,3 +12,6 @@ node_modules/
 Thumbs.db
 desktop.ini
 marketing/video/out/
+
+# Pacotes da Chrome Web Store (o do primeiro envio leva a chave privada)
+/loja/

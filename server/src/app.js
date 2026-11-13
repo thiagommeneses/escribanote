@@ -27,10 +27,10 @@ export async function buildApp({ config, db, mailer, anthropic = null, stripe = 
 
   await app.register(cookie);
 
-  // CORS só para a extensão (ID fixo); o app web roda no mesmo endereço da API.
+  // CORS só para a extensão (IDs em config.extensionOrigins: zip e Chrome Web Store); o app web roda no mesmo endereço da API.
   app.addHook("onRequest", async (req, reply) => {
-    if (req.headers.origin === config.extensionOrigin) {
-      reply.header("access-control-allow-origin", config.extensionOrigin);
+    if (config.extensionOrigins.includes(req.headers.origin)) {
+      reply.header("access-control-allow-origin", req.headers.origin);
       reply.header("vary", "Origin");
       if (req.method === "OPTIONS") {
         reply.header("access-control-allow-methods", "GET, POST, PUT, DELETE");

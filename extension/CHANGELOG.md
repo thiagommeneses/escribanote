@@ -2,6 +2,9 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.83 beta — 2026-11-13
+- Preparação para a **Chrome Web Store**: descrição curta (até 132 caracteres, como a loja pede), pacote próprio para a loja (`scripts/pacote-loja.py`) que mantém o mesmo ID da instalação pelo site, e a conta e o app web passam a reconhecer mais de um ID da extensão.
+
 ## 0.9.82 beta — 2026-11-13
 - **Horário do slide abre um balão com a fala**: clicar no horário de um slide não tira mais você dos slides. Aparece um balão, estilo conversa, com quem falou e o que disse naquele momento (e a fala seguinte), e o botão **Ver na transcrição completa** para ir até lá. Funciona também no modo Apresentar; Esc ou um clique fora fecha.
 - **Parar a pergunta à IA**: no widget da reunião e no app web (Pergunte à IA e Perguntar às reuniões), o botão vira **Parar** enquanto a resposta chega. O que já foi escrito fica na conversa, marcado como interrompido.

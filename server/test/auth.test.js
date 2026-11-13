@@ -92,3 +92,9 @@ test("apagar a conta: confirma pelo e-mail, cancela a assinatura e remove tudo",
   assert.equal(await ctx.db.one("SELECT 1 FROM users WHERE id = $1", [u.me.id]), null);
   assert.equal((await u.get("/api/v1/me")).statusCode, 401);
 });
+
+test("EXTENSION_IDS: aceita também o ID da Chrome Web Store", async () => {
+  const { loadConfig } = await import("../src/config.js");
+  const c = loadConfig({ extraExtensionIds: "abcdefghijklmnopabcdefghijklmnop, inválido" });
+  assert.deepEqual(c.extensionOrigins, [c.extensionOrigin, "chrome-extension://abcdefghijklmnopabcdefghijklmnop"]);
+});
