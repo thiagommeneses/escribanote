@@ -43,7 +43,7 @@ Avise os participantes: o widget tem um botão que manda no chat da reunião o a
 - Bloco promocional grande 1400×560 (opcional): `loja-bloco-grande.png`
 
 **Site oficial:** https://escribanote.com
-**Suporte:** https://escribanote.com/contato/
+**Suporte:** https://escribanote.com/#contato
 
 ## Privacidade (aba "Práticas de privacidade")
 
