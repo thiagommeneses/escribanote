@@ -1046,3 +1046,10 @@ body.list-dragging .lgroup.loose { min-height: 48px; }
 .sl-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .sl-preview .esd-slide { border-radius: 6px; border: 1px solid var(--border); }
 @media (max-width: 420px) { .sl-grid { grid-template-columns: 1fr 1fr; } }
+
+/* Assinatura no fim dos Ajustes */
+.made-by { display: flex; justify-content: center; padding: 18px 0 26px; }
+.made-by a { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; text-decoration: none; }
+.made-by a:hover { color: var(--text-2); }
+.made-by b { color: var(--text-2); font-weight: 700; }
+.made-by b span { color: color-mix(in srgb, #63b589 72%, var(--text)); } /* verde da meneseslabs, legível no claro e no escuro */

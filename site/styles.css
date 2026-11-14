@@ -268,7 +268,7 @@ thead th.us { color: var(--rec-deep); }
 .foot nav a:hover { color: var(--ink); }
 .made { margin-left: auto; display: inline-flex; gap: 0.5rem; align-items: center; text-decoration: none; }
 .made b { color: var(--ink); font-weight: 700; }
-.made b span { color: oklch(66% 0.1 155); }
+.made b span { color: #3f8f66; } /* verde da meneseslabs */
 
 /* ---------- Responsivo ---------- */
 @media (max-width: 960px) {

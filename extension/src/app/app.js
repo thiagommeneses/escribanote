@@ -220,6 +220,8 @@ if (!IS_TAB) {
   chrome.tabs.getCurrent().then((t) => { if (!t) connectPanel(); }).catch(() => {});
 }
 
+$("about-ver").textContent = chrome.runtime.getManifest().version_name || chrome.runtime.getManifest().version;
+
 // ---------------- Layout ----------------
 function applyLayout() {
   const wide = IS_TAB && innerWidth >= 860;

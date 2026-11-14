@@ -395,3 +395,10 @@ p { margin: 0; }
 .sl-hint { margin: -4px 0 6px; }
 .sl-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .sl-preview .esd-slide { border-radius: 6px; border: 1px solid var(--rule); }
+
+/* Assinatura no fim da página da conta */
+.made-by { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin-top: 24px; }
+.made-by a { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.made-by a:hover { text-decoration: underline; }
+.made-by b { font-weight: 700; }
+.made-by b span { color: #3f8f66; }
