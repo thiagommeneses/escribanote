@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.84 beta — 2026-11-14
+- **Voltar à apresentação**: depois de ir de um slide para a transcrição completa ("Ver na transcrição completa" no balão do horário), aparece uma barra flutuante **Voltar à apresentação de slides**, com o número e o título do slide. Um clique reabre os slides exatamente onde você estava, inclusive em tela cheia se estava apresentando. Some sozinha ao voltar, ao fechar (×) ou ao abrir outra reunião. Na extensão e no app web.
+- **Parar a IA, regra do crédito (Pro)**: parar no começo da resposta devolve o crédito, como antes. Se a resposta já tinha passado de umas 200 palavras, o crédito fica cobrado, porque o texto que veio fica com você.
+- Corrigido: o aviso "Enviar as reuniões deste computador para a conta?" não aparecia no topo da lista depois de conectar a conta Pro.
+
 ## 0.9.83 beta — 2026-11-13
 - Preparação para a **Chrome Web Store**: descrição curta (até 132 caracteres, como a loja pede), pacote próprio para a loja (`scripts/pacote-loja.py`) que mantém o mesmo ID da instalação pelo site, e a conta e o app web passam a reconhecer mais de um ID da extensão.
 

@@ -123,6 +123,15 @@ const VIEW_CSS = `
 .esv-pop-acts{display:flex;justify-content:flex-end;margin-top:8px}
 .esv-pop-acts button{font:inherit;font-size:12.5px;font-weight:600;border:0;border-radius:8px;padding:6px 10px;background:#1d4ed8;color:#fff;cursor:pointer}
 .esv-pop-acts button:hover{background:#1e40af}
+.esv-back{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:2147483000;display:flex;align-items:center;gap:2px;max-width:calc(100vw - 24px);background:#1d4ed8;color:#fff;border-radius:999px;box-shadow:0 8px 28px #0f172a66;font:600 13.5px/1.2 system-ui,-apple-system,'Segoe UI',sans-serif;animation:esv-back-in .25s ease-out}
+.esv-back button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:10px 6px 10px 16px;display:flex;align-items:center;gap:8px;min-width:0;text-align:left}
+.esv-back button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.esv-back button small{font-weight:400;opacity:.85}
+.esv-back button.x{padding:10px 14px 10px 8px;font-size:17px;opacity:.85}
+.esv-back button:hover{opacity:1;text-decoration:underline}
+.esv-back button:focus-visible{outline:2px solid #fff;outline-offset:-4px;border-radius:999px}
+@keyframes esv-back-in{from{opacity:0;transform:translate(-50%,12px)}}
+@media (prefers-reduced-motion:reduce){.esv-back{animation:none}}
 @media (max-width:760px){.esv-body,.esv.editing .esv-body{grid-template-columns:1fr}.esv-thumbs{display:none}.esv-edit{border-left:0;border-top:1px solid #1e293b}.esv-bar h2{flex-basis:100%}}
 `;
 
@@ -186,6 +195,7 @@ export function slidePreviewHtml(session, o) {
 // Abre o visualizador. onSave(deck) grava (edição e tema); onJump(msRelativo) leva à fala da reunião.
 export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index = 0, present = false, editable = true, onRegenerate }) {
   injectCss();
+  hideReturnBar();
   let d = cleanDeck(deck);
   if (!d) return null;
   let cur = Math.min(Math.max(0, index), d.slides.length - 1);
@@ -312,7 +322,11 @@ export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index =
       e.stopPropagation();
       const a = e.target.closest("[data-pop]")?.dataset.pop;
       if (a === "close") closePop();
-      else if (a === "jump") { closePop(); close(); onJump(rel); }
+      else if (a === "jump") {
+        // guarda onde a pessoa estava, para o app oferecer a volta (showReturnBar)
+        const back = { index: cur, total: d.slides.length, title: d.slides[cur]?.title || d.title || "", present: !!document.querySelector(".esv-present") };
+        closePop(); close(); onJump(rel, back);
+      }
     });
     // dentro da tela cheia, o balão precisa estar no elemento em tela cheia para aparecer
     (document.querySelector(".esv-present") || root).appendChild(pop);
@@ -420,4 +434,28 @@ export function openDeck({ deck, session, shotUrls = {}, onSave, onJump, index =
   root.querySelector("[data-a=present]").focus();
   if (present) presentMode();
   return { close, root };
+}
+
+// Barra flutuante "Voltar à apresentação", mostrada depois de ir de um slide para a transcrição.
+// back vem do onJump ({ index, total, title, present }); onReturn(back) reabre os slides naquele ponto.
+export function showReturnBar(back, onReturn) {
+  injectCss();
+  hideReturnBar();
+  const bar = document.createElement("div");
+  bar.className = "esv-back";
+  bar.setAttribute("role", "region");
+  bar.setAttribute("aria-label", "Voltar aos slides");
+  const where = `slide ${back.index + 1} de ${back.total}`;
+  bar.innerHTML = `<button type="button" data-b="go" title="Voltar à apresentação de slides (${esc(where)})">◀ <span>Voltar à apresentação de slides <small>· ${esc(where)}${back.title ? ` · ${esc(back.title)}` : ""}</small></span></button><button type="button" class="x" data-b="x" aria-label="Fechar" title="Fechar">×</button>`;
+  bar.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-b]")?.dataset.b;
+    if (!b) return;
+    hideReturnBar();
+    if (b === "go") onReturn(back);
+  });
+  document.body.appendChild(bar);
+  return bar;
+}
+export function hideReturnBar() {
+  document.querySelector(".esv-back")?.remove();
 }

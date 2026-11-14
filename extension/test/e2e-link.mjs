@@ -2,7 +2,8 @@
 // deixa capturar uma aba que a extensão abriu sozinha). Duas rodadas:
 //   1. sem liberação: a aba abre, o painel avisa que falta um clique e nada começa; fechar a aba desiste;
 //   2. com a extensão liberada (--allowlisted-extension-id, como depois do clique): a transcrição começa sozinha.
-//   PROFILE=<cópia de bench/.perfil> CHROME=... node test/e2e-link.mjs
+//   CHROME=... node test/e2e-link.mjs   (PROFILE=<pasta> opcional; o áudio toca uma vez só, porque um vídeo em loop
+//   encerra a transcrição sozinho desde a 0.9.78)
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,7 +16,7 @@ const EXT = resolve(import.meta.dirname, "..");
 const PORT = 9600 + Math.floor(Math.random() * 100);
 const profile = process.env.PROFILE ? resolve(process.env.PROFILE) : mkdtempSync(join(tmpdir(), "escribanote-webtab-"));
 import { createServer } from "node:http";
-const PAGE = `<!doctype html><title>Aula de geografia - YouTube</title><audio id="a" loop autoplay></audio><script>
+const PAGE = `<!doctype html><title>Aula de geografia - YouTube</title><audio id="a" autoplay></audio><script>
 fetch("/fala.pcm").then((r) => r.arrayBuffer()).then((b) => {
   const pcm = new Uint8Array(b), gap = 16000 * 2 * 2, total = pcm.length + gap;
   const h = new DataView(new ArrayBuffer(44)); const w = (o, s) => { for (let i = 0; i < s.length; i++) h.setUint8(o + i, s.charCodeAt(i)); };
@@ -69,7 +70,9 @@ try {
   await sleep(500);
   assert.equal(await linkTab(ev), null, "link inválido não abre aba");
   await submit(ev, PAGE_URL);
-  const tabId = await waitFor(() => linkTab(ev), "aba do link aberta", 10000);
+  const tabId = await waitFor(() => linkTab(ev), "aba do link aberta", 10000).catch(async (err) => {
+    throw new Error(`${err.message} (aviso na tela: ${await ev(`[...document.querySelectorAll(".toast")].map((t) => t.textContent).join(" | ")`)}; link-open direto: ${JSON.stringify(await ev(`chrome.runtime.sendMessage({ type: "link-open", url: ${JSON.stringify(PAGE_URL)} }).catch((e) => "erro " + e.message)`))})`);
+  });
   assert.equal(await ev(`chrome.runtime.sendMessage({ type: "link-pending", tabId: ${tabId} })`), "link");
   await waitFor(() => ev(`document.querySelector("#link-form").classList.contains("waiting") && /falta um clique/.test(document.querySelector("#link-title").textContent) && document.querySelector("#web-cta").hidden`), "aviso de falta um clique", 10000);
   await sleep(4000);
@@ -96,7 +99,7 @@ try {
   await submit(ev, PAGE_URL);
   const tab2 = await waitFor(() => linkTab(ev), "aba do link aberta", 10000);
   const id = await waitFor(async () => (await webSessions(ev))[0], "sessão começa sozinha", 30000);
-  await waitFor(() => ev(`chrome.runtime.sendMessage({ type: "hq-get", tabId: ${tab2} }).then((h) => h && h.state === "running")`), "captura da aba ligada", 120000).catch(async (err) => { console.log("hq:", JSON.stringify(await ev(`chrome.runtime.sendMessage({ type: "hq-get", tabId: ${tab2} })`)), "sessão:", JSON.stringify((await ev(`chrome.runtime.sendMessage({ type: "get", id: ${JSON.stringify(id)} })`)).report?.events?.slice(-4))); throw err; });
+  await waitFor(() => ev(`chrome.runtime.sendMessage({ type: "hq-get", tabId: ${tab2} }).then((h) => h && h.state === "running")`), "captura da aba ligada", 120000).catch(async (err) => { console.log("hq:", JSON.stringify(await ev(`chrome.runtime.sendMessage({ type: "hq-get", tabId: ${tab2} })`)), "sessão:", JSON.stringify((await ev(`chrome.runtime.sendMessage({ type: "get", id: ${JSON.stringify(id)} })`))?.report?.events?.slice(-4))); throw err; });
   let s = await ev(`chrome.runtime.sendMessage({ type: "get", id: ${JSON.stringify(id)} })`);
   assert.ok(s.web && !s.endedAt && s.url.startsWith(PAGE_URL), "sessão web ao vivo com a URL: " + s.url);
   assert.ok(s.report.events.some((e) => e.kind === "web-start" && e.detail?.link === true), "evento do link");

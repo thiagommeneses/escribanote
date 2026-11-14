@@ -10,7 +10,7 @@ import { getBackupDir, setBackupDir, backupPermission, resolveBackupFolder, read
 import { readTrack, writeTrackFile } from "../lib/audiovault.js";
 import { accountIsPro } from "../lib/account.js";
 import { DECK_KINDS, DECK_SIZES, DECK_STYLES, DECK_DEFAULTS, deckOptions, cleanDeck } from "../lib/slides.js";
-import { openDeck, deckThumbHtml, downloadPptx, printDeck, paletteChooserHtml, paletteClick, paletteInput, slidePreviewHtml } from "../lib/deckview.js";
+import { openDeck, showReturnBar, hideReturnBar, deckThumbHtml, downloadPptx, printDeck, paletteChooserHtml, paletteClick, paletteInput, slidePreviewHtml } from "../lib/deckview.js";
 import "../lib/icons.js";
 
 const { icon, tagIcon, TAG_ICONS } = globalThis.EsIcons;
@@ -273,6 +273,7 @@ function renderLinkCta() {
 }
 
 async function openSession(id, pinned) {
+  if (id !== state.session?.id) hideReturnBar(); // a volta aos slides é só da reunião aberta
   const changedSession = !state.session || state.session.id !== id;
   state.pinned = pinned;
   if (changedSession) {
@@ -1469,7 +1470,7 @@ async function renderSlides() {
     : "";
   pane.innerHTML = card + form;
 }
-async function openSlides({ present = false } = {}) {
+async function openSlides({ present = false, index = 0 } = {}) {
   const s = state.session;
   const deck = cleanDeck(s.slides);
   if (!deck) return;
@@ -1478,11 +1479,16 @@ async function openSlides({ present = false } = {}) {
     session: s,
     shotUrls: await slideShotUrls(s),
     present,
+    index,
     onSave: async (d) => {
       const r = normalize(await send({ type: "slides-save", id: s.id, deck: d }));
       if (state.session?.id === s.id) state.session = r;
     },
-    onJump: (rel) => { if (state.session?.id === s.id) jumpToMs(s.startedAt + rel); },
+    onJump: (rel, back) => {
+      if (state.session?.id !== s.id) return;
+      jumpToMs(s.startedAt + rel);
+      if (back) showReturnBar(back, (b) => { if (state.session?.id === s.id) openSlides({ present: b.present, index: b.index }); });
+    },
     onRegenerate: () => { state.slidesUi.form = true; state.tab = "slides"; renderMeeting(); },
   });
 }
@@ -3901,7 +3907,8 @@ async function renderAccount() {
           : "Sincronização ligada.";
   }
   const banner = $("sync-banner");
-  const show = accountIsPro(a) && !r.sync.consent;
+  // a conta que vem do service worker não traz o token (fica só lá): conecta-se pela própria resposta
+  const show = !!a && accountIsPro({ ...a, token: true }) && !r.sync.consent;
   banner.hidden = !show;
   if (show) $("sync-banner-text").textContent = r.pending
     ? `Conta conectada (${a.email}). Enviar as ${r.pending} reuniões deste computador para a conta?`

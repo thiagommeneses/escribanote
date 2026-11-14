@@ -4,11 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Escribanote — transcrição de reuniões que fica com você</title>
-  <meta name="description" content="Transcrição ao vivo do Google Meet, Microsoft Teams, Zoom e huddles do Slack, e de arquivos de áudio e vídeo, aulas e vídeos do YouTube, com destaques, notas, capítulos, ata por IA que lê os slides e o seu material de apoio, pastas e reconhecimento de alta precisão. Grátis, sem conta e guardada só no seu computador.">
+  <meta name="description" content="Transcrição ao vivo de reuniões no Google Meet, Teams, Zoom e Slack, com ata e slides por IA. Grátis, sem conta e guardada só no seu computador.">
   <meta property="og:title" content="Escribanote — transcrição de reuniões que fica com você">
   <meta property="og:description" content="Meet, Teams, Zoom e Slack transcritos ao vivo. Destaques, notas, ata por IA. Tudo salvo só no seu computador.">
   <meta property="og:image" content="https://escribanote.com/img/og.png">
   <meta property="og:url" content="https://escribanote.com/">
+  <link rel="canonical" href="https://escribanote.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Escribanote">
+  <meta property="og:locale" content="pt_BR">
+  <meta name="twitter:card" content="summary_large_image">
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Escribanote", "applicationCategory": "BusinessApplication", "operatingSystem": "Chrome, Edge", "url": "https://escribanote.com/", "description": "Extensão de navegador que transcreve reuniões do Google Meet, Microsoft Teams, Zoom e Slack, com destaques, notas, ata e slides por IA.", "inLanguage": "pt-BR", "offers": [{"@type": "Offer", "name": "Grátis", "price": "0", "priceCurrency": "BRL"}, {"@type": "Offer", "name": "Escribanote Pro (anual)", "price": "150", "priceCurrency": "BRL", "url": "https://escribanote.com/pro/"}]}</script>
   <meta name="theme-color" content="#f6f1e7">
   <link rel="icon" href="img/icon.png">
   <link rel="preload" href="fonts/fraunces-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -405,14 +411,23 @@
       <div class="install-copy" data-reveal>
         <p class="eyebrow">Instalação em 1 minuto</p>
         <h2>Leve o Escribanote para a sua próxima reunião.</h2>
-        <p>Enquanto a versão da Chrome Web Store não sai, a instalação é manual e leva três passos. Funciona no
+        <p id="install-manual">Enquanto a versão da Chrome Web Store não sai, a instalação é manual e leva três passos. Funciona no
           Chrome, Edge, Brave e outros navegadores baseados em Chromium.</p>
+        <!-- Aparece quando download/latest.json traz "store" (o link da Chrome Web Store), depois da aprovação. -->
+        <div id="store-cta" hidden>
+          <p>Instale pela Chrome Web Store com um clique: funciona no Chrome, Edge, Brave e outros navegadores baseados em
+            Chromium, e as atualizações chegam sozinhas.</p>
+          <a class="btn btn-rec" id="store-link" href="#" rel="noopener">Adicionar ao Chrome — é grátis</a>
+          <p class="tiny">Prefere instalar à mão? <a href="#instalar-manual" id="show-manual">Baixe o .zip</a> e siga os três passos.</p>
+        </div>
+        <div id="zip-cta">
         <a class="btn btn-rec" id="download" href="download/escribanote-0.9.83.zip" download>Baixar o Escribanote <span id="dl-version"></span></a>
         <p class="tiny">Arquivo .zip · código legível, sem ofuscação · nenhum instalador</p>
+        </div>
         <p class="tiny">Huddles no app do Slack para Windows? O <a href="download/escribanote-audio-windows.zip">ajudante de áudio</a> (opcional, 2 arquivos, sem administrador)
           dispensa o "compartilhar tela": um clique e a transcrição começa. No Slack pelo Chrome não precisa de nada.</p>
       </div>
-      <ol class="steps" data-reveal-group>
+      <ol class="steps" id="instalar-manual" data-reveal-group>
         <li data-reveal><b>Descompacte</b> o arquivo baixado numa pasta que você não vá apagar.</li>
         <li data-reveal><b>Abra</b> <code>chrome://extensions</code> (no Edge, <code>edge://extensions</code>) e ative o <b>Modo do desenvolvedor</b>: no Chrome fica no canto superior direito, no Edge na barra lateral esquerda.</li>
         <li data-reveal><b>Clique</b> em <b>Carregar sem compactação</b> e escolha a pasta. Fixe o ícone do Escribanote na barra.</li>
@@ -489,7 +504,8 @@
           <p class="news-note">Saem versões novas com frequência, a partir do que quem usa pede. O histórico completo está no
             <a href="https://github.com/thiagommeneses/escribanote/blob/main/extension/CHANGELOG.md">changelog</a>.</p>
           <ol class="news-list">
-          <li><span class="news-v">0.9.82</span><b>Fala no balão e botão Parar na IA</b><p>Clique no horário de um slide e veja, num balão, o que foi dito naquele momento, sem sair da apresentação. E dá para parar uma resposta da IA no meio: o que já veio fica, e no Pro o crédito volta.</p></li>
+          <li><span class="news-v">0.9.84</span><b>Volta para os slides num clique</b><p>Foi do slide para a transcrição completa? Uma barra flutuante leva de volta à apresentação, no mesmo slide em que você estava, até em tela cheia.</p></li>
+          <li><span class="news-v">0.9.82</span><b>Fala no balão e botão Parar na IA</b><p>Clique no horário de um slide e veja, num balão, o que foi dito naquele momento, sem sair da apresentação. E dá para parar uma resposta da IA no meio: o que já veio fica, e no Pro o crédito volta se você parar logo no começo.</p></li>
           <li><span class="news-v">0.9.81</span><b>Widget sem erros depois de atualizar</b><p>Atualizou a extensão com a reunião aberta? Os botões do widget agora só avisam para recarregar a aba, sem gerar erros.</p></li>
           <li><span class="news-v">0.9.80</span><b>Slides em 8 estilos, com a sua paleta</b><p>Do minimalista ao geométrico, com cartões, linha do tempo, números em anéis e formas que abrem editáveis no PowerPoint. Crie e salve a paleta da sua empresa, no claro ou no escuro.</p></li>
           <li><span class="news-v">0.9.79</span><b>Slides a partir da reunião</b><p>A IA monta a apresentação com o que foi dito e com as capturas de tela. Cada slide aponta o momento da reunião, vem com notas do apresentador e pode ser editado, apresentado em tela cheia ou baixado em .pptx e PDF.</p></li>

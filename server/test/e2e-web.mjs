@@ -162,6 +162,18 @@ try {
   check(await evalIn(p, `document.getElementById("credits").textContent`) === credBefore, "parar devolve o crédito");
   const chats2 = await evalIn(p, `fetch("/api/v1/meetings/mt-1").then((r) => r.json()).then((d) => d.doc.chats.length)`);
   check(chats2 === 2, "resposta interrompida fica salva na conversa");
+  // 6c) Parar depois que boa parte da resposta já veio (mais de STOP_CHARGE_CHARS): o crédito fica cobrado
+  const credBefore2 = await evalIn(p, `document.getElementById("credits").textContent`);
+  srv.anthropic.text = "Resposta longa que vai sendo escrita aos poucos. ".repeat(60);
+  srv.anthropic.delayMs = 15;
+  await evalIn(p, `document.getElementById("ask-input").value = "Explique ainda mais"; document.querySelector('[data-act="ask"]').click(); true`);
+  await waitFor(p, `!!document.querySelector('[data-act="ai-stop"]') && ([...document.querySelectorAll("#qa .a")].at(-1)?.textContent || "").length > 1500`, "resposta já longa");
+  await evalIn(p, `document.querySelector('[data-act="ai-stop"]').click(); true`);
+  await waitFor(p, `([...document.querySelectorAll("#qa .a")].at(-1)?.textContent || "").includes("interrompida") && !!document.querySelector('[data-act="ask"]')`, "resposta longa interrompida");
+  srv.anthropic.delayMs = 0;
+  await sleep(2500);
+  const n = (t) => Number(String(t).match(/\d+/)?.[0]);
+  check(n(await evalIn(p, `document.getElementById("credits").textContent`)) === n(credBefore2) - 1, "parar depois de uma resposta longa mantém o crédito cobrado");
 
   // 7) Renomear participante
   await evalIn(p, `document.querySelector('.spk[data-spk="b"]').click(); true`);
@@ -189,12 +201,12 @@ try {
   await waitFor(p, `!!document.getElementById("askall-input")`, "tela de perguntar às reuniões");
   await evalIn(p, `document.getElementById("askall-input").value = "O que foi aprovado?"; document.querySelector('[data-act="askall"]').click(); true`);
   await waitFor(p, `document.querySelector("#qa .a")?.textContent.includes("180 mil")`, "resposta sobre todas as reuniões");
-  check(await evalIn(p, `document.getElementById("credits").textContent.includes("11")`), "pergunta geral custou 2 créditos");
+  check(await evalIn(p, `document.getElementById("credits").textContent.includes("10")`), "pergunta geral custou 2 créditos");
 
   // 11) Conta Pro
   await go("#/conta");
   await waitFor(p, `!!document.querySelector(".panel.pro")`, "painel do Pro");
-  check(await evalIn(p, `document.querySelector(".panel.pro").textContent.includes("11 de 30")`), "créditos na conta");
+  check(await evalIn(p, `document.querySelector(".panel.pro").textContent.includes("10 de 30")`), "créditos na conta");
   await shot(p, "web-6-conta-pro.png");
   // Senha: a conta entrou pelo link e ainda não tem senha; define pelo painel
   check(await evalIn(p, `document.getElementById("pw-panel").textContent.includes("Definir senha")`), "conta sem senha oferece Definir senha");
@@ -224,7 +236,7 @@ try {
     await evalIn(p, `document.querySelector('[data-act="sl-gen"]').click(); true`);
     await waitFor(p, `!!document.querySelector(".esv .esv-thumb")`, "visualizador dos slides", 10000);
     check(await evalIn(p, `document.querySelectorAll(".esv-thumb").length`) === 4, "quatro slides no visualizador");
-    check(await evalIn(p, `document.getElementById("credits").textContent.includes("10")`), "slides custaram 1 crédito");
+    check(await evalIn(p, `document.getElementById("credits").textContent.includes("9")`), "slides custaram 1 crédito");
     const reqSl = srv.anthropic.calls.at(-1).params;
     check(/Aula ou treinamento/.test(reqSl.system) && reqSl.output_config.format.type === "json_schema", "pedido com o tipo escolhido e esquema JSON");
     await evalIn(p, `document.querySelector('.esv-thumb[data-i="1"]').click(); true`);
@@ -241,6 +253,13 @@ try {
     await evalIn(p, `document.querySelector('.esv-pop [data-pop="jump"]').click(); true`);
     await sleep(500);
     check(await evalIn(p, `!document.querySelector(".esv") && !!document.querySelector("#tx .blk.flash")`), "horário do slide leva à fala");
+    check(/slide 2 de \d+/.test(await evalIn(p, `document.querySelector(".esv-back")?.textContent || ""`)), "barra de volta aos slides aparece");
+    await shot(p, "web-6c3-voltar-slides.png");
+    await evalIn(p, `document.querySelector('.esv-back [data-b="go"]').click(); true`);
+    await waitFor(p, `!!document.querySelector(".esv .esd-slide")`, "slides reabertos");
+    check(await evalIn(p, `document.querySelector('.esv-thumb[data-i="1"]').matches('[aria-current="true"]') && !document.querySelector(".esv-back")`), "volta aos slides no mesmo slide");
+    await evalIn(p, `document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); true`);
+    await sleep(300);
     await evalIn(p, `document.querySelector('[data-act="tab"][data-tab="sl"]').click(); true`);
     await waitFor(p, `!!document.querySelector(".sl-deck .sl-cover")`, "cartão dos slides");
     await shot(p, "web-6d-slides-cartao.png");
