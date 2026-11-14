@@ -2,6 +2,10 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.87 beta — 2026-11-14
+- **Paleta Menta (meneseslabs)** nos slides: os verdes da meneseslabs (#3F8F66 e #63B589), no claro e no escuro.
+- **Assinatura "um produto meneseslabs"** com o logo no fim dos Ajustes da extensão (com a versão instalada) e na página da conta do app web, como já havia no site.
+
 ## 0.9.86 beta — 2026-11-14
 - **O ícone abre e fecha o painel**: clicar no ícone do Escribanote com o painel lateral aberto fecha o painel. Exceção: se a aba está esperando o clique para liberar o som (link colado ou "Transcrever esta aba"), o clique continua servindo para isso e o painel fica.
 - **Botão flutuante "Abrir em uma aba"**: um botão pequeno no canto de baixo do painel lateral abre o Escribanote em tela inteira, na mesma reunião e aba interna (ou traz para a frente a aba que já estiver aberta).

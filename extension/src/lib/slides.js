@@ -67,6 +67,7 @@ export const DECK_PALETTES = [
   { id: "laranja", label: "Laranja", a: "C2410C", b: "FBBF24" },
   { id: "vinho", label: "Vinho", a: "9F1239", b: "F59E0B" },
   { id: "grafite", label: "Grafite", a: "334155", b: "0EA5E9" },
+  { id: "menta", label: "Menta (meneseslabs)", a: "3F8F66", b: "63B589" },
 ];
 export const DECK_DEFAULTS = { kind: "resumo", size: "medio", style: "moderno", palette: "azul", mode: "claro" };
 const pick = (list, id) => list.find((x) => x.id === id) || list[0];

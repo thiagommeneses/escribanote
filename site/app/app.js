@@ -1449,6 +1449,7 @@ async function renderAccount(params) {
       <div id="del-acc" hidden class="drawer"><p class="small">Isto apaga a sua conta, todas as reuniões da nuvem e cancela a assinatura na hora. As reuniões salvas na extensão, no seu computador, continuam lá.</p>
       <label class="field">Digite <b>${esc(me.email)}</b> para confirmar<input id="del-confirm" autocomplete="off"></label>
       <div class="row"><button class="btn primary" data-act="delete-account">Apagar para sempre</button></div></div></section>
+    <p class="made-by small muted"><a href="https://meneseslabs.com.br" target="_blank" rel="noopener"><img src="/img/meneseslabs.svg" alt="" width="24" height="19"><span>um produto <b>meneses<span>labs</span></b></span></a> · <a href="/termos.html">Termos</a> · <a href="/privacidade.html">Privacidade</a></p>
   </section>`;
   bindPasswordPanel();
   if (justPaid && !isPro()) pollPro();
