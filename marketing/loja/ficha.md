@@ -60,6 +60,7 @@ Transcrever e organizar reuniões online (Google Meet, Teams, Zoom e huddles do 
 - **tabCapture:** captura o áudio da aba da reunião ou do vídeo que o usuário mandou transcrever, para o Whisper local. Só começa por ação do usuário.
 - **downloads:** salva as exportações (PDF, Word, .pptx, texto) e o backup automático das reuniões na pasta Downloads.
 - **downloads.ui:** esconde a barra de downloads durante o backup automático, que roda sozinho ao fim de cada reunião, para não interromper o usuário.
+- **contextMenus:** (a partir da 0.9.85) acrescenta ao menu do botão direito no ícone da extensão os atalhos "Abrir o Escribanote em uma aba", "Minhas reuniões", "Gravar do computador" e "Ajustes". Não cria itens no menu das páginas.
 - **nativeMessaging (opcional):** só se o usuário instalar o "Ajudante de áudio" do Windows (programa nosso, opcional) para gravar o som do computador sem o seletor de compartilhar tela.
 - **Acesso a https://api.anthropic.com (opcional):** pedido só quando o usuário coloca a própria chave da API da Anthropic, para a ata, os slides e as perguntas à IA irem direto do navegador para a Anthropic.
 - **Acesso a todos os sites (opcional):** pedido só quando o usuário liga "capturas de tela pelo widget" (a captura da aba precisa desse acesso) ou cadastra um webhook próprio para receber a ata; neste caso é pedido só o endereço do webhook.

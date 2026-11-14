@@ -228,9 +228,12 @@ function nav(view) {
   render();
 }
 for (const b of document.querySelectorAll("[data-nav]")) b.addEventListener("click", () => nav(b.dataset.nav));
-$("pop-out").addEventListener("click", () =>
-  chrome.tabs.create({ url: chrome.runtime.getURL(`src/app/app.html?${state.session ? "id=" + state.session.id : "tab=1"}`) }),
-);
+$("pop-out").addEventListener("click", () => openInTab());
+// Abre o Escribanote numa aba, na mesma reunião e aba interna; se já houver uma aba dele aberta, usa ela.
+async function openInTab() {
+  const r = await send({ type: "open-app-tab", id: state.session?.id || "", tab: state.view === "meeting" && state.session ? state.tab : "", view: state.session ? "" : state.view }).catch(() => null);
+  if (!r || r.error) chrome.tabs.create({ url: chrome.runtime.getURL(`src/app/app.html?${state.session ? "id=" + state.session.id : "tab=1"}`) });
+}
 
 function render() {
   const wide = document.body.classList.contains("wide");
@@ -322,6 +325,13 @@ async function reloadSession() {
 }
 
 // ---------------- Reunião ----------------
+// "13/11, 13:32" (sem o ano, se for deste ano): cabe ao lado do Exportar no painel lateral.
+function shortDate(t) {
+  const d = new Date(t);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", ...(sameYear ? {} : { year: "numeric" }) }) + ", " +
+    d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
 function renderMeeting() {
   const s = state.session;
   $("m-empty").hidden = !!s;
@@ -335,9 +345,10 @@ function renderMeeting() {
   const end = s.endedAt || s.updatedAt;
   $("m-meta").innerHTML = [
     `<span>${esc(PLATFORM[s.platform] || s.platform)}</span>`,
-    `<span>${esc(dateLabel(s.startedAt))}</span>`,
+    `<span title="${esc(dateLabel(s.startedAt))}">${esc(shortDate(s.startedAt))}</span>`,
     `<span>${fmtDuration(end - s.startedAt)}</span>`,
-    `<span>${names.length} participante${names.length === 1 ? "" : "s"}</span>`,
+    // no painel estreito o resumo dos participantes (acima da transcrição) já mostra quantos são
+    state.tab === "transcript" && names.length > 1 && !document.body.classList.contains("wide") ? "" : `<span>${names.length} participante${names.length === 1 ? "" : "s"}</span>`,
     isLive(s) ? `<span class="live-dot" style="color:var(--danger);font-weight:600">${icon(s.paused ? "pausar" : "gravando")}${s.paused ? "pausado" : "gravando"}</span>` : "",
   ].join("");
   $("m-pause").hidden = !isLive(s);
@@ -361,6 +372,7 @@ function renderMeeting() {
   $("c-hl").textContent = hlCount || "";
   $("c-notes").textContent = s.notes.items.length || "";
   for (const b of document.querySelectorAll(".subtabs button")) b.setAttribute("aria-selected", b.dataset.tab === state.tab);
+  syncTabsScroll();
   const nv = (s.summaryHistory || []).length;
   $("c-ata").textContent = nv > 1 ? `v${nv}` : "";
   for (const p of ["transcript", "highlights", "notes", "ata", "ai", "slides", "stats", "diag"]) $(`pane-${p}`).hidden = p !== state.tab;
@@ -475,6 +487,29 @@ async function renderRecent() {
         <button type="button" class="linkish" data-bk-restore>Restaurar de uma pasta de backup</button></p>`;
 }
 
+// Abas numa linha só: rola de lado no painel estreito, com um esmaecido indicando que há mais.
+function syncTabsScroll() {
+  const bar = document.querySelector(".subtabs");
+  const on = bar.querySelector('[aria-selected="true"]');
+  if (on && bar.scrollWidth > bar.clientWidth) {
+    const l = on.offsetLeft - bar.offsetLeft, r = l + on.offsetWidth;
+    if (l < bar.scrollLeft) bar.scrollLeft = Math.max(0, l - 24);
+    else if (r > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = r - bar.clientWidth + 24;
+  }
+  tabsFade();
+}
+function tabsFade() {
+  const bar = document.querySelector(".subtabs");
+  bar.classList.toggle("more-r", bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 2);
+  bar.classList.toggle("more-l", bar.scrollLeft > 2);
+}
+document.querySelector(".subtabs").addEventListener("scroll", tabsFade, { passive: true });
+document.querySelector(".subtabs").addEventListener("wheel", (e) => {
+  const bar = e.currentTarget;
+  if (bar.scrollWidth <= bar.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+  e.preventDefault();
+  bar.scrollLeft += e.deltaY;
+}, { passive: false });
 for (const b of document.querySelectorAll(".subtabs button")) {
   b.addEventListener("click", () => {
     state.tab = b.dataset.tab;
@@ -516,6 +551,19 @@ $("m-title").addEventListener("keydown", (e) => {
   if (e.key === "Escape") { e.target.value = state.session ? state.session.title : ""; e.target.blur(); }
 });
 $("m-rename").addEventListener("click", () => { $("m-title").focus(); $("m-title").select(); });
+// Menu ⋯ do título: renomear, abrir em aba e apagar (o Apagar saiu do lado do Exportar, onde era fácil clicar sem querer).
+$("m-more").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const menu = $("more-menu");
+  menu.hidden = !menu.hidden;
+  $("m-more").setAttribute("aria-expanded", String(!menu.hidden));
+  $("m-more-tab").hidden = IS_TAB;
+  if (!menu.hidden) menu.querySelector("button:not([hidden])")?.focus();
+});
+document.addEventListener("click", () => { $("more-menu").hidden = true; $("m-more").setAttribute("aria-expanded", "false"); });
+$("more-menu").addEventListener("keydown", (e) => { if (e.key === "Escape") { $("more-menu").hidden = true; $("m-more").focus(); } });
+$("m-more-rename").addEventListener("click", () => { $("m-title").focus(); $("m-title").select(); });
+$("m-more-tab").addEventListener("click", () => openInTab());
 
 $("web-start").addEventListener("click", async (e) => {
   const b = e.currentTarget;
@@ -895,8 +943,20 @@ function renderChapters(s) {
   if (!list.length) {
     el.innerHTML = `<button type="button" class="chip" id="ch-make" title="Divide a reunião por assunto com a IA (chave própria ou 1 crédito do Pro)">${state.chaptersBusy ? icon("aguarde") + "Dividindo em capítulos…" : icon("capitulos") + "Dividir em capítulos"}</button>`;
   } else {
-    el.innerHTML = list.map((c, i) => `<button type="button" class="chip" data-ch="${i + 1}" title="${esc(c.title)}"><time>${clock(c.startAt - s.startedAt)}</time><span>${esc(c.title)}</span></button>`).join("") +
-      `<button type="button" class="chip" id="ch-make" title="Gerar os capítulos de novo" aria-label="Gerar os capítulos de novo">${icon(state.chaptersBusy ? "aguarde" : "refazer")}</button><button type="button" class="chip" id="ch-clear" title="Remover os capítulos" aria-label="Remover os capítulos">${icon("fechar")}</button>`;
+    // Um botão com a lista num menu: os títulos já aparecem dentro da transcrição, então não precisam ocupar a tela toda.
+    el.innerHTML = `<div class="menu-wrap"><button type="button" class="chip ch-toggle" id="ch-toggle" aria-haspopup="menu" aria-expanded="false" title="Ir para um capítulo">${icon(state.chaptersBusy ? "aguarde" : "capitulos")}<span>Capítulos</span><b>${list.length}</b>${icon("seta")}</button>
+      <div class="menu ch-menu" id="ch-menu" role="menu" hidden>${list.map((c, i) => `<button type="button" role="menuitem" data-ch="${i + 1}" title="${esc(c.title)}"><time>${clock(c.startAt - s.startedAt)}</time><span>${esc(c.title)}</span></button>`).join("")}
+        <hr><button type="button" role="menuitem" id="ch-make"><span>${icon("refazer")}</span>Gerar os capítulos de novo</button><button type="button" role="menuitem" id="ch-clear"><span>${icon("fechar")}</span>Remover os capítulos</button></div></div>`;
+    const menu = $("ch-menu");
+    $("ch-toggle").addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu.hidden = !menu.hidden;
+      $("ch-toggle").setAttribute("aria-expanded", String(!menu.hidden));
+      if (menu.hidden) return;
+      menu.classList.remove("flip");
+      if (menu.getBoundingClientRect().right > document.documentElement.clientWidth - 8) menu.classList.add("flip");
+    });
+    menu.addEventListener("click", (e) => e.stopPropagation());
   }
   $("ch-make").addEventListener("click", async () => {
     if (state.chaptersBusy) return;
@@ -909,10 +969,13 @@ function renderChapters(s) {
   });
   $("ch-clear")?.addEventListener("click", async () => { state.session = normalize(await send({ type: "chapters-clear", id: s.id })); renderMeeting(); });
   el.querySelectorAll("[data-ch]").forEach((b) => b.addEventListener("click", () => {
+    const m = $("ch-menu");
+    if (m) m.hidden = true;
     const li = $(`ch-${b.dataset.ch}`);
     if (li) li.scrollIntoView({ block: "start", behavior: "smooth" });
   }));
 }
+document.addEventListener("click", () => { const m = document.getElementById("ch-menu"); if (m && !m.hidden) { m.hidden = true; $("ch-toggle")?.setAttribute("aria-expanded", "false"); } });
 
 // Pergunta com até três respostas; resolve com a chave da escolhida (ou null).
 function askChoice(anchor, { title, text, choices }) {
@@ -990,6 +1053,21 @@ async function renameSpeaker(id, anchor) {
 // ----- Transcrição -----
 function renderSpeakers(s) {
   const ids = [...new Set(s.entries.map((e) => e.speakerId))];
+  // Muitos participantes no painel estreito: uma linha com as iniciais e o total; o clique abre os nomes
+  // (filtrar e renomear). Na aba larga, ou com poucos, os nomes ficam sempre à vista.
+  const sum = $("spk-sum");
+  const collapsible = ids.length > 3 && !document.body.classList.contains("wide");
+  const open = !collapsible || state.spkOpen;
+  sum.hidden = !collapsible;
+  if (collapsible) {
+    const off = ids.filter((id) => state.hidden.has(id)).length;
+    const shown = ids.slice(0, 3);
+    sum.innerHTML = `<span class="stack">${shown.map((id) => avatar(id, speakerName(s, id), 22)).join("")}${ids.length > 3 ? `<span class="av more">+${ids.length - 3}</span>` : ""}</span><span class="lbl">${ids.length} participantes</span>${off ? `<b>${off} oculto${off === 1 ? "" : "s"}</b>` : ""}${icon("seta")}`;
+    sum.setAttribute("aria-label", `${ids.length} participantes${off ? `, ${off} ocultos` : ""}`);
+    sum.setAttribute("aria-expanded", String(!!state.spkOpen));
+    sum.title = state.spkOpen ? "Esconder os nomes" : "Mostrar os nomes para filtrar ou renomear";
+  }
+  $("speakers").hidden = !open;
   $("speakers").innerHTML = ids
     .map((id) => {
       const name = speakerName(s, id);
@@ -998,6 +1076,10 @@ function renderSpeakers(s) {
     .join("");
 }
 
+$("spk-sum").addEventListener("click", () => {
+  state.spkOpen = !state.spkOpen;
+  renderSpeakers(state.session);
+});
 $("speakers").addEventListener("click", (e) => {
   const chip = e.target.closest(".spk");
   if (!chip) return;
@@ -1055,8 +1137,8 @@ function blockHtml(s, b, q) {
   const changed = (b.fixed || b.edited) && b.original !== b.text;
   const badges =
     (b.hq ? `<span class="badge-hq" title="Transcrito pela alta precisão (Whisper local)">${icon("hq")}</span>` : "") +
-    (b.fixed ? `<span class="badge-fix" data-act="orig" title="Revisado pela IA — clique para ver o original">${icon("ok")}revisado</span>` : "") +
-    (b.edited ? `<span class="badge-edit"${changed ? ' data-act="orig"' : ""} title="Corrigido à mão${changed ? " — clique para ver o original" : ""}">${icon("editar")}editado</span>` : "");
+    (b.fixed ? `<span class="badge-fix" data-act="orig" title="Revisado pela IA — clique para ver o original">${icon("ok")}<span class="lbl">revisado</span></span>` : "") +
+    (b.edited ? `<span class="badge-edit"${changed ? ' data-act="orig"' : ""} title="Corrigido à mão${changed ? " — clique para ver o original" : ""}">${icon("editar")}<span class="lbl">editado</span></span>` : "");
   // Um <p> por parágrafo; do segundo em diante, o horário em que ele começou.
   const paras = b.paras && b.paras.length ? b.paras : [{ at: b.startAt, text: b.text, original: b.original }];
   const body = paras
@@ -1069,7 +1151,7 @@ function blockHtml(s, b, q) {
   const orig = changed && state.showOrig.has(b.key) ? `<p class="orig">${esc(b.original)}</p>` : "";
   return `<li class="blk${b.kind === "chat" ? " chat" : ""}" data-key="${esc(b.key)}" data-ids="${esc(JSON.stringify(b.ids))}" data-tags="${esc(JSON.stringify(b.tags))}" data-start="${b.startAt}" data-at="${b.endAt}">
     ${avatar(b.speakerId, b.speaker, 32)}
-    <div><div class="who"><b style="color:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${highlight(b.speaker, q)}</b><time class="${hasAudio(s) ? "seek" : ""}" data-at="${b.startAt}" title="${hasAudio(s) ? "Ouvir a partir daqui" : ""}">${clock(b.startAt - s.startedAt)}</time>${wallClock(s, b.startAt)}${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
+    <div><div class="who"><b style="--sc:${colorFor(b.speaker)}" data-speaker="${esc(b.speakerId)}" title="Clique para renomear">${highlight(b.speaker, q)}</b><time class="${hasAudio(s) ? "seek" : ""}" data-at="${b.startAt}" title="${hasAudio(s) ? "Ouvir a partir daqui" : ""}${s.platform === "import" ? "" : `${hasAudio(s) ? " · " : ""}${new Date(b.startAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} no relógio`}">${clock(b.startAt - s.startedAt)}</time>${wallClock(s, b.startAt)}${b.kind === "chat" ? '<span class="muted tiny">chat</span>' : ""}${badges}${tagChips}</div>
     ${body}${orig}</div>
     <div class="acts">${acts}<button data-act="copy" title="Copiar">${icon("copiar")}</button><button data-act="note" title="Nota neste ponto">${icon("nota")}</button><button data-act="edit" title="Corrigir o texto">${icon("editar")}</button><button data-act="split" title="Dividir esta fala em duas">${icon("dividir")}</button><button data-act="move" title="Mover para outro falante">${icon("falante")}</button><button data-act="del" title="Apagar esta fala">${icon("apagar")}</button></div>
   </li>`;
@@ -4151,6 +4233,15 @@ $("wipe").addEventListener("click", async () => {
 let pending = null;
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "backup-updated") return refreshBackupUi();
+  // "Abrir em uma aba" com esta aba já aberta: ela vem para a frente e mostra o que foi pedido.
+  if (msg.type === "app-open" && IS_TAB) {
+    if (msg.id) {
+      if (["transcript", "highlights", "notes", "ata", "ai", "slides", "stats", "diag"].includes(msg.tab)) state.tab = msg.tab;
+      state.view = "meeting";
+      openSession(msg.id, true);
+    } else if (msg.view) nav(msg.view);
+    return;
+  }
   if (msg.type === "retranscribe-progress") {
     if (state.retrans && state.retrans.id === msg.sessionId) {
       state.retrans.status = state.retrans.status?.state === "cancelling" && msg.status?.state === "running" ? state.retrans.status : msg.status || {};
@@ -4238,8 +4329,11 @@ if (params.get("perm") === "mic") {
   applyUsage();
   applyLayout();
   const id = params.get("id");
+  const TABS = ["transcript", "highlights", "notes", "ata", "ai", "slides", "stats", "diag"];
+  if (id && TABS.includes(params.get("t"))) state.tab = params.get("t");
   if (id) await openSession(id, true);
   else await followCurrent();
+  if (!id && params.get("view") === "list") nav("list");
   if (id && params.get("slides") && state.session?.slides) {
     state.tab = "slides";
     renderMeeting();
