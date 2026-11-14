@@ -24,6 +24,7 @@
       </nav>
     </header>
 
+    <button type="button" class="pop-float" id="pop-float" title="Abrir o Escribanote em uma aba (tela inteira)" aria-label="Abrir em uma aba" hidden><i data-ic="abrir"></i></button>
     <div class="layout">
       <!-- Lista lateral (só em tela larga) e view "Reuniões" -->
       <aside id="view-list" class="view list-view">
@@ -49,25 +50,35 @@
       <!-- Reunião -->
       <main id="view-meeting" class="view meeting-view">
         <div id="m-empty" class="empty">
-          <div class="empty-art"><i data-ic="chat"></i></div>
-          <h2>Nenhuma reunião em andamento nesta aba</h2>
-          <p>Entre numa reunião do <b>Google Meet</b>, <b>Microsoft Teams</b> ou <b>Zoom</b> pelo navegador.
-            O Escribanote começa a transcrever sozinho e mostra um widget dentro da reunião.</p>
-          <div class="rec-cta" id="web-cta" hidden>
-            <div><b>Vídeo ou áudio nesta página?</b>
-              <span>YouTube, Instagram, aulas, podcasts: transcreve o som desta aba com o Whisper enquanto toca, neste computador.</span></div>
-            <button class="btn primary sm" id="web-start"><span class="rec-dot"></span>Transcrever esta aba</button>
+          <div class="empty-hero">
+            <div class="empty-art"><i data-ic="chat"></i></div>
+            <div>
+              <h2>Nenhuma reunião nesta aba</h2>
+              <p>Entre numa reunião do <b>Meet</b>, <b>Teams</b> ou <b>Zoom</b> pelo navegador: a transcrição começa sozinha, com um widget dentro da chamada.</p>
+            </div>
           </div>
-          <form class="rec-cta link-cta" id="link-form">
-            <div><b id="link-title">Tem o link de um vídeo?</b>
-              <span id="link-hint">Cole o link (YouTube, Instagram, aula, podcast). O vídeo abre numa aba e é transcrito enquanto toca.</span>
-              <input id="link-url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…" aria-label="Link do vídeo ou áudio"></div>
-            <button class="btn primary sm" id="link-go" type="submit"><span class="rec-dot"></span>Abrir e transcrever</button>
-          </form>
-          <div class="rec-cta">
-            <div><b>Huddle no Slack ou reunião em outro app?</b>
-              <span>Grave o áudio do computador e transcreva com o Whisper, aqui mesmo.</span></div>
-            <button class="btn primary sm" data-recorder><span class="rec-dot"></span>Gravar do computador</button>
+          <div class="day go-head">Ou transcreva outra coisa</div>
+          <div class="go-list">
+            <div class="go go-hi" id="web-cta" hidden>
+              <span class="go-ic"><i data-ic="gravando"></i></span>
+              <div><b>Transcrever esta aba</b><span>Vídeo, aula ou podcast tocando nesta página.</span></div>
+              <button class="btn primary sm" id="web-start">Começar</button>
+            </div>
+            <form class="go link-cta" id="link-form">
+              <span class="go-ic"><i data-ic="baixar"></i></span>
+              <div><b id="link-title">Tem o link de um vídeo?</b>
+                <span id="link-hint">YouTube, Instagram, aula ou podcast: abre numa aba e transcreve enquanto toca.</span>
+                <span class="link-row">
+                  <input id="link-url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Cole o link aqui" aria-label="Link do vídeo ou áudio">
+                  <button class="btn primary sm" id="link-go" type="submit" title="Abrir e transcrever" aria-label="Abrir e transcrever"><i data-ic="enviar"></i></button>
+                </span>
+              </div>
+            </form>
+            <button type="button" class="go go-btn" data-recorder>
+              <span class="go-ic"><i data-ic="mic"></i></span>
+              <div><b>Gravar do computador</b><span>Huddle no Slack ou reunião em outro app.</span></div>
+              <span class="go-chev" aria-hidden="true">›</span>
+            </button>
           </div>
           <div id="recent" class="recent"></div>
         </div>

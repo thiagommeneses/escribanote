@@ -205,12 +205,28 @@ async function ensureApiPermission() {
   return chrome.permissions.request({ origins: [API_ORIGIN] });
 }
 
+// ---------------- Painel lateral: avisa o service worker que está aberto ----------------
+// Assim o clique no ícone da extensão fecha o painel quando ele já está aberto (interruptor).
+if (!IS_TAB) {
+  const connectPanel = () => {
+    let port;
+    try { port = chrome.runtime.connect({ name: "panel" }); } catch { return; }
+    chrome.windows.getCurrent().then((w) => port.postMessage({ type: "hello", windowId: w.id })).catch(() => {});
+    port.onMessage.addListener((m) => { if (m?.type === "close") window.close(); });
+    // o service worker reiniciou: conecta de novo (a extensão atualizada derruba a página de qualquer jeito)
+    port.onDisconnect.addListener(() => setTimeout(connectPanel, 1000));
+  };
+  // só o painel lateral de verdade (numa aba, getCurrent devolve a aba)
+  chrome.tabs.getCurrent().then((t) => { if (!t) connectPanel(); }).catch(() => {});
+}
+
 // ---------------- Layout ----------------
 function applyLayout() {
   const wide = IS_TAB && innerWidth >= 860;
   document.body.classList.toggle("wide", wide);
   document.body.classList.toggle("narrow", innerWidth < 420);
   $("pop-out").hidden = IS_TAB;
+  $("pop-float").hidden = IS_TAB;
   render();
 }
 addEventListener("resize", () => {
@@ -229,6 +245,7 @@ function nav(view) {
 }
 for (const b of document.querySelectorAll("[data-nav]")) b.addEventListener("click", () => nav(b.dataset.nav));
 $("pop-out").addEventListener("click", () => openInTab());
+$("pop-float").addEventListener("click", () => openInTab());
 // Abre o Escribanote numa aba, na mesma reunião e aba interna; se já houver uma aba dele aberta, usa ela.
 async function openInTab() {
   const r = await send({ type: "open-app-tab", id: state.session?.id || "", tab: state.view === "meeting" && state.session ? state.tab : "", view: state.session ? "" : state.view }).catch(() => null);
@@ -265,7 +282,7 @@ async function followCurrent() {
 }
 
 // Link colado: o Chrome só libera o som da aba nova depois de um clique no ícone do Escribanote nela.
-const LINK_HINT = "Cole o link (YouTube, Instagram, aula, podcast). O vídeo abre numa aba e é transcrito enquanto toca.";
+const LINK_HINT = "YouTube, Instagram, aula ou podcast: abre numa aba e transcreve enquanto toca.";
 const LINK_WAIT = "Clique no ícone do Escribanote na barra do navegador (ou Alt+Shift+E) e a transcrição começa sozinha. O navegador exige esse clique em cada aba para liberar o som dela.";
 function renderLinkCta() {
   $("link-form").classList.toggle("waiting", !!state.linkWaiting);

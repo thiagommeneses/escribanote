@@ -138,7 +138,27 @@ async function openAppTab({ id = "", tab = "", view = "", forTab } = {}) {
   return { tabId: t.id };
 }
 
+// Painéis laterais abertos, por janela: o painel se conecta pela porta "panel" ao abrir e cai ao fechar.
+const openPanels = new Map(); // windowId → port
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "panel") return;
+  port.onMessage.addListener((m) => {
+    if (m?.type !== "hello" || !(m.windowId >= 0)) return;
+    port.windowId = m.windowId;
+    openPanels.set(m.windowId, port);
+  });
+  port.onDisconnect.addListener(() => { if (openPanels.get(port.windowId) === port) openPanels.delete(port.windowId); });
+});
 chrome.action.onClicked.addListener((tab) => {
+  // Clicar com o painel aberto fecha o painel (como um interruptor). Exceção: se esta aba espera o clique
+  // para liberar o som (link colado ou "Transcrever esta aba"), o clique serve para isso e o painel fica.
+  const panel = openPanels.get(tab.windowId);
+  if (panel && !pendingLinks.has(tab.id)) {
+    openPanels.delete(tab.windowId);
+    if (chrome.sidePanel.close) chrome.sidePanel.close({ windowId: tab.windowId }).catch(() => panel.postMessage({ type: "close" }));
+    else panel.postMessage({ type: "close" });
+    return;
+  }
   // sidePanel.open precisa vir já, ainda dentro do gesto do clique
   chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => chrome.tabs.create({ url: chrome.runtime.getURL("src/app/app.html?tab=1") }));
   if (pendingLinks.has(tab.id)) pollLinks();
