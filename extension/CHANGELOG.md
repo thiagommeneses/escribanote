@@ -2,6 +2,11 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.86 beta — 2026-11-14
+- **O ícone abre e fecha o painel**: clicar no ícone do Escribanote com o painel lateral aberto fecha o painel. Exceção: se a aba está esperando o clique para liberar o som (link colado ou "Transcrever esta aba"), o clique continua servindo para isso e o painel fica.
+- **Botão flutuante "Abrir em uma aba"**: um botão pequeno no canto de baixo do painel lateral abre o Escribanote em tela inteira, na mesma reunião e aba interna (ou traz para a frente a aba que já estiver aberta).
+- **Tela inicial do painel redesenhada**: título curto e uma lista com os três caminhos (Transcrever esta aba, colar o link de um vídeo e Gravar do computador), com ícones e o link numa linha só; as reuniões recentes aparecem logo abaixo, sem rolar.
+
 ## 0.9.85 beta — 2026-11-14
 - **Painel lateral mais enxuto**: a transcrição começa bem mais perto do topo (no painel estreito, a primeira fala subiu de uns 760 px para uns 350 px).
   - **Capítulos num botão**: "Capítulos 8 ▾" abre a lista com os horários (e Gerar de novo / Remover); os títulos continuam dentro da transcrição.

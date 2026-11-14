@@ -486,6 +486,44 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; border-r
 .blk p.orig { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--danger) 50%, transparent); font-size: 12.5px; }
 #m-hq.on { border-color: var(--ok); color: var(--ok); }
 
+/* Estado vazio do painel: título curto e uma lista de atalhos (esta aba, link, gravar do computador) */
+#m-empty.empty { text-align: left; padding: 18px 2px 24px; max-width: 560px; }
+.empty-hero { display: flex; gap: 12px; align-items: flex-start; padding: 4px 4px 2px; }
+.empty-hero .empty-art { flex: none; width: 40px; height: 40px; border-radius: 12px; margin: 2px 0 0; }
+.empty-hero .empty-art svg { width: 22px; height: 22px; }
+.empty-hero h2 { margin: 0 0 3px; font-size: 16px; }
+.empty-hero p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+.go-head { margin-top: 10px; }
+.go-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.go { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin: 0; text-align: left; font: inherit; color: var(--text); background: none; border: 0; border-top: 1px solid var(--border); width: 100%; }
+.go:first-child, .go[hidden] + .go { border-top: 0; }
+.go[hidden] { display: none; }
+.go > div { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.go > div b { font-size: 13.5px; }
+.go > div > span { color: var(--text-2); font-size: 12.5px; line-height: 1.4; }
+.go-ic { flex: none; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); align-self: flex-start; }
+.go-ic svg { width: 17px; height: 17px; }
+.go-btn { cursor: pointer; }
+.go-btn:hover { background: var(--bg-soft); }
+.go-chev { color: var(--muted); font-size: 20px; line-height: 1; }
+.go-hi { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.go-hi .go-ic { background: var(--accent); color: #fff; }
+.link-row { display: flex; gap: 6px; margin-top: 6px; }
+.link-row[hidden], .link-row:has(input[hidden]) { display: none; }
+.link-row input { flex: 1; min-width: 0; margin: 0; }
+.link-row .btn { flex: none; padding-left: 10px; padding-right: 10px; }
+.link-row .btn svg { width: 15px; height: 15px; }
+.go.link-cta.waiting { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+#m-empty .recent { margin-top: 8px; }
+/* Abrir em uma aba: botão pequeno no canto do painel lateral (sobe quando a barra de volta aos slides aparece) */
+.pop-float { position: fixed; right: 12px; bottom: 12px; z-index: 7; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
+  display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow); opacity: .82; transition: opacity .15s, transform .15s; }
+.pop-float:hover, .pop-float:focus-visible { opacity: 1; color: var(--accent); border-color: var(--accent); transform: translateY(-1px); }
+.pop-float[hidden] { display: none; }
+.pop-float svg { width: 16px; height: 16px; }
+body:has(.esv-back) .pop-float { bottom: 70px; }
+body.on-settings .pop-float { display: none; }
+
 /* Chamada para o gravador do computador (estado vazio) */
 .rec-cta { display: flex; align-items: center; gap: 12px; text-align: left; margin: 18px auto 6px; padding: 12px 14px;
   border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
