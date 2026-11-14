@@ -77,7 +77,17 @@
             <div class="m-titlerow">
               <input id="m-title" data-count="focus" class="m-title" aria-label="Título da reunião" maxlength="200" title="Clique para renomear a reunião" placeholder="Nome da reunião">
               <button type="button" class="m-rename" id="m-rename" title="Renomear a reunião" aria-label="Renomear a reunião"><i data-ic="editar"></i></button>
+              <div class="menu-wrap">
+                <button type="button" class="m-rename m-more" id="m-more" title="Mais ações" aria-label="Mais ações" aria-haspopup="menu" aria-expanded="false">⋯</button>
+                <div class="menu flip" id="more-menu" role="menu" hidden>
+                  <button type="button" id="m-more-rename" role="menuitem"><span><i data-ic="editar"></i></span>Renomear</button>
+                  <button type="button" id="m-more-tab" role="menuitem"><span><i data-ic="abrir"></i></span>Abrir em uma aba</button>
+                  <hr>
+                  <button type="button" class="danger-item" id="m-delete" role="menuitem"><span><i data-ic="apagar"></i></span>Apagar reunião</button>
+                </div>
+              </div>
             </div>
+            <div class="m-sub">
             <div class="m-meta" id="m-meta"></div>
             <div class="m-actions">
               <button class="btn sm" id="m-pause" hidden></button>
@@ -88,7 +98,7 @@
                 <div class="menu" id="export-menu" hidden></div>
               </div>
               <button class="btn sm ghost" id="m-undo" hidden title="Desfazer a última correção manual (Ctrl+Z na transcrição)"><i data-ic="desfazer"></i>Desfazer</button>
-              <button class="btn sm ghost" id="m-delete" title="Apagar reunião">Apagar</button>
+            </div>
             </div>
             <div class="player" id="player" hidden>
               <button type="button" class="pbtn" id="p-play" title="Ouvir (espaço)" aria-label="Ouvir"><i data-ic="tocar"></i></button>
@@ -115,12 +125,11 @@
 
           <section class="pane" id="pane-transcript">
             <div id="t-banner"></div>
-            <div class="chapters" id="chapters" hidden></div>
             <div class="t-tools">
               <div class="search"><i data-ic="buscar"></i>
                 <input id="t-search" type="search" placeholder="Buscar nesta reunião…" aria-label="Buscar na transcrição"></div>
-              <button class="btn sm" id="t-replace-btn" aria-expanded="false" title="Trocar uma palavra ou nome errado em toda a transcrição">Substituir</button>
-              <button class="btn sm t-clean" id="t-clean" aria-pressed="false" title="Esconde “ahn”, “hum”, “éé” e palavras repetidas em sequência. O texto guardado não muda, e as exportações seguem esta escolha.">Leitura limpa</button>
+              <button class="btn sm t-icon" id="t-replace-btn" aria-expanded="false" title="Substituir: trocar uma palavra ou nome errado em toda a transcrição" aria-label="Substituir"><i data-ic="substituir"></i><span class="lbl">Substituir</span></button>
+              <button class="btn sm t-clean" id="t-clean" aria-pressed="false" title="Leitura limpa: esconde “ahn”, “hum”, “éé” e palavras repetidas em sequência. O texto guardado não muda, e as exportações seguem esta escolha." aria-label="Leitura limpa"><i data-ic="limpo"></i><span class="lbl">Leitura limpa</span></button>
             </div>
             <div class="t-replace" id="t-replace" hidden>
               <input id="t-repl" placeholder="Substituir por…" aria-label="Substituir por" maxlength="200">
@@ -128,6 +137,10 @@
               <label class="tiny"><input type="checkbox" id="t-case"> maiúsculas</label>
               <button class="btn sm primary" id="t-repl-go" disabled>Substituir tudo</button>
               <span class="muted tiny" id="t-repl-info">Digite na busca o que trocar.</span>
+            </div>
+            <div class="t-row">
+              <button type="button" class="spk-sum" id="spk-sum" aria-expanded="false" aria-controls="speakers" hidden></button>
+              <div class="chapters" id="chapters" hidden></div>
             </div>
             <div class="speakers" id="speakers"></div>
             <ol class="timeline" id="timeline"></ol>

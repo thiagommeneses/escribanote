@@ -101,6 +101,43 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
 // e clicar com o painel já aberto não o fecha. O painel fica aberto ao trocar de aba; o som de cada aba nova
 // precisa de um clique no ícone nela. Se havia uma transcrição esperando esse clique, ela começa sozinha.
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+// Botão direito no ícone da extensão: atalhos para abrir o Escribanote numa aba inteira.
+function setupActionMenu() {
+  chrome.contextMenus.removeAll(() => {
+    const add = (id, title) => chrome.contextMenus.create({ id, title, contexts: ["action"] }, () => void chrome.runtime.lastError);
+    add("open-tab", "Abrir o Escribanote em uma aba");
+    add("open-list", "Minhas reuniões (em uma aba)");
+    add("open-recorder", "Gravar do computador");
+    add("open-settings", "Ajustes");
+  });
+}
+chrome.runtime.onInstalled.addListener(setupActionMenu);
+chrome.runtime.onStartup.addListener(setupActionMenu);
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "open-recorder") return chrome.tabs.create({ url: chrome.runtime.getURL("src/app/gravar.html") });
+  if (info.menuItemId === "open-settings") return openAppTab({ view: "settings" });
+  if (info.menuItemId === "open-list") return openAppTab({ view: "list" });
+  if (info.menuItemId === "open-tab") return openAppTab({ forTab: tab?.id });
+});
+
+// Abre o app numa aba (ou traz para a frente a que já existe, levando a reunião e a aba interna pedidas).
+// forTab: a reunião ao vivo daquela aba, se houver.
+async function openAppTab({ id = "", tab = "", view = "", forTab } = {}) {
+  if (!id && forTab != null) id = (await activeFor(forTab).catch(() => null))?.id || "";
+  const base = chrome.runtime.getURL("src/app/app.html");
+  const ctx = await chrome.runtime.getContexts({ contextTypes: ["TAB"] }).catch(() => []);
+  const open = ctx.find((c) => c.documentUrl?.startsWith(base) && c.tabId >= 0);
+  if (open) {
+    await chrome.tabs.update(open.tabId, { active: true });
+    if (open.windowId >= 0) await chrome.windows.update(open.windowId, { focused: true }).catch(() => {});
+    chrome.runtime.sendMessage({ type: "app-open", id, tab, view }).catch(() => {});
+    return { tabId: open.tabId, reused: true };
+  }
+  const q = new URLSearchParams(id ? { id, ...(tab ? { t: tab } : {}) } : { tab: "1", ...(view ? { view } : {}) });
+  const t = await chrome.tabs.create({ url: `${base}?${q}` });
+  return { tabId: t.id };
+}
+
 chrome.action.onClicked.addListener((tab) => {
   // sidePanel.open precisa vir já, ainda dentro do gesto do clique
   chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => chrome.tabs.create({ url: chrome.runtime.getURL("src/app/app.html?tab=1") }));
@@ -1461,6 +1498,8 @@ async function handle(msg, sender) {
       return startWeb(Number(msg.tabId));
     case "link-open":
       return openLink(msg.url);
+    case "open-app-tab":
+      return openAppTab({ id: msg.id || "", tab: msg.tab || "", view: msg.view || "" });
     case "link-pending":
       // "link": vídeo aberto pelo link colado; "web": "Transcrever esta aba" esperando o clique no ícone
       return pendingLinks.has(Number(msg.tabId)) ? (pendingLinks.get(Number(msg.tabId)).web ? "web" : "link") : false;
@@ -2253,6 +2292,7 @@ async function waitUntil(fn, ms) {
 }
 
 chrome.commands.onCommand.addListener(async (command, tab) => {
+  if (command === "open-tab") return openAppTab({ forTab: tab?.id });
   if (command === "open-recorder") {
     chrome.tabs.create({ url: chrome.runtime.getURL("src/app/gravar.html") });
     return;

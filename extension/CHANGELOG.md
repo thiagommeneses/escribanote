@@ -2,6 +2,16 @@
 
 Uma entrada por versão, a mais nova no topo. Detalhes técnicos de cada mudança ficam no README.
 
+## 0.9.85 beta — 2026-11-14
+- **Painel lateral mais enxuto**: a transcrição começa bem mais perto do topo (no painel estreito, a primeira fala subiu de uns 760 px para uns 350 px).
+  - **Capítulos num botão**: "Capítulos 8 ▾" abre a lista com os horários (e Gerar de novo / Remover); os títulos continuam dentro da transcrição.
+  - **Participantes compactos**: com mais de 3, uma linha com as iniciais e "+5"; o clique abre os nomes para filtrar e renomear, e avisa quantos estão ocultos.
+  - **Abas numa linha só**, que rola de lado (também com a roda do mouse), com um esmaecido indicando que há mais.
+  - **Busca inteira**: Substituir e Leitura limpa viram ícones no painel estreito (o nome aparece ao passar o mouse).
+  - **Apagar saiu de perto do Exportar**: agora fica no menu ⋯ ao lado do título, junto com Renomear e Abrir em uma aba. A data ficou curta ("13/11, 13:32") e o Exportar subiu para a mesma linha.
+  - Falas com um horário só (o da reunião; a hora do relógio aparece ao passar o mouse), selos "revisado" e "editado" só com o ícone, e nomes com cor mais escura para ler melhor no fundo claro.
+- **Abrir em uma aba, do jeito certo**: botão direito no ícone do Escribanote na barra do navegador traz **Abrir o Escribanote em uma aba**, **Minhas reuniões**, **Gravar do computador** e **Ajustes**. A aba abre na mesma reunião e na mesma aba interna (Ata, Slides…) em que você estava; se o Escribanote já estiver aberto numa aba, ela vem para a frente em vez de abrir outra. Também dá para criar um atalho de teclado em chrome://extensions/shortcuts ("Abrir o Escribanote em uma aba").
+
 ## 0.9.84 beta — 2026-11-14
 - **Voltar à apresentação**: depois de ir de um slide para a transcrição completa ("Ver na transcrição completa" no balão do horário), aparece uma barra flutuante **Voltar à apresentação de slides**, com o número e o título do slide. Um clique reabre os slides exatamente onde você estava, inclusive em tela cheia se estava apresentando. Some sozinha ao voltar, ao fechar (×) ou ao abrir outra reunião. Na extensão e no app web.
 - **Parar a IA, regra do crédito (Pro)**: parar no começo da resposta devolve o crédito, como antes. Se a resposta já tinha passado de umas 200 palavras, o crédito fica cobrado, porque o texto que veio fica com você.
