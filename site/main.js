@@ -244,6 +244,24 @@
       if (!j) return;
       document.getElementById("dl-version").textContent = "v" + (j.label || j.version);
       document.getElementById("download").href = "download/" + j.file;
+      // Com a extensão aprovada na Chrome Web Store, o botão da loja vira o principal e o .zip fica como alternativa.
+      if (typeof j.store === "string" && j.store.startsWith("https://chromewebstore.google.com/")) {
+        const $ = (id) => document.getElementById(id);
+        $("store-link").href = j.store;
+        $("store-cta").hidden = false;
+        $("install-manual").hidden = true;
+        $("zip-cta").hidden = true;
+        $("instalar-manual").hidden = true;
+        $("show-manual").addEventListener("click", () => {
+          $("zip-cta").hidden = false;
+          $("instalar-manual").hidden = false;
+        });
+        document.querySelectorAll('a[href="#instalar"]').forEach((a) => {
+          a.href = j.store;
+          a.rel = "noopener";
+          if (/^Baixar grátis/.test(a.textContent)) a.textContent = a.textContent.replace("Baixar grátis", "Instalar grátis");
+        });
+      }
     })
     .catch(() => {});
 })();

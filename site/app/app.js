@@ -8,7 +8,7 @@ import { computeStats, fmtDuration } from "./lib/stats.js";
 import { normalize, toBlocks, mergeSpeakers, speakerName } from "./lib/transcript.js";
 import { commitSummary, diffDocument, diffStats, diffHtml } from "./lib/diff.js";
 import { DECK_KINDS, DECK_SIZES, DECK_STYLES, DECK_DEFAULTS, deckOptions, cleanDeck } from "./lib/slides.js";
-import { openDeck, deckThumbHtml, downloadPptx, printDeck, paletteChooserHtml, paletteClick, paletteInput, slidePreviewHtml } from "./lib/deckview.js";
+import { openDeck, showReturnBar, hideReturnBar, deckThumbHtml, downloadPptx, printDeck, paletteChooserHtml, paletteClick, paletteInput, slidePreviewHtml } from "./lib/deckview.js";
 import "./lib/icons.js"; // ícones da extensão (duotone): globalThis.EsIcons
 
 const { icon, tagIcon } = globalThis.EsIcons;
@@ -516,6 +516,7 @@ async function renderLibrary(id, params) {
   $("side-foot").textContent = `${state.list.length} ${state.list.length === 1 ? "reunião" : "reuniões"} na conta · Enter busca dentro das falas`;
   renderLocalNotice();
   if (!id) {
+    hideReturnBar();
     state.meeting = null;
     $("meeting").innerHTML = `<div class="empty-pane" style="margin:auto;padding:80px 24px">
       <p style="font:400 26px/1.2 var(--serif)">Escolha uma reunião</p>
@@ -523,6 +524,7 @@ async function renderLibrary(id, params) {
     return;
   }
   if (state.meeting?.id !== id) {
+    hideReturnBar(); // a volta aos slides é só da reunião aberta
     $("meeting").innerHTML = `<div class="empty-pane" style="padding:80px 24px"><p class="muted">Abrindo…</p></div>`;
     try {
       const r = await api.get(`/meetings/${encodeURIComponent(id)}`);
@@ -894,7 +896,7 @@ async function generateSlides() {
   state.slidesBusy = null;
   if (state.tab === "sl") renderPane();
 }
-function openSlides({ present = false } = {}) {
+function openSlides({ present = false, index = 0 } = {}) {
   const m = state.meeting;
   const deck = cleanDeck(m.doc.slides);
   if (!deck) return;
@@ -902,6 +904,7 @@ function openSlides({ present = false } = {}) {
     deck,
     session: m.doc,
     present,
+    index,
     editable: isPro(),
     onSave: async (d) => {
       if (state.meeting?.id !== m.id) return;
@@ -909,12 +912,13 @@ function openSlides({ present = false } = {}) {
       if (!ok) throw new Error("Não salvou");
       if (state.tab === "sl") renderPane();
     },
-    onJump: (rel) => {
+    onJump: (rel, back) => {
       if (state.meeting?.id !== m.id) return;
       const at = m.doc.startedAt + rel;
       const blocks = toBlocks(m.doc).filter((b) => b.kind !== "chat");
       const b = blocks.filter((x) => x.startAt <= at + 2000).pop() || blocks[0];
       if (b) jumpTo(b.ids[0]);
+      if (back) showReturnBar(back, (x) => { if (state.meeting?.id === m.id) openSlides({ present: x.present, index: x.index }); });
     },
     onRegenerate: isPro() ? () => { slideUi.form = true; state.tab = "sl"; renderPane(); } : null,
   });

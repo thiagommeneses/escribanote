@@ -21,3 +21,7 @@ Disallow: /
 # Buscadores e demais robôs: podem indexar o site.
 User-agent: *
 Allow: /
+Disallow: /app/
+Disallow: /s/
+
+Sitemap: https://escribanote.com/sitemap.xml

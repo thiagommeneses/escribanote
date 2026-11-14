@@ -188,6 +188,17 @@ try {
   assert.equal(await ev(`!!document.querySelector(".esv")`), false, "o visualizador fecha");
   assert.equal(await ev(`document.querySelector('.subtabs [aria-selected="true"]').dataset.tab`), "transcript");
   assert.equal(await ev(`!!document.querySelector(".blk.flash")`), true, "a fala fica em destaque");
+  // A barra "Voltar à apresentação" reabre os slides no mesmo slide.
+  const wasAt = await ev(`document.querySelector(".esv-back")?.textContent || ""`);
+  assert.match(wasAt, /Voltar à apresentação de slides · slide \d+ de 5/, "barra de volta aparece");
+  await shot("05b-voltar");
+  await ev(`document.querySelector('.esv-back [data-b="go"]').click()`);
+  await waitFor(`!!document.querySelector(".esv .esd-slide")`, "slides reabertos");
+  const n = Number(wasAt.match(/slide (\d+)/)[1]);
+  assert.equal(await ev(`document.querySelector('.esv-thumb[aria-current="true"]')?.dataset.i`), String(n - 1), "volta no mesmo slide");
+  assert.equal(await ev(`!!document.querySelector(".esv-back")`), false, "a barra some ao voltar");
+  await ev(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
+  await sleep(300);
 
   // 7. A aba mostra o cartão com a capa e as ações.
   await ev(`document.querySelector('.subtabs [data-tab="slides"]').click()`);

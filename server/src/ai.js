@@ -6,6 +6,9 @@ import { ANSWER_MAX_TOKENS, QUESTION_MAX, questionCredits, isHeavyQuestion, SUPP
 import { cleanDoc, loadDoc, requirePro, saveMeeting } from "./meetings.js";
 import { slidesRequest, parseDeck, SLIDES_SHOTS_MAX, SLIDES_MIN_MS } from "./lib.js";
 
+// Parar a resposta depois disso (~200 palavras) não devolve o crédito: a pessoa já ficou com a resposta.
+export const STOP_CHARGE_CHARS = 1200;
+
 // US$ por milhão de tokens (entrada, saída, leitura de cache, escrita de cache de 5 min).
 const PRICES = {
   "claude-sonnet-5-5": { in: 2, out: 10, cacheRead: 0.2, cacheWrite: 2.5 },
@@ -151,7 +154,8 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
     let stream;
     let text = "";
     let closed = false;
-    // Quem perguntou desistiu (Parar, aba fechada): a resposta é cortada e o crédito volta (failed → refund).
+    // Quem perguntou desistiu (Parar, aba fechada): a resposta é cortada. O crédito volta se parou no começo
+    // (menos de STOP_CHARGE_CHARS de texto); se já veio uma resposta útil, ele fica cobrado.
     // O "close" do pedido não chega quando a conexão cai no meio da resposta; o da resposta chega.
     const onClose = () => {
       if (!res.writableEnded && !closed) (closed = true), stream?.abort();
@@ -214,9 +218,14 @@ export function registerAi(app, { db, config, sealer, anthropic }) {
       const extra = onDone ? await onDone(text).catch((err) => (req.log.error({ err }, "salvar resultado da IA"), {})) : {};
       send("done", { text, model, balance: call.balance, credits, ...extra });
     } catch (err) {
-      req.log.error({ err: err?.message }, "falha na IA");
-      const balance = await failed(req, call, credits, err).catch(() => call.balance + credits);
-      send("error", { message: friendly(err), balance });
+      if (closed && text.length >= STOP_CHARGE_CHARS) {
+        // Parou com boa parte da resposta já entregue: conta como usada (tokens de saída estimados pelo texto).
+        await finish(call.id, model, { output_tokens: Math.ceil(text.length / 4) }).catch(() => {});
+      } else {
+        req.log.error({ err: err?.message }, "falha na IA");
+        const balance = await failed(req, call, credits, err).catch(() => call.balance + credits);
+        send("error", { message: friendly(err), balance });
+      }
     }
     clearInterval(ping);
     res.end();
